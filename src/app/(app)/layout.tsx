@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireMe, DEMO_COOKIE } from "@/lib/auth";
-import { isDemo } from "@/lib/db";
+import { requireMe, DEMO_COOKIE, SESSION_COOKIE } from "@/lib/auth";
+import { asService, isDemo } from "@/lib/db";
+import { endSession } from "@/lib/session";
 import { brandById } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
-import { supabaseServer } from "@/lib/supabase/server";
 import { NavLinks } from "@/components/nav";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
 async function signOut() {
   "use server";
-  if (isDemo) (await cookies()).delete(DEMO_COOKIE);
-  else await (await supabaseServer()).auth.signOut();
+  const jar = await cookies();
+  if (isDemo) jar.delete(DEMO_COOKIE);
+  else {
+    const token = jar.get(SESSION_COOKIE)?.value;
+    await asService((q) => endSession(q, token));
+    jar.delete(SESSION_COOKIE);
+  }
   redirect("/");
 }
 

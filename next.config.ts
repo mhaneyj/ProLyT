@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
-  outputFileTracingIncludes: { "/**": ["./supabase/**/*.sql"] },
+  outputFileTracingIncludes: { "/**": ["./db/**/*.sql"] },
   poweredByHeader: false,
   async headers() {
     return [{

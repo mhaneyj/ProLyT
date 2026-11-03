@@ -52,9 +52,9 @@ describe("metrics", () => {
 describe("demo data", () => {
   it("loads cleanly on top of the real schema", async () => {
     const db = new PGlite();
-    await db.exec(readFileSync("supabase/local-auth-stubs.sql", "utf8"));
-    await db.exec(readFileSync("supabase/migrations/0001_init.sql", "utf8"));
-    await db.exec(readFileSync("supabase/seed.sql", "utf8"));
+    await db.exec(readFileSync("db/00_auth.sql", "utf8"));
+    await db.exec(readFileSync("db/01_schema.sql", "utf8"));
+    await db.exec(readFileSync("db/02_seed.sql", "utf8"));
     await db.exec(DEMO_SEED_SQL);
     const r = await db.query<{ n: number }>("select count(*)::int n from sessions");
     expect(r.rows[0].n).toBe(12);

@@ -260,6 +260,14 @@ describe("program branding and ProLyt admin", () => {
     const m = await db.query("select role from org_members where org_id=$1 and user_id=$2", [org, BOSS]);
     expect(m.rows).toEqual([{ role: "owner" }]);
   });
+  it("a ProLyt admin can invite an owner to an existing program; others can't", async () => {
+    await as(db, ADMIN, () => db.query("select invite_owner($1, 'Josh@Example.com')", [ORG]));
+    const JOSH = "10000000-0000-0000-0000-0000000000a7";
+    await addUser(db, JOSH, "josh@example.com");
+    await as(db, JOSH, () => db.query("select claim_invites()"));
+    expect((await db.query("select role from org_members where org_id=$1 and user_id=$2", [ORG, JOSH])).rows).toEqual([{ role: "owner" }]);
+    await expect(as(db, OWNER, () => db.query("select invite_owner($1, 'x@example.com')", [ORG]))).rejects.toThrow(/admins only/);
+  });
   it("non-admins cannot create programs or see the platform overview", async () => {
     await expect(as(db, OWNER, () => db.query("select create_program('X','x-prog','x@x.com')"))).rejects.toThrow(/admins only/);
     await expect(as(db, OWNER, () => db.query("select * from platform_overview()"))).rejects.toThrow(/admins only/);

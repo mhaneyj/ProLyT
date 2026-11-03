@@ -2,11 +2,12 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { asUser, isDemo } from "./db";
-import { supabaseServer } from "./supabase/server";
+import { asService, asUser, isDemo } from "./db";
+import { userForSession } from "./session";
 import { brandBySlug, currentOrgSlug } from "./org";
 
 export const DEMO_COOKIE = "gf_demo_uid";
+export const SESSION_COOKIE = "prolyt_session";
 
 export type Role = "owner" | "coach" | "guardian";
 export type Me = {
@@ -20,9 +21,10 @@ export type Me = {
 };
 
 export const currentUserId = cache(async (): Promise<string | null> => {
-  if (isDemo) return (await cookies()).get(DEMO_COOKIE)?.value ?? null;
-  const { data } = await (await supabaseServer()).auth.getUser();
-  return data.user?.id ?? null;
+  const jar = await cookies();
+  if (isDemo) return jar.get(DEMO_COOKIE)?.value ?? null;
+  const token = jar.get(SESSION_COOKIE)?.value;
+  return token ? asService((q) => userForSession(q, token)) : null;
 });
 
 export const getMe = cache(async (): Promise<Me | null> => {

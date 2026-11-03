@@ -1,5 +1,5 @@
-// Spins up a real Postgres (PGlite, in-process) with stand-ins for Supabase's
-// auth schema and roles, then applies the migration and seed. Tests switch
+// Spins up a real Postgres (PGlite, in-process), applies the same SQL files
+// used on Neon, then the seed. Tests switch
 // users with `as(uid)` so row-level security is exercised for real.
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
@@ -8,11 +8,37 @@ import { join } from "node:path";
 const root = join(__dirname, "..");
 
 
-export async function makeDb() {
-  const db = new PGlite();
-  await db.exec(readFileSync(join(root, "supabase/local-auth-stubs.sql"), "utf8"));
-  await db.exec(readFileSync(join(root, "supabase/migrations/0001_init.sql"), "utf8"));
-  await db.exec(readFileSync(join(root, "supabase/seed.sql"), "utf8"));
+type Db = Pick<PGlite, "query" | "exec">;
+
+/**
+ * Real Postgres when TEST_PG_ADMIN_URL is set (each suite gets a fresh database
+ * owned by a NON-superuser, like Neon's neondb_owner); otherwise in-process PGlite.
+ */
+async function realPostgres(): Promise<Db> {
+  const { default: pg } = await import("pg");
+  const admin = new pg.Client({ connectionString: process.env.TEST_PG_ADMIN_URL });
+  await admin.connect();
+  const name = `prolyt_test_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  await admin.query(`create database ${name} owner neondb_owner`);
+  await admin.end();
+  const url = new URL(process.env.TEST_PG_OWNER_URL!);
+  url.pathname = "/" + name;
+  const c = new pg.Client({ connectionString: url.toString() });
+  await c.connect();
+  return {
+    query: (async (sql: string, params?: unknown[]) => {
+      const r = await c.query(sql, params as unknown[]);
+      return { rows: r.rows, fields: [], affectedRows: r.rowCount ?? 0 };
+    }) as unknown as PGlite["query"],
+    exec: (async (sql: string) => { await c.query(sql); return []; }) as unknown as PGlite["exec"],
+  };
+}
+
+export async function makeDb(): Promise<PGlite> {
+  const db = (process.env.TEST_PG_ADMIN_URL ? await realPostgres() : new PGlite()) as PGlite;
+  await db.exec(readFileSync(join(root, "db/00_auth.sql"), "utf8"));
+  await db.exec(readFileSync(join(root, "db/01_schema.sql"), "utf8"));
+  await db.exec(readFileSync(join(root, "db/02_seed.sql"), "utf8"));
   return db;
 }
 

@@ -1,5 +1,5 @@
 -- ProLyt · athlete development platform · schema v1
--- Runs on Supabase Postgres. Relies on Supabase's auth schema (auth.users, auth.uid()).
+-- Runs on Postgres (Neon in production). Requires db/00_auth.sql first (auth.users, auth.uid()).
 --
 -- Model: an athlete has ONE ProLyt profile, owned by their family. Programs
 -- (Game-Fit Loomis and other licensees) connect to that profile with a parent's
@@ -538,6 +538,15 @@ begin
   insert into org_invites (org_id, email, role, invited_by) values (v_org, lower(trim(p_owner_email)), 'owner', auth.uid());
   insert into audit_log (actor, action, target) values (auth.uid(), 'create_program', v_org::text);
   return v_org;
+end $$;
+
+create function invite_owner(p_org uuid, p_email text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'ProLyt admins only'; end if;
+  insert into org_invites (org_id, email, role, invited_by) values (p_org, lower(trim(p_email)), 'owner', auth.uid())
+  on conflict (org_id, email, role) do update set accepted_at = null, invited_by = excluded.invited_by;
+  insert into audit_log (actor, action, target, detail) values (auth.uid(), 'invite_owner', p_org::text, jsonb_build_object('email', lower(trim(p_email))));
 end $$;
 
 create function platform_overview()

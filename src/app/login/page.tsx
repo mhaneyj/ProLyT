@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
-import { isDemo } from "@/lib/db";
+import { asService, isDemo } from "@/lib/db";
+import { requestLink, RateLimited } from "@/lib/session";
+import { sendSignInEmail } from "@/lib/email";
 import { DEMO_COOKIE } from "@/lib/auth";
 import { DEMO_USERS } from "@/lib/demo-seed";
-import { supabaseServer } from "@/lib/supabase/server";
 import { Button, Card, Kicker, Notice } from "@/components/ui";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
@@ -22,14 +23,21 @@ async function demoSignIn(form: FormData) {
 
 async function emailSignIn(form: FormData) {
   "use server";
-  const email = String(form.get("email") ?? "").trim();
-  if (!email) redirect("/login?error=Enter%20your%20email");
-  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
-  const { error } = await (await supabaseServer()).auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${origin}/auth/callback` },
-  });
-  redirect(error ? `/login?error=${encodeURIComponent(error.message)}` : "/login?sent=1");
+  if (isDemo) return;
+  const h = await headers();
+  // Link back to the same program address they signed in from
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
+  const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
+  const origin = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_SITE_URL ?? "");
+  let message: string | null = null;
+  try {
+    const { email, token } = await asService((q) => requestLink(q, String(form.get("email") ?? "")));
+    const brand = await brandBySlug(await currentOrgSlug());
+    await sendSignInEmail(email, `${origin}/auth/verify?token=${encodeURIComponent(token)}`, brand?.name ?? null);
+  } catch (e) {
+    message = e instanceof RateLimited || e instanceof Error ? e.message : "Something went wrong. Try again.";
+  }
+  redirect(message ? `/login?error=${encodeURIComponent(message)}` : "/login?sent=1");
 }
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string }> }) {
@@ -66,7 +74,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       ) : sp.sent ? (
         <Card accent>
           <div className="font-semibold">Check your email</div>
-          <p className="mt-1 text-sm text-soft">We sent you a sign-in link. It works once and expires in an hour.</p>
+          <p className="mt-1 text-sm text-soft">We sent you a sign-in link. Open it on this device. It works once and expires in 15 minutes.</p>
         </Card>
       ) : (
         <form action={emailSignIn} className="flex flex-col gap-3">

@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState } from "react";
-import { createProgram, type AdminState } from "./actions";
+import { createProgram, inviteOwner, type AdminState } from "./actions";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
@@ -33,6 +33,23 @@ export function NewProgramForm() {
       <button disabled={pending} className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold disabled:opacity-60">
         {pending ? "Creating…" : "Create program"}
       </button>
+    </form>
+  );
+}
+
+export function InviteOwnerForm({ orgId, name }: { orgId: string; name: string }) {
+  const [state, action, pending] = useActionState<AdminState, FormData>(inviteOwner, {});
+  return (
+    <form action={action} className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+      <input type="hidden" name="org" value={orgId} />
+      <label htmlFor={`owner-${orgId}`} className="text-xs text-soft">Invite an owner for {name}</label>
+      <div className="flex gap-2">
+        <input id={`owner-${orgId}`} name="email" type="email" autoComplete="off" placeholder="owner@email.com" className="min-h-11 min-w-0 flex-1 rounded-md border border-[#333] bg-[#111] px-3 text-sm text-cream" />
+        <button disabled={pending} className="min-h-11 flex-none rounded-md border-2 border-[#3a3a3a] px-3 text-sm font-bold hover:border-gold disabled:opacity-60">{pending ? "…" : "Invite"}</button>
+      </div>
+      <div aria-live="polite" className="text-xs">
+        {state.error ? <span role="alert" className="text-bad">{state.error}</span> : state.ok ? <span className="text-good">✓ {state.ok}</span> : null}
+      </div>
     </form>
   );
 }

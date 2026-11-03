@@ -7,12 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:setup": "node scripts/db-setup.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.2.17",
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.118.0",
     "next": "^15.5.28",
     "pg": "^8.13.3",
     "react": "19.1.0",

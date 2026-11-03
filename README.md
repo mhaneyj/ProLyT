@@ -8,7 +8,7 @@ ProLyt is an athlete development platform licensed to training programs. Game-Fi
 - **Each program runs under its own brand.** Its own web address (`gamefit-loomis.prolyt.app`), logo and color, with a small "Powered by ProLyt."
 - **ProLyt staff see totals, never children.** The admin view shows programs, athlete counts and revenue only.
 
-**Stack:** Next.js 15 (App Router) · Supabase Postgres + Auth · Stripe Connect · Vercel
+**Stack:** Next.js 15 (App Router) · Neon Postgres · email sign-in links (Resend) · Stripe Connect · Vercel
 
 ## Run it now (demo mode, no accounts needed)
 
@@ -22,10 +22,14 @@ With no environment variables set, the app runs on an in-memory Postgres loaded 
 ## Tests
 
 ```bash
-npm test                         # 42 database + business-logic tests
-# click-throughs (need Playwright and a build with NEXT_PUBLIC_ROOT_DOMAIN=localhost):
-BASE=http://gamefit-loomis.localhost:3000 node tests/e2e/walkthrough.mjs   # 25 checks: parent, coach, owner
-PORT=3000 node tests/e2e/platform.mjs                                       # 23 checks: branding, second program, ProLyt admin
+npm test                         # 53 database, sign-in and business-logic tests (in-process Postgres)
+# Same tests on a real Postgres server, owned by a non-superuser like Neon's:
+TEST_PG_ADMIN_URL=postgres://postgres@localhost/postgres TEST_PG_OWNER_URL=postgres://neondb_owner:…@localhost/neondb npx vitest run
+
+# Click-throughs (need Playwright and a build with NEXT_PUBLIC_ROOT_DOMAIN=localhost):
+BASE=http://gamefit-loomis.localhost:3000 node tests/e2e/walkthrough.mjs   # demo: parent, coach, owner (25 checks)
+PORT=3000 node tests/e2e/platform.mjs                                       # demo: branding, second program, admin (23)
+PORT=3000 LOG=server.log node tests/e2e/launch.mjs                          # real database: email sign-in, invites, registration (18)
 ```
 
 The database tests run the real migration and check the safety rules as each kind of user: families can't see each other, coaches can't read consent forms, parents can't fake coach or verified numbers, coach pay is credited once per session, film of a child under 13 can never be made public, a second program sees nothing until the parent connects it (and loses access when they leave), owners can rebrand but can't touch ProLyt's fee, and ProLyt admins can't read children's records.
@@ -43,13 +47,22 @@ The database tests run the real migration and check the safety rules as each kin
 
 Not in version 1 (by decision): NIL marketplace, community feed, college search, event mode, film upload UI, data feeds from MaxPreps/Hudl/QwikCut.
 
-## Go live
+## Go live (Neon + Vercel)
 
-1. **Supabase:** create a project. In the SQL editor run `supabase/migrations/0001_init.sql`, then `supabase/seed.sql` (the program and its three plans). Do **not** run `local-auth-stubs.sql` there. Under Authentication → URL configuration, add `https://YOUR-DOMAIN/auth/callback`.
-2. **Stripe:** turn on Connect (Express accounts). Add a webhook to `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`, `account.updated`. Turn on 1099 tax forms for connected accounts.
-3. **Vercel:** import the repo, add the variables from `.env.example` (including `NEXT_PUBLIC_ROOT_DOMAIN=prolyt.app`), and add the domains `prolyt.app` and `*.prolyt.app`. The payout job runs Fridays at 17:00 UTC (`vercel.json`).
-4. **Supabase redirect URLs:** add `https://*.prolyt.app/auth/callback`.
-5. **First admin:** after you sign in once, run `insert into platform_admins select id from auth.users where email = 'you@…';` in the SQL editor. Then create programs from the ProLyt admin screen. Owners get access when they first sign in with the invited email, and invite their own coaches from Settings.
+1. **Neon:** create a project (Postgres 16 or 17, region US West to sit near Vercel's default). Copy the **pooled** connection string.
+2. **Set up the database** from your computer, once:
+   ```bash
+   DATABASE_URL="postgres://…-pooler…/neondb?sslmode=require" npm run db:setup
+   ```
+   This creates the sign-in tables, the ProLyt schema and the Game-Fit Loomis program with its three plans. Re-running it is safe.
+3. **Resend:** create an account, verify your sending domain, create an API key.
+4. **Stripe:** turn on Connect (Express accounts). Add a webhook to `https://prolyt.app/api/stripe/webhook` for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`, `account.updated`. Turn on tax forms for connected accounts.
+5. **Vercel:** import the repo and add the variables from `.env.example`. Put your own email in `PLATFORM_ADMIN_EMAILS`. Add the domains `prolyt.app` and `*.prolyt.app`. The payout job runs Fridays at 17:00 UTC (`vercel.json`).
+6. **First sign-in:** go to prolyt.app, sign in with your email, and you land on the ProLyt admin screen. Invite Josh as owner of Game-Fit Loomis. He signs in at gamefit-loomis.prolyt.app and invites his coaches from Settings.
+
+**Before you own a domain:** set `NEXT_PUBLIC_ORG_SLUG=gamefit-loomis` and the `*.vercel.app` address shows Game-Fit Loomis.
+
+**How sign-in works:** families enter their email and get a one-time link (15 minutes). The link opens a "Finish signing in" button so email scanners that pre-open links can't use it up. Only hashes of links and sessions are stored; sessions last 30 days; 5 links per email per hour. Sign-in is per program address, so a parent with kids at two programs signs in at each.
 
 ## Before real families use it
 
@@ -57,6 +70,8 @@ Not in version 1 (by decision): NIL marketplace, community feed, college search,
 - [ ] Attorney review of under-13 consent (the card payment is the planned verification method)
 - [ ] CPA or attorney decides which coaches are contractors vs employees (California AB5)
 - [ ] Program's Stripe account connected and `orgs.stripe_account_id` set
+- [ ] Neon: point-in-time restore on (paid plan) so data can be recovered
+- [ ] Session creation and booking screens for coaches (sample data only today)
 - [ ] Payout job tested end to end in Stripe test mode, including a coach who hasn't finished setup
 
 ## How the money moves
@@ -72,8 +87,12 @@ The math lives in `src/lib/domain/settlement.ts` and refuses to run if coach pay
 ## Project map
 
 ```
-supabase/migrations/0001_init.sql   schema, safety triggers, row-level security
-src/lib/db.ts                       one SQL layer: Supabase in production, in-memory Postgres in demo
+db/00_auth.sql                      sign-in tables and database roles
+db/01_schema.sql                    schema, safety triggers, row-level security
+db/02_seed.sql                      Game-Fit Loomis and its plans
+scripts/db-setup.mjs                npm run db:setup
+src/lib/db.ts                       one SQL layer: Neon in production, in-memory Postgres in demo
+src/lib/session.ts                  email sign-in links and sessions (tested)
 src/lib/auth.ts                     who's signed in and their roles
 src/lib/domain/                     money split, metrics, formatting (pure, tested)
 src/app/(app)/                      signed-in screens

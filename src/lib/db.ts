@@ -1,7 +1,7 @@
 // One SQL data layer for both modes.
-// - Production: a direct Postgres connection to Supabase (DATABASE_URL). Each request
-//   runs in a transaction as the `authenticated` role with the user's id in
-//   request.jwt.claims, so the same row-level security rules apply as in Supabase.
+// - Production: Neon Postgres (DATABASE_URL, use the pooled connection string). Each
+//   request runs in a transaction as the `authenticated` role with the user's id in
+//   request.jwt.claims, so row-level security decides what every query can see.
 // - Demo mode (no DATABASE_URL): an in-process Postgres (PGlite) loaded with the
 //   same migration plus sample data. Nothing leaves the server; it resets on restart.
 import "server-only";
@@ -23,9 +23,9 @@ async function pglite(): Promise<PGlite> {
       const { PGlite } = await import("@electric-sql/pglite");
       const db = new PGlite();
       const root = process.cwd();
-      await db.exec(readFileSync(join(root, "supabase/local-auth-stubs.sql"), "utf8"));
-      await db.exec(readFileSync(join(root, "supabase/migrations/0001_init.sql"), "utf8"));
-      await db.exec(readFileSync(join(root, "supabase/seed.sql"), "utf8"));
+      await db.exec(readFileSync(join(root, "db/00_auth.sql"), "utf8"));
+      await db.exec(readFileSync(join(root, "db/01_schema.sql"), "utf8"));
+      await db.exec(readFileSync(join(root, "db/02_seed.sql"), "utf8"));
       await db.exec(DEMO_SEED_SQL);
       return db;
     })();
@@ -36,7 +36,7 @@ async function pglite(): Promise<PGlite> {
 async function pool(): Promise<Pool> {
   if (!g.__gfPool) {
     const { Pool } = await import("pg");
-    g.__gfPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+    g.__gfPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 10_000 });
   }
   return g.__gfPool;
 }

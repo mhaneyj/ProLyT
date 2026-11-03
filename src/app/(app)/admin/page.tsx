@@ -3,7 +3,7 @@ import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
 import { Card, SectionLabel, Stat, Title } from "@/components/ui";
 import { ProgramLogo } from "@/components/brand";
-import { NewProgramForm } from "./form";
+import { NewProgramForm, InviteOwnerForm } from "./form";
 import { themeVars } from "@/lib/domain/brand";
 
 export const metadata = { title: "ProLyt admin" };
@@ -26,7 +26,8 @@ export default async function Admin() {
 
       <SectionLabel>Programs</SectionLabel>
       {rows.map((r) => (
-        <Card key={r.org_id} className="flex items-center gap-3">
+        <Card key={r.org_id}>
+         <div className="flex items-center gap-3">
           <span style={themeVars(r.brand_color) as React.CSSProperties}><ProgramLogo brand={{ name: r.name, logo_url: null }} size={40} /></span>
           <div className="min-w-0 flex-1">
             <div className="truncate font-semibold">{r.name}</div>
@@ -36,6 +37,8 @@ export default async function Admin() {
             <div className="tabular font-display text-lg">{r.athletes}</div>
             <div className="text-[11px] text-muted">athletes</div>
           </div>
+         </div>
+          <InviteOwnerForm orgId={r.org_id} name={r.name} />
         </Card>
       ))}
 

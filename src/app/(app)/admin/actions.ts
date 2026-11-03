@@ -28,3 +28,16 @@ export async function createProgram(_: AdminState, form: FormData): Promise<Admi
   revalidatePath("/admin");
   return { ok: `${p.data.name} created. Send ${p.data.owner} the link ${p.data.slug}.prolyt.app.` };
 }
+
+export async function inviteOwner(_: AdminState, form: FormData): Promise<AdminState> {
+  const me = await requirePlatformAdmin();
+  const org = String(form.get("org") ?? "");
+  const email = z.email("Enter the owner's email").safeParse(String(form.get("email") ?? "").trim());
+  if (!email.success) return { error: email.error.issues[0].message };
+  try {
+    await asUser(me.id, (q) => q("select invite_owner($1, $2)", [org, email.data]));
+  } catch (e) {
+    return { error: dbMessage(e) };
+  }
+  return { ok: `Invited. ${email.data} becomes owner the first time they sign in.` };
+}
