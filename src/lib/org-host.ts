@@ -1,6 +1,6 @@
 const PLATFORM_SUBDOMAINS = new Set(["www", "app", "api", "admin"]);
 
-/** prolyt.com / www.prolyt.com → ProLyt itself; gamefit-loomis.prolyt.com → that program. */
+/** prolyt.app / www.prolyt.app → ProLyt itself; gamefit-loomis.prolyt.app → that program. */
 export function slugForHost(host: string, root: string, forced: string | null): string | null {
   if (root) {
     if (host === root) return forced;

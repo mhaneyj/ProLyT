@@ -5,7 +5,7 @@
 ProLyt is an athlete development platform licensed to training programs. Game-Fit Loomis is the first licensee.
 
 - **One profile per athlete, owned by the family.** Programs connect to it with a parent's permission and add verified results, so the record follows the athlete from program to program. When a family leaves, that program loses access.
-- **Each program runs under its own brand.** Its own web address (`gamefit-loomis.prolyt.com`), logo and color, with a small "Powered by ProLyt."
+- **Each program runs under its own brand.** Its own web address (`gamefit-loomis.prolyt.app`), logo and color, with a small "Powered by ProLyt."
 - **ProLyt staff see totals, never children.** The admin view shows programs, athlete counts and revenue only.
 
 **Stack:** Next.js 15 (App Router) · Neon Postgres · email sign-in links (Resend) · Stripe Connect · Vercel
@@ -56,11 +56,11 @@ Not in version 1 (by decision): NIL marketplace, community feed, college search,
    ```
    This creates the sign-in tables, the ProLyt schema and the Game-Fit Loomis program with its three plans. Re-running it is safe.
 3. **Resend:** create an account, verify your sending domain, create an API key.
-4. **Stripe:** turn on Connect (Express accounts). Add a webhook to `https://prolyt.com/api/stripe/webhook` for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`, `account.updated`. Turn on tax forms for connected accounts.
-5. **Vercel:** import the repo and add the variables from `.env.example`. Put your own email in `PLATFORM_ADMIN_EMAILS`. Add the domains `prolyt.com`, `www.prolyt.com`, `*.prolyt.com` and `app.game-fitloomis.com`. The payout job runs Fridays at 17:00 UTC (`vercel.json`).
+4. **Stripe:** turn on Connect (Express accounts). Add a webhook to `https://prolyt.app/api/stripe/webhook` for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`, `account.updated`. Turn on tax forms for connected accounts.
+5. **Vercel:** import the repo and add the variables from `.env.example`. Put your own email in `PLATFORM_ADMIN_EMAILS`. Add the domains `prolyt.app`, `www.prolyt.app`, `*.prolyt.app` and `app.game-fitloomis.com`. The payout job runs Fridays at 17:00 UTC (`vercel.json`).
    - **Game-Fit's own address:** at Game-Fit's domain registrar, add a CNAME record `app` → the target Vercel shows for `app.game-fitloomis.com`. Their marketing site stays at `game-fitloomis.com`, with a "Family login" link to the app.
    - **Other programs' own addresses:** set it on the ProLyt admin screen, add it to the Vercel project, and have the program add the CNAME.
-6. **First sign-in:** go to prolyt.com, sign in with your email, and you land on the ProLyt admin screen. Invite Josh as owner of Game-Fit Loomis. He signs in at gamefit-loomis.prolyt.com and invites his coaches from Settings.
+6. **First sign-in:** go to prolyt.app, sign in with your email, and you land on the ProLyt admin screen. Invite Josh as owner of Game-Fit Loomis. He signs in at gamefit-loomis.prolyt.app and invites his coaches from Settings.
 
 **Before you own a domain:** set `NEXT_PUBLIC_ORG_SLUG=gamefit-loomis` and the `*.vercel.app` address shows Game-Fit Loomis.
 

@@ -8,7 +8,7 @@ export type Brand = { id: string; name: string; slug: string; logo_url: string |
 
 /**
  * Which program's branding to show, from the web address:
- * gamefit-loomis.prolyt.com → "gamefit-loomis". Falls back to NEXT_PUBLIC_ORG_SLUG
+ * gamefit-loomis.<ROOT_DOMAIN> → "gamefit-loomis". Falls back to NEXT_PUBLIC_ORG_SLUG
  * (single-program deployments and local dev). Null on the bare ProLyt domain.
  */
 export const currentOrgSlug = cache(async (): Promise<string | null> => {

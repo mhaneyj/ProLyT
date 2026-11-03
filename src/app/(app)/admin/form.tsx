@@ -1,6 +1,7 @@
 "use client";
 import { useActionState, useState } from "react";
 import { createProgram, inviteOwner, setDomain, type AdminState } from "./actions";
+import { ROOT_DOMAIN } from "@/lib/site";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
@@ -20,7 +21,7 @@ export function NewProgramForm() {
         <label htmlFor="p-slug" className="mb-1.5 block text-sm text-soft">Web address</label>
         <div className="flex items-center gap-2">
           <input id="p-slug" name="slug" value={slug} onChange={(e) => { setTouched(true); setSlug(toSlug(e.target.value)); }} className={`${input} tabular`} />
-          <span className="flex-none text-sm text-muted">.prolyt.com</span>
+          <span className="flex-none text-sm text-muted">.{ROOT_DOMAIN}</span>
         </div>
       </div>
       <div>

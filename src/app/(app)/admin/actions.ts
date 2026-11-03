@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
+import { ROOT_DOMAIN, programAddress } from "@/lib/site";
 
 export type AdminState = { ok?: string; error?: string };
 
@@ -26,7 +27,7 @@ export async function createProgram(_: AdminState, form: FormData): Promise<Admi
     return { error: /duplicate key/.test(m) ? "That web address is taken." : m };
   }
   revalidatePath("/admin");
-  return { ok: `${p.data.name} created. Send ${p.data.owner} the link ${p.data.slug}.prolyt.com.` };
+  return { ok: `${p.data.name} created. Send ${p.data.owner} the link ${programAddress(p.data.slug)}.` };
 }
 
 export async function setDomain(_: AdminState, form: FormData): Promise<AdminState> {
@@ -34,7 +35,7 @@ export async function setDomain(_: AdminState, form: FormData): Promise<AdminSta
   const org = String(form.get("org") ?? "");
   const domain = String(form.get("domain") ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   if (domain && !/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(domain)) return { error: "Enter a web address like app.yourprogram.com" };
-  if (domain.endsWith("prolyt.com")) return { error: "Use the program's own domain. ProLyt addresses work automatically." };
+  if (domain === ROOT_DOMAIN || domain.endsWith("." + ROOT_DOMAIN)) return { error: "Use the program's own domain. ProLyt addresses work automatically." };
   try {
     await asUser(me.id, (q) => q("select set_custom_domain($1, $2)", [org, domain]));
   } catch (e) {

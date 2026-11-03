@@ -5,6 +5,7 @@ import { Card, SectionLabel, Stat, Title } from "@/components/ui";
 import { ProgramLogo } from "@/components/brand";
 import { NewProgramForm, InviteOwnerForm, DomainForm } from "./form";
 import { themeVars } from "@/lib/domain/brand";
+import { programAddress } from "@/lib/site";
 
 export const metadata = { title: "ProLyt admin" };
 
@@ -31,7 +32,7 @@ export default async function Admin() {
           <span style={themeVars(r.brand_color) as React.CSSProperties}><ProgramLogo brand={{ name: r.name, logo_url: null }} size={40} /></span>
           <div className="min-w-0 flex-1">
             <div className="truncate font-semibold">{r.name}</div>
-            <div className="truncate text-xs text-muted">{r.custom_domain ?? `${r.slug}.prolyt.com`} · {r.coaches} coaches · {r.active_members} active</div>
+            <div className="truncate text-xs text-muted">{r.custom_domain ?? programAddress(r.slug)} · {r.coaches} coaches · {r.active_members} active</div>
           </div>
           <div className="text-right">
             <div className="tabular font-display text-lg">{r.athletes}</div>

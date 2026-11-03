@@ -1,9 +1,10 @@
 import "server-only";
+import { ROOT_DOMAIN } from "./site";
 
 /** Sends the sign-in email through Resend. Without a key (local dev), prints the link to the server log instead. */
 export async function sendSignInEmail(to: string, link: string, programName: string | null) {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? "ProLyt <signin@prolyt.com>";
+  const from = process.env.EMAIL_FROM ?? `ProLyt <signin@${ROOT_DOMAIN}>`;
   const who = programName ?? "ProLyt";
   if (!key) {
     if (process.env.VERCEL_ENV === "production") throw new Error("Email isn't set up yet. Add RESEND_API_KEY.");

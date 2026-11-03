@@ -9,6 +9,7 @@ import { Card, Kicker, Notice } from "@/components/ui";
 import { PoweredBy, ProgramLogo } from "@/components/brand";
 import { RegisterForm } from "./form";
 import { ConnectForm } from "./connect-form";
+import { programAddress } from "@/lib/site";
 
 export const metadata = { title: "Register an athlete" };
 
@@ -19,7 +20,7 @@ export default async function Register() {
   if (!brand) {
     return (
       <main className="mx-auto max-w-md px-5 py-10">
-        <Notice>Open your program&apos;s ProLyt link to register (for example yourprogram.prolyt.com).</Notice>
+        <Notice>Open your program&apos;s ProLyt link to register (for example {programAddress("yourprogram")}).</Notice>
       </main>
     );
   }
