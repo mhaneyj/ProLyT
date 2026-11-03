@@ -19,7 +19,7 @@ export default async function Register() {
   if (!brand) {
     return (
       <main className="mx-auto max-w-md px-5 py-10">
-        <Notice>Open your program&apos;s ProLyt link to register (for example yourprogram.prolyt.app).</Notice>
+        <Notice>Open your program&apos;s ProLyt link to register (for example yourprogram.prolyt.com).</Notice>
       </main>
     );
   }

@@ -3,12 +3,12 @@ import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
 import { Card, SectionLabel, Stat, Title } from "@/components/ui";
 import { ProgramLogo } from "@/components/brand";
-import { NewProgramForm, InviteOwnerForm } from "./form";
+import { NewProgramForm, InviteOwnerForm, DomainForm } from "./form";
 import { themeVars } from "@/lib/domain/brand";
 
 export const metadata = { title: "ProLyt admin" };
 
-type Row = { org_id: string; name: string; slug: string; brand_color: string; athletes: number; active_members: number; coaches: number; revenue_30d_cents: number };
+type Row = { org_id: string; name: string; slug: string; custom_domain: string | null; brand_color: string; athletes: number; active_members: number; coaches: number; revenue_30d_cents: number };
 
 export default async function Admin() {
   const me = await requirePlatformAdmin();
@@ -31,13 +31,14 @@ export default async function Admin() {
           <span style={themeVars(r.brand_color) as React.CSSProperties}><ProgramLogo brand={{ name: r.name, logo_url: null }} size={40} /></span>
           <div className="min-w-0 flex-1">
             <div className="truncate font-semibold">{r.name}</div>
-            <div className="text-xs text-muted">{r.slug} · {r.coaches} coaches · {r.active_members} active members</div>
+            <div className="truncate text-xs text-muted">{r.custom_domain ?? `${r.slug}.prolyt.com`} · {r.coaches} coaches · {r.active_members} active</div>
           </div>
           <div className="text-right">
             <div className="tabular font-display text-lg">{r.athletes}</div>
             <div className="text-[11px] text-muted">athletes</div>
           </div>
          </div>
+          <DomainForm orgId={r.org_id} current={r.custom_domain} />
           <InviteOwnerForm orgId={r.org_id} name={r.name} />
         </Card>
       ))}

@@ -268,6 +268,13 @@ describe("program branding and ProLyt admin", () => {
     expect((await db.query("select role from org_members where org_id=$1 and user_id=$2", [ORG, JOSH])).rows).toEqual([{ role: "owner" }]);
     await expect(as(db, OWNER, () => db.query("select invite_owner($1, 'x@example.com')", [ORG]))).rejects.toThrow(/admins only/);
   });
+  it("only ProLyt admins set a program's own domain; bad addresses are refused", async () => {
+    await as(db, ADMIN, () => db.query("select set_custom_domain($1, 'App.Game-FitLoomis.com')", [ORG]));
+    expect((await db.query<{ custom_domain: string }>("select custom_domain from orgs where id=$1", [ORG])).rows[0].custom_domain).toBe("app.game-fitloomis.com");
+    await expect(as(db, OWNER, () => db.query("select set_custom_domain($1, 'evil.com')", [ORG]))).rejects.toThrow(/admins only/);
+    await expect(as(db, OWNER, () => db.query("update orgs set custom_domain='evil.com' where id=$1", [ORG]))).rejects.toThrow(/permission/);
+    await expect(as(db, ADMIN, () => db.query("select set_custom_domain($1, 'not a domain')", [ORG]))).rejects.toThrow();
+  });
   it("non-admins cannot create programs or see the platform overview", async () => {
     await expect(as(db, OWNER, () => db.query("select create_program('X','x-prog','x@x.com')"))).rejects.toThrow(/admins only/);
     await expect(as(db, OWNER, () => db.query("select * from platform_overview()"))).rejects.toThrow(/admins only/);

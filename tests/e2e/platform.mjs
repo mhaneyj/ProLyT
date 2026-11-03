@@ -11,7 +11,8 @@ const OUT = process.env.OUT ?? "./shots";
 const url = (sub, path) => `http://${sub ? sub + "." : ""}localhost:${PORT}${path}`;
 mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch();
+// Point the program's own domain at this machine, as DNS will in production
+const browser = await chromium.launch({ args: ["--host-resolver-rules=MAP app.game-fitloomis.com 127.0.0.1"] });
 const results = [];
 const check = (name, ok, detail = "") => { results.push({ ok }); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? " — " + detail : ""}`); };
 const seen = (loc) => loc.first().waitFor({ state: "visible", timeout: 6000 }).then(() => true, () => false);
@@ -43,6 +44,24 @@ async function signIn(sub, userName) {
   await shot(page, "p02-speed-login");
   await page.goto(url("", "/"));
   check("bare ProLyt domain is unbranded", (await page.getByText("Register an athlete").count()) === 0);
+  await ctx.close();
+}
+
+// ── A program's own domain opens its branded app
+{
+  const { ctx, page, errors } = await (async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+    return { ctx, page, errors };
+  })();
+  await page.goto(`http://app.game-fitloomis.com:${PORT}/login`);
+  check("app.game-fitloomis.com shows Game-Fit's sign-in", await seen(page.getByRole("img", { name: "Game-Fit Loomis" })));
+  await page.getByRole("button", { name: /Pat Morgan/ }).click();
+  await page.waitForURL(/\/family/);
+  check("families stay on Game-Fit's address", page.url().startsWith("http://app.game-fitloomis.com"), page.url());
+  check("header shows Game-Fit, not ProLyt", await seen(page.locator("header").getByText("Game-Fit Loomis")));
+  await shot(page, "p00-custom-domain");
+  check("no client errors (custom domain)", errors.length === 0, errors.join("; "));
   await ctx.close();
 }
 

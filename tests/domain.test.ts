@@ -76,3 +76,21 @@ describe("brand colors", () => {
     }
   });
 });
+
+describe("program web addresses on prolyt.com", () => {
+  // slugForHost is pure; import it without the server-only page helpers
+  it("maps addresses to programs", async () => {
+    const { slugForHost } = await import("../src/lib/org-host");
+    const r = "prolyt.com";
+    expect(slugForHost("prolyt.com", r, null)).toBeNull();
+    expect(slugForHost("www.prolyt.com", r, null)).toBeNull();
+    expect(slugForHost("gamefit-loomis.prolyt.com", r, null)).toBe("gamefit-loomis");
+    expect(slugForHost("api.prolyt.com", r, null)).toBeNull();
+    expect(slugForHost("a.b.prolyt.com", r, null)).toBeNull();
+    expect(slugForHost("evilprolyt.com", r, null)).toBe("gamefit-loomis"); // not a subdomain → fallback, never "evil"
+    expect(slugForHost("prolyt-abc.vercel.app", r, "gamefit-loomis")).toBe("gamefit-loomis");
+    const { isPlatformHost } = await import("../src/lib/org-host");
+    expect(isPlatformHost("app.game-fitloomis.com", r)).toBe(false); // looked up as a program domain
+    expect(isPlatformHost("gamefit-loomis.prolyt.com", r)).toBe(true);
+  });
+});

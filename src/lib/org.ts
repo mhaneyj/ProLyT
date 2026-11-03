@@ -2,12 +2,13 @@ import "server-only";
 import { cache } from "react";
 import { headers } from "next/headers";
 import { asService } from "./db";
+import { isPlatformHost, slugForHost } from "./org-host";
 
 export type Brand = { id: string; name: string; slug: string; logo_url: string | null; brand_color: string };
 
 /**
  * Which program's branding to show, from the web address:
- * gamefit-loomis.prolyt.app → "gamefit-loomis". Falls back to NEXT_PUBLIC_ORG_SLUG
+ * gamefit-loomis.prolyt.com → "gamefit-loomis". Falls back to NEXT_PUBLIC_ORG_SLUG
  * (single-program deployments and local dev). Null on the bare ProLyt domain.
  */
 export const currentOrgSlug = cache(async (): Promise<string | null> => {
@@ -18,11 +19,12 @@ export const currentOrgSlug = cache(async (): Promise<string | null> => {
   const raw = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
   const host = raw.split(":")[0].toLowerCase();
   const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "").toLowerCase();
-  if (root && host.endsWith("." + root)) {
-    const sub = host.slice(0, -(root.length + 1));
-    if (sub && sub !== "www" && sub !== "app") return sub;
+  // A program's own domain (app.game-fitloomis.com) → that program
+  if (host && !isPlatformHost(host, root)) {
+    const [o] = await asService((q) => q<{ slug: string }>("select slug from orgs where custom_domain = $1", [host]));
+    if (o) return o.slug;
   }
-  return process.env.NEXT_PUBLIC_ORG_SLUG ?? (root && host === root ? null : "gamefit-loomis");
+  return slugForHost(host, root, process.env.NEXT_PUBLIC_ORG_SLUG || null);
 });
 
 // Program branding is public information (shown on sign-in pages), so it's read with the server role.

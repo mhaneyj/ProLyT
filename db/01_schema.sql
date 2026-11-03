@@ -26,6 +26,8 @@ create table orgs (
   name text not null check (length(trim(name)) between 2 and 80),
   slug text not null unique check (slug ~ '^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$'),
   logo_url text check (logo_url is null or length(logo_url) < 700000),
+  -- The program's own address for its app, e.g. app.game-fitloomis.com (set by ProLyt staff with the DNS)
+  custom_domain text unique check (custom_domain is null or custom_domain ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$'),
   brand_color text not null default '#F8C40A' check (brand_color ~ '^#[0-9A-Fa-f]{6}$'),
   stripe_account_id text,                       -- the program's Stripe Connect account
   platform_fee_bps int not null default 0,      -- ProLyt licensing fee per charge, in basis points
@@ -540,6 +542,14 @@ begin
   return v_org;
 end $$;
 
+create function set_custom_domain(p_org uuid, p_domain text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'ProLyt admins only'; end if;
+  update orgs set custom_domain = nullif(lower(trim(p_domain)), '') where id = p_org;
+  insert into audit_log (actor, action, target, detail) values (auth.uid(), 'set_custom_domain', p_org::text, jsonb_build_object('domain', p_domain));
+end $$;
+
 create function invite_owner(p_org uuid, p_email text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
@@ -550,12 +560,12 @@ begin
 end $$;
 
 create function platform_overview()
-returns table (org_id uuid, name text, slug text, brand_color text, athletes int, active_members int, coaches int, revenue_30d_cents int, created_at timestamptz)
+returns table (org_id uuid, name text, slug text, custom_domain text, brand_color text, athletes int, active_members int, coaches int, revenue_30d_cents int, created_at timestamptz)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not is_platform_admin() then raise exception 'ProLyt admins only'; end if;
   return query
-  select o.id, o.name, o.slug, o.brand_color,
+  select o.id, o.name, o.slug, o.custom_domain, o.brand_color,
     (select count(*)::int from program_athletes pa where pa.org_id = o.id and pa.status = 'active'),
     (select count(*)::int from memberships m join plans p on p.id = m.plan_id where p.org_id = o.id and m.status = 'active'),
     (select count(*)::int from org_members om where om.org_id = o.id and om.role = 'coach'),
