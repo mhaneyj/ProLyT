@@ -16,7 +16,6 @@ const results = [];
 const check = (name, ok, detail = "") => { results.push({ ok }); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? " — " + detail : ""}`); };
 const seen = (loc) => loc.first().waitFor({ state: "visible", timeout: 6000 }).then(() => true, () => false);
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
-const accentOf = (page) => page.evaluate(() => getComputedStyle(document.querySelector("main") ?? document.body).getPropertyValue("--color-gold").trim().toUpperCase());
 
 async function signIn(sub, userName) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
