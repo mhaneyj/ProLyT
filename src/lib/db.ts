@@ -33,12 +33,49 @@ async function pglite(): Promise<PGlite> {
   return g.__gfPglite;
 }
 
+const gs = globalThis as unknown as { __gfSchema?: Promise<void> };
+
 async function pool(): Promise<Pool> {
   if (!g.__gfPool) {
     const { Pool } = await import("pg");
     g.__gfPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 10_000 });
   }
+  gs.__gfSchema ??= ensureSchema(g.__gfPool).catch((e) => {
+    gs.__gfSchema = undefined; // try again on the next request
+    throw e;
+  });
+  await gs.__gfSchema;
   return g.__gfPool;
+}
+
+/**
+ * First start on a brand-new database (e.g. a fresh Neon project): create the
+ * sign-in tables, schema and Game-Fit Loomis program automatically, so pasting
+ * DATABASE_URL into Vercel is the only setup step. A lock makes sure only one
+ * server instance does it; an existing database is left untouched.
+ */
+async function ensureSchema(p: Pool) {
+  const client = await p.connect();
+  try {
+    const [{ ready }] = (await client.query("select to_regclass('public.orgs') is not null as ready")).rows;
+    if (ready) return;
+    const root = process.cwd();
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(782301)");
+    const [{ ready: done }] = (await client.query("select to_regclass('public.orgs') is not null as ready")).rows;
+    if (!done) {
+      for (const f of ["00_auth.sql", "01_schema.sql", "02_seed.sql"]) {
+        await client.query(readFileSync(join(root, "db", f), "utf8"));
+      }
+      console.log("[db] New database: ProLyt schema and Game-Fit Loomis program created.");
+    }
+    await client.query("commit");
+  } catch (e) {
+    await client.query("rollback").catch(() => undefined);
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // PGlite has one connection; serialize transactions so role settings never leak.
