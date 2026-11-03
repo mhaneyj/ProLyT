@@ -10,7 +10,7 @@ import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
-export const metadata = { title: "Sign in" };
+export const metadata = { title: "Sign up or log in" };
 
 async function demoSignIn(form: FormData) {
   "use server";
@@ -48,7 +48,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       {brand ? <ProgramLogo brand={brand} size={80} /> : <ProLytMark className="text-4xl" />}
       <div>
         <Kicker>{brand ? brand.name : "ProLyt"}</Kicker>
-        <h1 className="mt-1 font-display text-[40px] uppercase leading-none">Sign in</h1>
+        <h1 className="mt-1 font-display text-[40px] uppercase leading-none">Sign up or log in</h1>
       </div>
 
       {isDemo ? (
@@ -89,7 +89,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             className="min-h-12 rounded-md border border-[#333] bg-[#111] px-3 text-cream"
           />
           <Button type="submit">Email me a sign-in link</Button>
-          <p className="text-xs text-muted">No passwords. New families can register after signing in.</p>
+          <p className="text-xs text-muted">No passwords. New here? Enter your email and we&apos;ll create your account, then you&apos;ll register your athlete.</p>
         </form>
       )}
       {brand ? <div className="mt-auto text-center"><PoweredBy /></div> : null}
