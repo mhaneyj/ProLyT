@@ -1,6 +1,12 @@
-# Game-Fit Athlete Portal · version 1
+# ProLyt · version 1
 
-Memberships, schedules, coach check-in, verified progress and coach payouts for Game-Fit Loomis. Built to be licensed to other programs later: every record belongs to an organization, and row-level security keeps programs and families apart.
+**Train it. Track it. ProLyt.** Your progress, highlighted.
+
+ProLyt is an athlete development platform licensed to training programs. Game-Fit Loomis is the first licensee.
+
+- **One profile per athlete, owned by the family.** Programs connect to it with a parent's permission and add verified results, so the record follows the athlete from program to program. When a family leaves, that program loses access.
+- **Each program runs under its own brand.** Its own web address (`gamefit-loomis.prolyt.app`), logo and color, with a small "Powered by ProLyt."
+- **ProLyt staff see totals, never children.** The admin view shows programs, athlete counts and revenue only.
 
 **Stack:** Next.js 15 (App Router) · Supabase Postgres + Auth · Stripe Connect · Vercel
 
@@ -16,11 +22,13 @@ With no environment variables set, the app runs on an in-memory Postgres loaded 
 ## Tests
 
 ```bash
-npm test                         # 25 database + business-logic tests
-BASE=http://localhost:3000 node tests/e2e/walkthrough.mjs   # 25-step click-through (needs Playwright)
+npm test                         # 42 database + business-logic tests
+# click-throughs (need Playwright and a build with NEXT_PUBLIC_ROOT_DOMAIN=localhost):
+BASE=http://gamefit-loomis.localhost:3000 node tests/e2e/walkthrough.mjs   # 25 checks: parent, coach, owner
+PORT=3000 node tests/e2e/platform.mjs                                       # 23 checks: branding, second program, ProLyt admin
 ```
 
-The database tests run the real migration and check the safety rules as each kind of user: families can't see each other, coaches can't read consent forms, parents can't fake coach or verified numbers, coach pay is credited once per session, and film of a child under 13 can never be made public.
+The database tests run the real migration and check the safety rules as each kind of user: families can't see each other, coaches can't read consent forms, parents can't fake coach or verified numbers, coach pay is credited once per session, film of a child under 13 can never be made public, a second program sees nothing until the parent connects it (and loses access when they leave), owners can rebrand but can't touch ProLyt's fee, and ProLyt admins can't read children's records.
 
 ## What's in version 1
 
@@ -28,7 +36,9 @@ The database tests run the real migration and check the safety rules as each kin
 |---|---|
 | Families | Register (consents, waiver, under-13 parental confirmation, emergency info) · Home · Progress (verified vs coach-logged vs self-reported) · Schedule |
 | Coaches | Today · Session check-in · Log results (with typo guard) · Earnings + Stripe payout setup |
-| Owner | Dashboard: revenue, plan mix, logging rate, failed payments, coaches not set up for payouts |
+| Owner | Dashboard: revenue, plan mix, logging rate, failed payments · Settings: logo, brand color (with a readability check), coach invites, coach pay |
+| ProLyt staff | All programs at a glance · Create a program and invite its owner |
+| Families (multi-program) | Bring an existing athlete profile to a new program in one step |
 | Money | Monthly membership checkout · Stripe webhooks · Weekly payout job (coaches, then the program) |
 
 Not in version 1 (by decision): NIL marketplace, community feed, college search, event mode, film upload UI, data feeds from MaxPreps/Hudl/QwikCut.
@@ -37,8 +47,9 @@ Not in version 1 (by decision): NIL marketplace, community feed, college search,
 
 1. **Supabase:** create a project. In the SQL editor run `supabase/migrations/0001_init.sql`, then `supabase/seed.sql` (the program and its three plans). Do **not** run `local-auth-stubs.sql` there. Under Authentication → URL configuration, add `https://YOUR-DOMAIN/auth/callback`.
 2. **Stripe:** turn on Connect (Express accounts). Add a webhook to `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`, `account.updated`. Turn on 1099 tax forms for connected accounts.
-3. **Vercel:** import the repo, add the variables from `.env.example`, deploy. The payout job runs Fridays at 17:00 UTC (`vercel.json`).
-4. **Staff:** after the owner and coaches sign in once, set their roles in `org_members` (owner, coach, `pay_type` contractor or employee, `coach_verified` after background checks).
+3. **Vercel:** import the repo, add the variables from `.env.example` (including `NEXT_PUBLIC_ROOT_DOMAIN=prolyt.app`), and add the domains `prolyt.app` and `*.prolyt.app`. The payout job runs Fridays at 17:00 UTC (`vercel.json`).
+4. **Supabase redirect URLs:** add `https://*.prolyt.app/auth/callback`.
+5. **First admin:** after you sign in once, run `insert into platform_admins select id from auth.users where email = 'you@…';` in the SQL editor. Then create programs from the ProLyt admin screen. Owners get access when they first sign in with the invited email, and invite their own coaches from Settings.
 
 ## Before real families use it
 
@@ -50,7 +61,7 @@ Not in version 1 (by decision): NIL marketplace, community feed, college search,
 
 ## How the money moves
 
-Families pay the platform each month. Every Friday the payout job, for each program:
+Families pay ProLyt each month on the program's behalf. Every Friday the payout job, for each program:
 1. pays contractor coaches for sessions they checked in (70% of 1-on-1s, flat rate for group sessions; set per program in `orgs`),
 2. holds pay for coaches who haven't finished Stripe setup and shows it on the owner dashboard,
 3. sends employee coaches' sessions to payroll instead,

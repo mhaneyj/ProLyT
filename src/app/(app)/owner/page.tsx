@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
@@ -12,9 +13,9 @@ export default async function Owner() {
       select
         (select coalesce(sum(amount_cents),0)::int from payments where org_id = $1 and created_at > now() - interval '30 days') revenue,
         (select coalesce(sum(amount_cents),0)::int from payments where org_id = $1 and created_at between now() - interval '60 days' and now() - interval '30 days') last,
-        (select count(*)::int from athletes where org_id = $1) athletes,
-        (select count(*)::int from memberships m join athletes a on a.id = m.athlete_id where a.org_id = $1 and m.status = 'active') active,
-        (select count(*)::int from memberships m join athletes a on a.id = m.athlete_id where a.org_id = $1 and m.status = 'past_due') past_due,
+        (select count(*)::int from program_athletes where org_id = $1 and status = 'active') athletes,
+        (select count(*)::int from memberships m join plans p on p.id = m.plan_id where p.org_id = $1 and m.status = 'active') active,
+        (select count(*)::int from memberships m join plans p on p.id = m.plan_id where p.org_id = $1 and m.status = 'past_due') past_due,
         (select coalesce(round(100.0 * count(*) filter (where exists (select 1 from attendance at where at.session_id = s.id)) / nullif(count(*),0)),0)::int
            from sessions s where s.org_id = $1 and s.starts_at between now() - interval '30 days' and now()) logged,
         (select coalesce(sum(e.amount_cents),0)::int from coach_earnings e join org_members om on om.user_id = e.coach_id and om.org_id = e.org_id and om.role = 'coach'
@@ -22,7 +23,7 @@ export default async function Owner() {
     const alerts = await q<{ title: string; sub: string }>(`
       select a.first_name || ' ' || a.last_name || ' · payment failed' title, p.name || ' · ' || to_char(p.price_cents/100.0, 'FM$999') sub
       from memberships m join athletes a on a.id = m.athlete_id join plans p on p.id = m.plan_id
-      where a.org_id = $1 and m.status = 'past_due'
+      where p.org_id = $1 and m.status = 'past_due'
       union all
       select pr.full_name || ' · payout setup not finished', 'Their pending pay is held until they finish'
       from org_members om join profiles pr on pr.id = om.user_id
@@ -36,7 +37,7 @@ export default async function Owner() {
 
   return (
     <>
-      <Title sub="Last 30 days.">Dashboard</Title>
+      <div className="flex items-end justify-between gap-3"><Title sub="Last 30 days.">Dashboard</Title><Link href="/owner/settings" className="min-h-11 pb-1 text-sm font-semibold">Settings</Link></div>
       <Card>
         <div className="flex items-baseline justify-between text-sm"><span className="text-muted">Revenue</span>
           {change !== null ? <span className={change >= 0 ? "font-bold text-good" : "font-bold text-warn"}>{change >= 0 ? "+" : ""}{change}% vs prior 30 days</span> : null}

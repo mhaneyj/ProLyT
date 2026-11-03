@@ -8,9 +8,10 @@ export const DEMO_USERS = [
   { id: "d0000000-0000-0000-0000-000000000003", name: "Coach Marco", email: "marco@demo.gamefit", role: "Coach", home: "/coach" },
   { id: "d0000000-0000-0000-0000-000000000004", name: "Pat Morgan", email: "pat@demo.gamefit", role: "Parent of Jordan (15)", home: "/family" },
   { id: "d0000000-0000-0000-0000-000000000005", name: "Sam Lee", email: "sam@demo.gamefit", role: "Parent of Riley (11)", home: "/family" },
+  { id: "d0000000-0000-0000-0000-000000000009", name: "ProLyt Admin", email: "admin@demo.prolyt", role: "ProLyt staff · all programs", home: "/admin" },
 ] as const;
 
-const [OWNER, LEM, MARCO, PAT, SAM] = DEMO_USERS.map((u) => u.id);
+const [OWNER, LEM, MARCO, PAT, SAM, ADMIN] = DEMO_USERS.map((u) => u.id);
 const DANA = "d0000000-0000-0000-0000-000000000006";
 const A = {
   jordan: "a0000000-0000-0000-0000-000000000001",
@@ -32,12 +33,21 @@ const at = (day: number, hour: number) =>
   `((date_trunc('day', now() at time zone 'America/Los_Angeles') + interval '${day} days' + interval '${hour} hours') at time zone 'America/Los_Angeles')`;
 
 export const DEMO_SEED_SQL = `
+update orgs set logo_url = '/logo.png' where id = '${ORG_ID}';
+insert into orgs (id, name, slug, brand_color) values
+  ('00000000-0000-0000-0000-0000000000a2', 'Sample Speed Academy', 'sample-speed', '#3EC1F3');
+insert into plans (org_id, name, price_cents, sessions_per_week) values
+  ('00000000-0000-0000-0000-0000000000a2', 'Speed Club', 18000, 2);
+
 insert into auth.users (id, email) values
+  ('${ADMIN}', 'admin@demo.prolyt'),
   ('${OWNER}', 'owner@demo.gamefit'), ('${LEM}', 'lem@demo.gamefit'), ('${MARCO}', 'marco@demo.gamefit'),
   ('${PAT}', 'pat@demo.gamefit'), ('${SAM}', 'sam@demo.gamefit'), ('${DANA}', 'dana@demo.gamefit');
 update profiles set full_name = case id
   when '${OWNER}' then 'Coach Josh' when '${LEM}' then 'Coach Lem' when '${MARCO}' then 'Coach Marco'
-  when '${PAT}' then 'Pat Morgan' when '${SAM}' then 'Sam Lee' when '${DANA}' then 'Dana Park' end;
+  when '${ADMIN}' then 'ProLyt Admin' when '${PAT}' then 'Pat Morgan' when '${SAM}' then 'Sam Lee' when '${DANA}' then 'Dana Park' end;
+
+insert into platform_admins values ('${ADMIN}');
 
 insert into org_members (org_id, user_id, role, coach_verified, pay_type, payouts_enabled) values
   ('${ORG_ID}', '${OWNER}', 'owner', true, null, false),
@@ -48,11 +58,13 @@ insert into org_members (org_id, user_id, role, coach_verified, pay_type, payout
   ('${ORG_ID}', '${SAM}', 'guardian', false, null, false),
   ('${ORG_ID}', '${DANA}', 'guardian', false, null, false);
 
-insert into athletes (id, org_id, first_name, last_name, birth_date, grad_year, position, school) values
-  ('${A.jordan}', '${ORG_ID}', 'Jordan', 'Morgan', (current_date - interval '15 years 3 months')::date, 2029, 'OL', 'Sample High'),
-  ('${A.riley}', '${ORG_ID}', 'Riley', 'Lee', (current_date - interval '11 years 5 months')::date, 2033, 'WR', 'Sample Middle'),
-  ('${A.eli}', '${ORG_ID}', 'Eli', 'Park', (current_date - interval '14 years 1 month')::date, 2030, 'DB', 'Sample High'),
-  ('${A.noah}', '${ORG_ID}', 'Noah', 'Park', (current_date - interval '16 years 6 months')::date, 2028, 'DL', 'Sample High');
+insert into athletes (id, first_name, last_name, birth_date, grad_year, position, school) values
+  ('${A.jordan}', 'Jordan', 'Morgan', (current_date - interval '15 years 3 months')::date, 2029, 'OL', 'Sample High'),
+  ('${A.riley}', 'Riley', 'Lee', (current_date - interval '11 years 5 months')::date, 2033, 'WR', 'Sample Middle'),
+  ('${A.eli}', 'Eli', 'Park', (current_date - interval '14 years 1 month')::date, 2030, 'DB', 'Sample High'),
+  ('${A.noah}', 'Noah', 'Park', (current_date - interval '16 years 6 months')::date, 2028, 'DL', 'Sample High');
+
+insert into program_athletes (org_id, athlete_id) select '${ORG_ID}', id from athletes;
 
 insert into guardians (athlete_id, user_id, is_primary) values
   ('${A.jordan}', '${PAT}', true), ('${A.riley}', '${SAM}', true),
@@ -62,14 +74,14 @@ insert into medical_notes (athlete_id, allergies, emergency_name, emergency_phon
   ('${A.jordan}', 'None', 'Pat Morgan', '555-0101'), ('${A.riley}', 'Peanuts', 'Sam Lee', '555-0102'),
   ('${A.eli}', null, 'Dana Park', '555-0103'), ('${A.noah}', null, 'Dana Park', '555-0103');
 
-insert into consents (athlete_id, guardian_user_id, kind, version, signer_name)
-select a, g, k::consent_kind, '2027-1', n from (values
+insert into consents (athlete_id, org_id, guardian_user_id, kind, version, signer_name)
+select a, '${ORG_ID}', g, k::consent_kind, '2027-1', n from (values
   ('${A.jordan}'::uuid, '${PAT}'::uuid, 'Pat Morgan'), ('${A.riley}'::uuid, '${SAM}'::uuid, 'Sam Lee'),
   ('${A.eli}'::uuid, '${DANA}'::uuid, 'Dana Park'), ('${A.noah}'::uuid, '${DANA}'::uuid, 'Dana Park')) v(a, g, n)
 cross join (values ('participation'), ('waiver')) k(k);
-insert into consents (athlete_id, guardian_user_id, kind, version, signer_name)
-values ('${A.riley}', '${SAM}', 'parental_verification', '2027-1', 'Sam Lee'),
-       ('${A.jordan}', '${PAT}', 'media_release', '2027-1', 'Pat Morgan');
+insert into consents (athlete_id, org_id, guardian_user_id, kind, version, signer_name)
+values ('${A.riley}', null, '${SAM}', 'parental_verification', '2027-1', 'Sam Lee'),
+       ('${A.jordan}', '${ORG_ID}', '${PAT}', 'media_release', '2027-1', 'Pat Morgan');
 
 insert into memberships (athlete_id, plan_id, status, current_period_end) values
   ('${A.jordan}', '00000000-0000-0000-0000-0000000000b2', 'active', now() + interval '18 days'),
@@ -112,6 +124,7 @@ insert into results (athlete_id, metric, value, unit, source, logged_by, recorde
   ('${A.riley}', '40yd', 5.88, 's', 'coach_logged', '${MARCO}', now() - interval '7 days'),
   ('${A.riley}', 'vertical', 17.5, 'in', 'coach_logged', '${MARCO}', now() - interval '28 days'),
   ('${A.riley}', 'vertical', 19, 'in', 'coach_logged', '${MARCO}', now() - interval '7 days');
+update results set org_id = '${ORG_ID}' where source <> 'self_reported';
 
 insert into coach_earnings (org_id, coach_id, session_id, amount_cents, basis, status, created_at)
 select '${ORG_ID}', '${LEM}', ('60000000-0000-0000-0000-0000000000' || lpad(w::text, 2, '0'))::uuid, 14000,

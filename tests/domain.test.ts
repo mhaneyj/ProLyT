@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { settleWeek } from "../src/lib/domain/settlement";
 import { improvement, bestOfficial } from "../src/lib/domain/metrics";
 import { ageOn } from "../src/lib/domain/format";
+import { checkBrandColor, contrast, themeVars } from "../src/lib/domain/brand";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { DEMO_SEED_SQL } from "../src/lib/demo-seed";
@@ -57,5 +58,21 @@ describe("demo data", () => {
     await db.exec(DEMO_SEED_SQL);
     const r = await db.query<{ n: number }>("select count(*)::int n from sessions");
     expect(r.rows[0].n).toBe(12);
+  });
+});
+
+describe("brand colors", () => {
+  it("accepts Del Oro gold and bright colors, rejects ones invisible on black", () => {
+    expect(checkBrandColor("#F8C40A")).toBeNull();
+    expect(checkBrandColor("#3EC1F3")).toBeNull();
+    expect(checkBrandColor("#101010")).toMatch(/too dark/);
+    expect(checkBrandColor("#0A1F44")).toMatch(/too dark/); // navy
+    expect(checkBrandColor("red")).toMatch(/like #F8C40A/);
+  });
+  it("picks readable button text for any accepted color", () => {
+    for (const c of ["#F8C40A", "#3EC1F3", "#E03A3E", "#9B5DE5", "#FFFFFF", "#22C55E"]) {
+      const v = themeVars(c);
+      expect(contrast(v["--color-gold"], v["--color-on-gold"])).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

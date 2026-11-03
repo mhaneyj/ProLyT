@@ -4,7 +4,7 @@ import { asService } from "@/lib/db";
 import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 
 // Sends a contractor coach to Stripe's hosted payout setup (bank + tax info).
-// Game-Fit never sees or stores bank details.
+// ProLyt never sees or stores bank details.
 async function handle(request: NextRequest) {
   const base = siteUrl(request.nextUrl.origin);
   const me = await getMe();

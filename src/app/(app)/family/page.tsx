@@ -78,7 +78,7 @@ export default async function FamilyHome() {
               {a.status === "pending" ? (
                 <form action="/api/stripe/checkout" method="post" className="mt-3">
                   <input type="hidden" name="athlete_id" value={a.id} />
-                  <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-ink">Finish payment</button>
+                  <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold">Finish payment</button>
                 </form>
               ) : null}
             </Card>

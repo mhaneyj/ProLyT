@@ -42,7 +42,7 @@ export function Stat({ label, value, tone }: { label: string; value: ReactNode; 
 const btnBase =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md px-4 font-cond text-[18px] font-extrabold uppercase tracking-[2px] transition-colors disabled:opacity-50";
 const btnKinds = {
-  primary: "bg-gold text-ink hover:bg-gold-hover",
+  primary: "bg-gold text-on-gold hover:bg-gold-hover",
   ghost: "border-2 border-[#3a3a3a] text-cream hover:border-gold",
   good: "border-2 border-good text-good",
 };
@@ -63,7 +63,7 @@ export function Pill({ children, tone = "muted" }: { children: ReactNode; tone?:
   const t = {
     muted: "border border-line text-soft",
     good: "bg-good text-ink",
-    gold: "bg-gold text-ink",
+    gold: "bg-gold text-on-gold",
     warn: "bg-warn text-ink",
     bad: "bg-bad text-ink",
   }[tone];

@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         const sub = typeof inv.subscription === "string" ? inv.subscription : null;
         if (!sub) break;
         const [ms] = await q<{ id: string; org_id: string }>(
-          "select ms.id, a.org_id from memberships ms join athletes a on a.id = ms.athlete_id where ms.stripe_subscription_id = $1", [sub]);
+          "select ms.id, p.org_id from memberships ms join plans p on p.id = ms.plan_id where ms.stripe_subscription_id = $1", [sub]);
         if (!ms) break;
         const periodEnd = inv.lines?.data?.[0]?.period?.end;
         await q("update memberships set status = 'active', current_period_end = coalesce(to_timestamp($2), current_period_end) where id = $1",

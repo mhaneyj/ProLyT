@@ -33,7 +33,7 @@ export function LogForm({ session, athletes, metrics }: { session: string; athle
           <label htmlFor="value" className="mb-1.5 block text-sm text-soft">Result</label>
           <input ref={valueRef} id="value" name="value" defaultValue={state.values?.value} inputMode="decimal" autoComplete="off" className={`${input} tabular text-lg`} />
         </div>
-        <button disabled={pending} className="mt-[26px] min-h-12 rounded-md bg-gold px-6 font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-ink disabled:opacity-60">
+        <button disabled={pending} className="mt-[26px] min-h-12 rounded-md bg-gold px-6 font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-on-gold disabled:opacity-60">
           {pending ? "…" : "Save"}
         </button>
       </div>

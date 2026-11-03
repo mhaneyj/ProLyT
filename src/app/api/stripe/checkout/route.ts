@@ -11,9 +11,10 @@ async function start(request: NextRequest, athleteId: string | null) {
   if (!stripeConfigured || !athleteId) return NextResponse.redirect(`${base}/family`, 303);
 
   const m = await asUser(uid, async (q) => {
-    const [row] = await q<{ membership_id: string; org_id: string; plan: string; price_cents: number; first_name: string; email: string | null }>(
-      `select ms.id membership_id, a.org_id, p.name plan, p.price_cents, a.first_name, pr.email
+    const [row] = await q<{ membership_id: string; org_id: string; program: string; plan: string; price_cents: number; first_name: string; email: string | null }>(
+      `select ms.id membership_id, p.org_id, o.name program, p.name plan, p.price_cents, a.first_name, pr.email
        from memberships ms join athletes a on a.id = ms.athlete_id join plans p on p.id = ms.plan_id
+       join orgs o on o.id = p.org_id
        join guardians g on g.athlete_id = a.id and g.user_id = $2
        left join profiles pr on pr.id = $2
        where a.id = $1 and ms.status = 'pending' order by ms.created_at desc limit 1`,
@@ -32,7 +33,7 @@ async function start(request: NextRequest, athleteId: string | null) {
         currency: "usd",
         unit_amount: m.price_cents,
         recurring: { interval: "month" },
-        product_data: { name: `Game-Fit ${m.plan} membership · ${m.first_name}` },
+        product_data: { name: `${m.program} · ${m.plan} membership · ${m.first_name}` },
       },
     }],
     metadata: { membership_id: m.membership_id, org_id: m.org_id },

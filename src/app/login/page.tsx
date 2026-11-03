@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { isDemo } from "@/lib/db";
@@ -6,6 +5,9 @@ import { DEMO_COOKIE } from "@/lib/auth";
 import { DEMO_USERS } from "@/lib/demo-seed";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Button, Card, Kicker, Notice } from "@/components/ui";
+import { brandBySlug, currentOrgSlug } from "@/lib/org";
+import { themeVars } from "@/lib/domain/brand";
+import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
 export const metadata = { title: "Sign in" };
 
@@ -32,11 +34,12 @@ async function emailSignIn(form: FormData) {
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string }> }) {
   const sp = await searchParams;
+  const brand = await brandBySlug(await currentOrgSlug());
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
-      <Image src="/logo.png" alt="Game-Fit Loomis" width={120} height={92} priority />
+    <main style={brand ? (themeVars(brand.brand_color) as React.CSSProperties) : undefined} className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
+      {brand ? <ProgramLogo brand={brand} size={80} /> : <ProLytMark className="text-4xl" />}
       <div>
-        <Kicker>Athlete portal</Kicker>
+        <Kicker>{brand ? brand.name : "ProLyt"}</Kicker>
         <h1 className="mt-1 font-display text-[40px] uppercase leading-none">Sign in</h1>
       </div>
 
@@ -81,6 +84,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
           <p className="text-xs text-muted">No passwords. New families can register after signing in.</p>
         </form>
       )}
+      {brand ? <div className="mt-auto text-center"><PoweredBy /></div> : null}
     </main>
   );
 }

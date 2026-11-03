@@ -55,7 +55,7 @@ export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean
         <legend className="mb-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">2 · Membership</legend>
         {plans.map((p) => (
           <label key={p.id} className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 ${plan === p.id ? "border-2 border-gold bg-gold/5" : "border-line bg-panel"}`}>
-            <input type="radio" name="plan" value={p.id} checked={plan === p.id} onChange={() => setPlan(p.id)} className="size-5 accent-[#F8C40A]" />
+            <input type="radio" name="plan" value={p.id} checked={plan === p.id} onChange={() => setPlan(p.id)} className="size-5 accent-[var(--color-gold)]" />
             <span className="flex-1">
               <span className="block font-semibold">{p.name}</span>
               {p.sessions_per_week ? <span className="block text-xs text-muted">{p.sessions_per_week} session{p.sessions_per_week > 1 ? "s" : ""} a week</span> : null}
@@ -80,16 +80,16 @@ export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">4 · Agreements</legend>
         <label className="flex gap-3 text-sm text-soft">
-          <input type="checkbox" name="agree" defaultChecked={v.agree === "on"} className="mt-0.5 size-5 flex-none accent-[#F8C40A]" />
+          <input type="checkbox" name="agree" defaultChecked={v.agree === "on"} className="mt-0.5 size-5 flex-none accent-[var(--color-gold)]" />
           <span>I agree to the <Link href="/legal/participation" target="_blank" className="underline">participation terms</Link>, <Link href="/legal/waiver" target="_blank" className="underline">liability waiver</Link> and <Link href="/legal/privacy" target="_blank" className="underline">family privacy notice</Link>.</span>
         </label>
         <label className="flex gap-3 text-sm text-soft">
-          <input type="checkbox" name="media" defaultChecked={v.media === "on"} className="mt-0.5 size-5 flex-none accent-[#F8C40A]" />
+          <input type="checkbox" name="media" defaultChecked={v.media === "on"} className="mt-0.5 size-5 flex-none accent-[var(--color-gold)]" />
           <span>Optional: coaches may photograph and film my athlete for training and program use. Nothing is posted publicly without my approval each time.</span>
         </label>
         {young ? (
           <label className="flex gap-3 rounded-lg border border-gold p-3 text-sm text-soft">
-            <input type="checkbox" name="verify" defaultChecked={v.verify === "on"} className="mt-0.5 size-5 flex-none accent-[#F8C40A]" />
+            <input type="checkbox" name="verify" defaultChecked={v.verify === "on"} className="mt-0.5 size-5 flex-none accent-[var(--color-gold)]" />
             <span>My athlete is under 13. I confirm I am their parent or legal guardian and consent to the program collecting the information above. My card payment is used to verify this.</span>
           </label>
         ) : null}
@@ -97,7 +97,7 @@ export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean
       </fieldset>
 
       {state.error ? <div role="alert" className="rounded-lg border border-bad p-3 text-sm text-cream">{state.error}</div> : null}
-      <button disabled={pending} className="min-h-14 w-full rounded-md bg-gold font-cond text-[19px] font-extrabold uppercase tracking-[2px] text-ink disabled:opacity-60">
+      <button disabled={pending} className="min-h-14 w-full rounded-md bg-gold font-cond text-[19px] font-extrabold uppercase tracking-[2px] text-on-gold disabled:opacity-60">
         {pending ? "Saving…" : stripe ? "Continue to payment" : "Register"}
       </button>
     </form>

@@ -24,8 +24,8 @@ function Spark({ rows, lowerIsBetter }: { rows: Row[]; lowerIsBetter: boolean })
   });
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 h-16 w-full" role="img" aria-label="Trend of official results, higher on the chart is better">
-      <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke="#F8C40A" strokeWidth="2.5" strokeLinejoin="round" />
-      {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 5 : 3} fill="#F8C40A" />)}
+      <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke="var(--color-gold)" strokeWidth="2.5" strokeLinejoin="round" />
+      {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 5 : 3} fill="var(--color-gold)" />)}
     </svg>
   );
 }

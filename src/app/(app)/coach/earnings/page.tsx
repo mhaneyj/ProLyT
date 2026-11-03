@@ -36,9 +36,9 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
       {!employee && !m?.payouts_enabled ? (
         <Card accent>
           <div className="font-semibold">Get paid in about 5 minutes</div>
-          <p className="mt-1 text-sm text-soft">Add your bank and tax info once on Stripe&apos;s secure page. Game-Fit never sees your bank details.</p>
+          <p className="mt-1 text-sm text-soft">Add your bank and tax info once on Stripe&apos;s secure page. ProLyt never sees your bank details.</p>
           <form action="/api/stripe/connect" method="post" className="mt-3">
-            <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-ink">
+            <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold">
               {m?.stripe_account_id ? "Finish payout setup" : "Set up payouts"}
             </button>
           </form>

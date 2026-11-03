@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Game-Fit Athlete Portal", template: "%s · Game-Fit" },
-  description: "Training, progress, film and schedules for Game-Fit Loomis families and coaches.",
+  title: { default: "ProLyt", template: "%s · ProLyt" },
+  description: "Train it. Track it. ProLyt. The athlete development platform for programs, families and coaches.",
   icons: { icon: "/logo.png" },
 };
 

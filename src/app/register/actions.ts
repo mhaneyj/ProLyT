@@ -1,10 +1,12 @@
 "use server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
 import { ageOn } from "@/lib/domain/format";
 import { stripeConfigured } from "@/lib/stripe";
+import { currentOrgSlug } from "@/lib/org";
 
 const schema = z.object({
   first: z.string().trim().min(1, "Enter the athlete's first name"),
@@ -51,7 +53,8 @@ async function register(form: FormData): Promise<RegisterState | void> {
   let athleteId: string;
   try {
     athleteId = await asUser(me.id, async (q) => {
-      const [org] = await q<{ id: string }>("select id from orgs where slug = $1", [process.env.NEXT_PUBLIC_ORG_SLUG ?? "gamefit-loomis"]);
+      const slug = await currentOrgSlug();
+      const [org] = await q<{ id: string }>("select id from orgs where slug = $1", [slug]);
       if (!org) throw new Error("Program not found");
       const [r] = await q<{ id: string }>(
         `select register_athlete($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) id`,
@@ -64,6 +67,36 @@ async function register(form: FormData): Promise<RegisterState | void> {
     return { error: dbMessage(e) };
   }
 
+  revalidatePath("/", "layout"); // new program membership changes the header and menu
   if (stripeConfigured) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
   redirect("/family?registered=1");
+}
+
+const connectSchema = z.object({
+  athlete: z.guid("Pick an athlete"),
+  plan: z.guid("Pick a membership"),
+  signer: z.string().trim().min(2, "Type your full name to sign"),
+  agree: z.literal("on", { error: "Agree to the program's terms and waiver" }),
+  media: z.string().optional(),
+});
+
+/** Connects an athlete who already has a ProLyt profile to this program. */
+export async function connectAthlete(prev: RegisterState, form: FormData): Promise<RegisterState> {
+  const me = await requireMe();
+  const values = Object.fromEntries([...form.entries()].filter(([k]) => !k.startsWith("$")).map(([k, v]) => [k, String(v)]));
+  const parsed = connectSchema.safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message, values };
+  const d = parsed.data;
+  try {
+    await asUser(me.id, async (q) => {
+      const [org] = await q<{ id: string }>("select id from orgs where slug = $1", [await currentOrgSlug()]);
+      if (!org) throw new Error("Program not found");
+      await q("select connect_athlete($1, $2, $3, $4, $5)", [org.id, d.athlete, d.plan, d.signer, d.media === "on"]);
+    });
+  } catch (e) {
+    return { error: dbMessage(e), values };
+  }
+  revalidatePath("/", "layout");
+  if (stripeConfigured) redirect(`/api/stripe/checkout?athlete_id=${d.athlete}`);
+  redirect("/family?connected=1");
 }
