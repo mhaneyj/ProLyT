@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { asService } from "@/lib/db";
 import { consumeLink, SESSION_DAYS } from "@/lib/session";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { sessionCookieName } from "@/lib/auth";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
 import { Button, Kicker } from "@/components/ui";
@@ -20,7 +20,7 @@ async function finish(form: FormData) {
   const result = await asService((q) => consumeLink(q, token, admins));
   if (!result) redirect("/login?error=" + encodeURIComponent("That link expired or was already used. Send a new one."));
   const proto = ((await headers()).get("x-forwarded-proto") ?? "https").split(",")[0].trim();
-  (await cookies()).set(SESSION_COOKIE, result.session, {
+  (await cookies()).set(sessionCookieName(proto === "https"), result.session, {
     httpOnly: true,
     secure: proto === "https",
     sameSite: "lax",

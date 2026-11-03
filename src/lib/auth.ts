@@ -7,7 +7,11 @@ import { userForSession } from "./session";
 import { brandBySlug, currentOrgSlug } from "./org";
 
 export const DEMO_COOKIE = "gf_demo_uid";
-export const SESSION_COOKIE = "prolyt_session";
+// On HTTPS the "__Host-" prefix makes browsers lock the cookie to the exact address
+// that set it, so one program's subdomain can never set or read another's session.
+export const SECURE_SESSION_COOKIE = "__Host-prolyt_session";
+export const DEV_SESSION_COOKIE = "prolyt_session"; // plain-http local testing only
+export const sessionCookieName = (https: boolean) => (https ? SECURE_SESSION_COOKIE : DEV_SESSION_COOKIE);
 
 export type Role = "owner" | "coach" | "guardian";
 export type Me = {
@@ -23,7 +27,7 @@ export type Me = {
 export const currentUserId = cache(async (): Promise<string | null> => {
   const jar = await cookies();
   if (isDemo) return jar.get(DEMO_COOKIE)?.value ?? null;
-  const token = jar.get(SESSION_COOKIE)?.value;
+  const token = jar.get(SECURE_SESSION_COOKIE)?.value ?? jar.get(DEV_SESSION_COOKIE)?.value;
   return token ? asService((q) => userForSession(q, token)) : null;
 });
 

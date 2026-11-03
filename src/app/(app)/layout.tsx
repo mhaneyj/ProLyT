@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireMe, DEMO_COOKIE, SESSION_COOKIE } from "@/lib/auth";
+import { requireMe, DEMO_COOKIE, SECURE_SESSION_COOKIE, DEV_SESSION_COOKIE } from "@/lib/auth";
 import { asService, isDemo } from "@/lib/db";
 import { endSession } from "@/lib/session";
 import { brandById } from "@/lib/org";
@@ -14,9 +14,11 @@ async function signOut() {
   const jar = await cookies();
   if (isDemo) jar.delete(DEMO_COOKIE);
   else {
-    const token = jar.get(SESSION_COOKIE)?.value;
-    await asService((q) => endSession(q, token));
-    jar.delete(SESSION_COOKIE);
+    for (const name of [SECURE_SESSION_COOKIE, DEV_SESSION_COOKIE]) {
+      const token = jar.get(name)?.value;
+      if (token) await asService((q) => endSession(q, token));
+      jar.delete(name);
+    }
   }
   redirect("/");
 }
