@@ -172,6 +172,30 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await page.waitForURL(/\/athlete\//);
   check("profile shows the athlete", await seen(page.getByRole("heading", { name: "Jordan Morgan" })));
   check("profile shows upcoming booked session", await seen(page.getByText("Speed & agility")));
+  // Recruiting link: parent creates it, a college coach opens it without an account
+  await page.getByRole("button", { name: "Create link" }).click();
+  await page.waitForURL(/shared=/);
+  const link = await page.getByLabel("Profile link").inputValue();
+  check("parent gets a recruiting link", /\/p\/[\w-]{20,}/.test(link), link);
+  {
+    const anon = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const pg = await anon.newPage();
+    await pg.goto(link.replace(/^https?:\/\/[^/]+/, BASE));
+    check("public profile opens without signing in", await seen(pg.getByRole("heading", { name: /Jordan Morgan/ })));
+    check("public profile shows official numbers", await seen(pg.getByText("Testing")));
+    check("public profile hides private details", (await pg.getByText(/Del Oro|birth|allerg|555-/i).count()) === 0);
+    await pg.screenshot({ path: `${OUT}/15-public-profile.png`, fullPage: true });
+    await anon.close();
+  }
+  await page.getByRole("button", { name: "Turn off" }).click();
+  await page.waitForLoadState("networkidle");
+  {
+    const anon = await browser.newContext();
+    const pg = await anon.newPage();
+    const res = await pg.goto(link.replace(/^https?:\/\/[^/]+/, BASE));
+    check("turned-off link stops working", res.status() === 404);
+    await anon.close();
+  }
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Film" }).click();
   await page.waitForURL(/\/film/);
   await page.getByText("Add a clip").click();
@@ -192,6 +216,8 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   const { ctx, page } = await as("Sam Lee");
   await page.goto(`${BASE}/schedule`);
   check("other family can't see Jordan's booking", (await page.getByText(/Jordan/).count()) === 0);
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  check("under-13 has no public profile option", await seen(page.getByText(/Available at 13/)) && (await page.getByRole("button", { name: "Create link" }).count()) === 0);
   await ctx.close();
 }
 {

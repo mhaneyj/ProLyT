@@ -97,3 +97,26 @@ export async function addNote(form: FormData) {
   revalidatePath(`/athlete/${athlete}/progress`);
   if (session) revalidatePath(`/coach/session/${session}`);
 }
+
+export async function shareProfile(form: FormData) {
+  const me = await requireMe();
+  const athlete = String(form.get("athlete") ?? "");
+  const { newShareToken, shareHash } = await import("@/lib/share");
+  const token = newShareToken();
+  try {
+    await asUser(me.id, (q) => q("select create_profile_share($1, $2)", [athlete, shareHash(token)]));
+  } catch (e) {
+    const { redirect } = await import("next/navigation");
+    redirect(`/athlete/${athlete}?share_error=${encodeURIComponent(dbMessage(e))}`);
+  }
+  const { redirect } = await import("next/navigation");
+  // The token is shown once, right after it's made; only its hash is stored.
+  redirect(`/athlete/${athlete}?shared=${token}#recruiting`);
+}
+
+export async function stopSharing(form: FormData) {
+  const me = await requireMe();
+  const athlete = String(form.get("athlete") ?? "");
+  await asUser(me.id, (q) => q("select revoke_profile_share($1)", [athlete]));
+  revalidatePath(`/athlete/${athlete}`);
+}

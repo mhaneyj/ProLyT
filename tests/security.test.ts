@@ -417,3 +417,28 @@ describe("coach notes", () => {
     expect((await as(db, PARENT_A, () => db.query("update athletes set photo_path='blob:photos/x' where id=$1 returning id", [jordan]))).rows).toHaveLength(1);
   });
 });
+
+describe("recruiting profile link", () => {
+  const hash = (c: string) => c.repeat(64);
+  it("only a parent of a 13+ athlete can create one", async () => {
+    await expect(as(db, COACH, () => db.query("select create_profile_share($1,$2)", [jordan, hash("a")]))).rejects.toThrow(/parent or guardian/);
+    await expect(as(db, PARENT_B, () => db.query("select create_profile_share($1,$2)", [riley, hash("b")]))).rejects.toThrow(/13 and older/);
+    await as(db, PARENT_A, () => db.query("select create_profile_share($1,$2)", [jordan, hash("a")]));
+  });
+  it("the public view shows official numbers only and nothing private", async () => {
+    await as(db, PARENT_A, () => db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'40yd',4.1,'s','self_reported')", [jordan]));
+    const p = (await as(db, null, () => db.query<{ p: Record<string, unknown> }>("select public_profile($1) p", [hash("a")]))).rows[0].p;
+    expect(p.first_name).toBe("Jordan");
+    const json = JSON.stringify(p);
+    for (const secret of ["birth", "school", "Sample High", "555-", "allerg", "self_reported", "Good hands"]) expect(json).not.toContain(secret);
+  });
+  it("a new link replaces the old one, and turning it off kills it", async () => {
+    await as(db, PARENT_A, () => db.query("select create_profile_share($1,$2)", [jordan, hash("c")]));
+    expect((await as(db, null, () => db.query<{ p: unknown }>("select public_profile($1) p", [hash("a")]))).rows[0].p).toBeNull();
+    await as(db, PARENT_A, () => db.query("select revoke_profile_share($1)", [jordan]));
+    expect((await as(db, null, () => db.query<{ p: unknown }>("select public_profile($1) p", [hash("c")]))).rows[0].p).toBeNull();
+  });
+  it("families can't read other families' links", async () => {
+    expect((await as(db, PARENT_B, () => db.query("select * from profile_shares where athlete_id=$1", [jordan]))).rows).toHaveLength(0);
+  });
+});

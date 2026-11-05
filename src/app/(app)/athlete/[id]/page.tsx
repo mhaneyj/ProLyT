@@ -10,11 +10,16 @@ import { Player } from "@/components/player";
 import { SectionLabel } from "@/components/ui";
 import { loadAthlete } from "./header";
 import { PhotoButton } from "./photo-button";
+import { CopyLink } from "./share-card";
+import { shareProfile, stopSharing } from "./actions";
+import { headers } from "next/headers";
+import { Notice } from "@/components/ui";
 
 export const metadata = { title: "Profile" };
 
-export default async function AthleteProfile({ params }: { params: Promise<{ id: string }> }) {
+export default async function AthleteProfile({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ shared?: string; share_error?: string }> }) {
   const { id } = await params;
+  const sp = await searchParams;
   const me = await requireMe();
   const { a, switcher } = await loadAthlete(me, id, "");
   const d = await asUser(me.id, async (q) => ({
@@ -26,6 +31,8 @@ export default async function AthleteProfile({ params }: { params: Promise<{ id:
     next: await q<{ id: string; title: string; starts_at: string }>(`
       select s.id, s.title, s.starts_at from session_athletes sa join sessions s on s.id = sa.session_id
       where sa.athlete_id = $1 and s.starts_at > now() order by s.starts_at limit 3`, [id]),
+    share: a.family ? (await q<{ created_at: string; views: number }>(
+      "select created_at, views from profile_shares where athlete_id = $1 and revoked_at is null", [id]))[0] ?? null : null,
     note: (await q<{ body: string; focus: string | null; coach: string | null; created_at: string }>(`
       select n.body, n.focus, p.full_name coach, n.created_at from coach_notes n left join profiles p on p.id = n.coach_id
       where n.athlete_id = $1 order by n.created_at desc limit 1`, [id]))[0],
@@ -115,6 +122,47 @@ export default async function AthleteProfile({ params }: { params: Promise<{ id:
           ))}
         </section>
       ) : null}
+
+      {a.family ? await (async () => {
+        const h = await headers();
+        const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
+        const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
+        const fresh = sp.shared && /^[\w-]{20,40}$/.test(sp.shared) ? `${proto}://${host}/p/${sp.shared}` : null;
+        return (
+          <section id="recruiting" className="flex scroll-mt-4 flex-col gap-2 rounded-[14px] border border-line p-4">
+            <div className="font-cond text-[15px] font-extrabold uppercase tracking-[2px]">Recruiting profile</div>
+            {age < 13 ? (
+              <p className="text-sm text-muted">Available at 13. Until then nothing about {a.first_name} is ever public.</p>
+            ) : fresh ? (
+              <>
+                <p className="text-sm text-soft">Your link is ready. Send it to college or high school coaches. Save it now: for privacy we only show it once.</p>
+                <CopyLink url={fresh} />
+              </>
+            ) : d.share ? (
+              <p className="text-sm text-soft">Sharing is on. Opened {d.share.views} time{d.share.views === 1 ? "" : "s"}. Lost the link? Make a new one; the old one stops working.</p>
+            ) : (
+              <p className="text-sm text-soft">One link with {a.first_name}&apos;s name, position, class, official numbers and highlight links. Never school, birthday, contact info or coach notes. Turn it off anytime.</p>
+            )}
+            {sp.share_error ? <Notice tone="bad">{sp.share_error}</Notice> : null}
+            {age >= 13 ? (
+              <div className="flex gap-2">
+                <form action={shareProfile} className="flex-1">
+                  <input type="hidden" name="athlete" value={a.id} />
+                  <button className={`min-h-12 w-full rounded-md font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] ${fresh || d.share ? "border-2 border-[#3a3a3a]" : "bg-gold text-on-gold"}`}>
+                    {d.share || fresh ? "New link" : "Create link"}
+                  </button>
+                </form>
+                {d.share || fresh ? (
+                  <form action={stopSharing}>
+                    <input type="hidden" name="athlete" value={a.id} />
+                    <button className="min-h-12 rounded-md px-4 text-sm font-semibold text-muted hover:text-bad">Turn off</button>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        );
+      })() : null}
 
       {age < 13 && a.family ? (
         <div className="flex gap-3 rounded-[10px] border border-line p-3.5 text-[13px] leading-relaxed text-soft">
