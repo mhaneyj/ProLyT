@@ -24,7 +24,16 @@ export async function sendSignInEmail(to: string, link: string, programName: str
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from, to, subject: `Your ${who} sign-in link`, html }),
   });
-  if (!res.ok) throw new Error("We couldn't send the email. Try again in a minute.");
+  if (!res.ok) {
+    // Show the email service's own reason (e.g. "domain is not verified") so setup problems are obvious.
+    let reason = `status ${res.status}`;
+    try {
+      const body = (await res.json()) as { message?: string; name?: string };
+      reason = body.message ?? body.name ?? reason;
+    } catch {}
+    console.error("[email] Resend refused the sign-in email:", res.status, reason);
+    throw new Error(`We couldn't send the email (${reason.slice(0, 160)}).`);
+  }
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
