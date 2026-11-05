@@ -56,11 +56,12 @@ export default async function FamilyHome() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 id={`ath-${a.id}`} className="font-display text-[26px] uppercase leading-none">
-                    {a.first_name} {a.last_name}
+                    <Link href={`/athlete/${a.id}`} className="hover:text-gold">{a.first_name} {a.last_name}</Link>
                   </h2>
                   <p className="mt-1 text-sm text-muted">
                     {[a.position, `Age ${ageOn(a.birth_date)}`, a.grad_year ? `Class of ${a.grad_year}` : null].filter(Boolean).join(" · ")}
                   </p>
+                  <Link href={`/athlete/${a.id}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold">Profile, film &amp; highlights →</Link>
                 </div>
                 {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Package picked</Pill> : a.status ? <Pill>{a.status}</Pill> : <Pill>Free access</Pill>}
               </div>

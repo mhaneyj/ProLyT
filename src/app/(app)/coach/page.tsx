@@ -2,13 +2,14 @@ import Link from "next/link";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { dayTime, isSameLocalDay } from "@/lib/domain/format";
-import { Card, Empty, Pill, Title } from "@/components/ui";
+import { Card, Empty, LinkButton, Notice, Pill, Title } from "@/components/ui";
 
 export const metadata = { title: "Today" };
 
 type S = { id: string; title: string; starts_at: string; location: string | null; booked: number; marked: number; mine: boolean };
 
-export default async function CoachToday() {
+export default async function CoachToday({ searchParams }: { searchParams: Promise<{ posted?: string }> }) {
+  const { posted } = await searchParams;
   const me = await requireMe();
   if (!me.roles.includes("coach") && !me.roles.includes("owner")) {
     return (
@@ -50,6 +51,8 @@ export default async function CoachToday() {
   return (
     <>
       <Title sub="Tap a session to check athletes in and log results.">Today</Title>
+      {posted ? <Notice tone="good">{posted === "1" ? "Session posted." : `${posted} weekly sessions posted.`} Families see it on their schedule.</Notice> : null}
+      <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton>
       {today.length ? today.map(row) : <Empty title="No sessions today" />}
       {later.length ? (
         <>

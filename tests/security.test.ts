@@ -323,3 +323,81 @@ describe("free access and choosing a package later", () => {
     await expect(as(db, PARENT_F, () => db.query("select choose_plan($1, $2)", [kid, PLAN]))).rejects.toThrow(/already has a package/);
   });
 });
+
+describe("posting and booking sessions", () => {
+  const PARENT_S = "10000000-0000-0000-0000-0000000000c1";
+  let kid: string;
+  const tomorrow = () => new Date(Date.now() + 86400_000).toISOString();
+  const post = (user: string, opts: { coach?: string; capacity?: number | null; price?: number | null; weeks?: number; title?: string } = {}) =>
+    as(db, user, () => db.query<{ n: number }>(
+      "select create_sessions($1,'group','7v7',$2,$3,90,'Field 2',$4,$5,$6,$7) n",
+      [ORG, opts.title ?? "Booking test", tomorrow(), opts.coach ?? user, opts.capacity ?? null, opts.price ?? null, opts.weeks ?? 1]));
+  const sessionId = async (title: string) =>
+    (await db.query<{ id: string }>("select id from sessions where title=$1 order by starts_at limit 1", [title])).rows[0].id;
+  beforeAll(async () => {
+    await addUser(db, PARENT_S, "booker@example.com");
+    kid = (await as(db, PARENT_S, () => db.query<{ id: string }>(
+      `select register_athlete($1,'Book','Kid',$2,2030,'WR',null,null,'Book Parent',false,false,'Book Parent','555-0120') id`,
+      [ORG, yearsAgo(14)]))).rows[0].id;
+  });
+  it("coaches post a session, or a slot repeated weekly", async () => {
+    expect((await post(COACH, { title: "Weekly 7v7", weeks: 4 })).rows[0].n).toBe(4);
+    const s = await db.query<{ starts_at: Date }>("select starts_at from sessions where title='Weekly 7v7' order by starts_at");
+    expect(s.rows).toHaveLength(4);
+    expect(new Date(s.rows[1].starts_at).getTime() - new Date(s.rows[0].starts_at).getTime()).toBe(7 * 86400_000);
+  });
+  it("coaches can't post for another coach; owners can", async () => {
+    await expect(post(COACH, { coach: EMPLOYEE_COACH })).rejects.toThrow(/owner/);
+    await post(OWNER, { coach: EMPLOYEE_COACH, title: "Owner assigned" });
+    expect((await db.query("select coach_id from sessions where title='Owner assigned'")).rows).toEqual([{ coach_id: EMPLOYEE_COACH }]);
+  });
+  it("families can't post sessions", async () => {
+    await expect(post(PARENT_S)).rejects.toThrow(/Coaches only/);
+  });
+  it("a parent books and cancels their own athlete, within capacity", async () => {
+    await post(COACH, { title: "Two spots", capacity: 2 });
+    const s = await sessionId("Two spots");
+    await as(db, PARENT_S, () => db.query("select book_session($1,$2)", [s, kid]));
+    await as(db, PARENT_A, () => db.query("select book_session($1,$2)", [s, jordan]));
+    expect((await as(db, PARENT_S, () => db.query<{ n: number }>("select spots_left($1) n", [s]))).rows[0].n).toBe(0);
+    await expect(as(db, PARENT_B, () => db.query("select book_session($1,$2)", [s, riley]))).rejects.toThrow(/full/);
+    await as(db, PARENT_S, () => db.query("select cancel_booking($1,$2)", [s, kid]));
+    await as(db, PARENT_B, () => db.query("select book_session($1,$2)", [s, riley]));
+  });
+  it("parents only see their own child's bookings", async () => {
+    const s = await sessionId("Two spots");
+    expect((await as(db, PARENT_B, () => db.query("select athlete_id from session_athletes where session_id=$1", [s]))).rows).toEqual([{ athlete_id: riley }]);
+  });
+  it("nobody books someone else's child", async () => {
+    await post(COACH, { title: "Open session" });
+    const s = await sessionId("Open session");
+    await expect(as(db, PARENT_A, () => db.query("select book_session($1,$2)", [s, kid]))).rejects.toThrow(/parent or guardian/);
+    await expect(as(db, PARENT_A, () => db.query("insert into session_athletes values ($1,$2)", [s, jordan]))).rejects.toThrow();
+  });
+  it("paid sessions are booked by the coach, not the family", async () => {
+    await post(COACH, { title: "Paid 1-on-1", price: 9000 });
+    const s = await sessionId("Paid 1-on-1");
+    await expect(as(db, PARENT_S, () => db.query("select book_session($1,$2)", [s, kid]))).rejects.toThrow(/booked by your coach/);
+    await as(db, COACH, () => db.query("insert into session_athletes values ($1,$2)", [s, kid]));
+    await expect(as(db, PARENT_S, () => db.query("select cancel_booking($1,$2)", [s, kid]))).rejects.toThrow(/contact your coach/);
+  });
+});
+
+describe("film and highlights", () => {
+  let clip: string;
+  it("a parent adds film for their own athlete; coaches see it, other families don't", async () => {
+    clip = (await as(db, PARENT_A, () => db.query<{ id: string }>(
+      "insert into film (org_id, athlete_id, storage_path, title, is_highlight, uploaded_by) values ($1,$2,'https://youtu.be/abc123','Pass pro',true,$3) returning id",
+      [ORG, jordan, PARENT_A]))).rows[0].id;
+    expect((await as(db, COACH, () => db.query("select id from film where id=$1", [clip]))).rows).toHaveLength(1);
+    expect((await as(db, PARENT_B, () => db.query("select id from film where id=$1", [clip]))).rows).toHaveLength(0);
+  });
+  it("families can't add film for someone else's athlete", async () => {
+    await expect(as(db, PARENT_B, () => db.query(
+      "insert into film (org_id, athlete_id, storage_path, title, uploaded_by) values ($1,$2,'https://youtu.be/x','x',$3)", [ORG, jordan, PARENT_B]))).rejects.toThrow();
+  });
+  it("only the family or staff can delete it", async () => {
+    expect((await as(db, PARENT_B, () => db.query("delete from film where id=$1 returning id", [clip]))).rows).toHaveLength(0);
+    expect((await as(db, PARENT_A, () => db.query("delete from film where id=$1 returning id", [clip]))).rows).toHaveLength(1);
+  });
+});

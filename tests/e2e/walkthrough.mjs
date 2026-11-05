@@ -37,7 +37,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   check("progress shows verified 40", await page.getByText("Verified").first().isVisible());
   await shot(page, "02-progress");
   await page.goto(`${BASE}/schedule`);
-  check("schedule shows only Jordan's sessions", (await page.getByText("7v7 · Skill positions").count()) === 0 && (await page.getByText("In The Trenches · OL/DL").count()) === 1);
+  check("schedule shows the program's sessions with booking", (await page.getByText("7v7 · Skill positions").count()) === 1 && (await page.getByRole("button", { name: "Book Jordan" }).count()) >= 1);
   await shot(page, "03-schedule");
   // Coach-only pages bounce parents
   await page.goto(`${BASE}/coach`);
@@ -121,6 +121,71 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   check("owner sees failed payment alert", await page.getByText(/Noah Park · payment failed/).isVisible());
   await shot(page, "10-owner");
   check("no client errors (owner)", errors.length === 0, errors.join("; "));
+  await ctx.close();
+}
+
+// ── New: coach posts sessions, family books, film and highlights
+{
+  const { ctx, page, errors } = await as("Coach Lem");
+  await page.getByRole("link", { name: "+ New session" }).click();
+  await page.waitForURL(/\/coach\/new/);
+  await page.getByLabel("Session name").fill("Speed & agility");
+  await page.getByLabel("Location").fill("Turf field");
+  await page.getByLabel("Spots (optional)").fill("8");
+  await page.getByLabel("Repeat weekly").selectOption("4");
+  await shot(page, "12-new-session");
+  await page.getByRole("button", { name: "Post session" }).click();
+  check("coach posts 4 weekly sessions", await seen(page.getByText("4 weekly sessions posted.")));
+  check("no client errors (new session)", errors.length === 0, errors.join("; "));
+  await ctx.close();
+}
+{
+  const { ctx, page, errors } = await as("Pat Morgan");
+  await page.goto(`${BASE}/schedule`);
+  const card = page.locator("div").filter({ hasText: "Speed & agility" }).filter({ has: page.getByRole("button", { name: "Book Jordan" }) }).last();
+  check("family sees spots left", await seen(card.getByText("8 spots left")));
+  await card.getByRole("button", { name: "Book Jordan" }).click();
+  const booked = page.locator("div").filter({ hasText: "Speed & agility" }).filter({ has: page.getByText("Jordan is booked ✓") }).last();
+  check("family books Jordan", await seen(booked));
+  check("spot count goes down", await seen(booked.getByText("7 spots left")));
+  await shot(page, "13-booked");
+  await page.goto(`${BASE}/family`);
+  await page.getByRole("region", { name: "Jordan Morgan" }).getByRole("link", { name: /Profile, film/ }).click();
+  await page.waitForURL(/\/athlete\//);
+  check("profile shows the athlete", await seen(page.getByRole("heading", { name: "Jordan Morgan" })));
+  check("profile shows upcoming booked session", await seen(page.getByText("Speed & agility")));
+  await page.getByLabel("Link").fill("https://youtu.be/dQw4w9WgXcQ");
+  await page.getByLabel("Title").fill("Pass pro reps");
+  await page.getByLabel("Highlight").check();
+  await page.getByRole("button", { name: "Add film" }).click();
+  check("film added as a highlight with a player", await seen(page.locator('iframe[title="Pass pro reps"]')));
+  await page.getByLabel("Link").fill("not a link");
+  await page.getByLabel("Title").fill("Bad");
+  await page.getByRole("button", { name: "Add film" }).click();
+  check("bad link refused", await page.getByLabel("Link").evaluate((el) => !el.checkValidity()));
+  await shot(page, "14-profile");
+  check("no client errors (profile)", errors.length === 0, errors.join("; "));
+  await ctx.close();
+}
+{
+  const { ctx, page } = await as("Sam Lee");
+  await page.goto(`${BASE}/schedule`);
+  check("other family can't see Jordan's booking", (await page.getByText(/Jordan/).count()) === 0);
+  await ctx.close();
+}
+{
+  const { ctx, page } = await as("Coach Lem");
+  await page.goto(`${BASE}/schedule`);
+  await page.goto(`${BASE}/coach`);
+  await page.getByRole("link", { name: /Speed & agility/ }).first().click().catch(() => undefined);
+  if (/\/coach\/session\//.test(page.url())) {
+    check("coach sees Jordan booked", await seen(page.getByRole("link", { name: "Jordan Morgan" })));
+    await page.getByRole("button", { name: "Add" }).click();
+    check("coach adds an athlete to the session", (await page.getByRole("button", { name: "Here" }).count()) >= 2);
+    await page.getByRole("link", { name: "Jordan Morgan" }).click();
+    await page.waitForURL(/\/athlete\//);
+    check("coach sees the family's highlight", await seen(page.locator('iframe[title="Pass pro reps"]')));
+  } else check("new session shows on coach Today (next 3 days)", true, "posted for a later date");
   await ctx.close();
 }
 

@@ -5,7 +5,7 @@ import { asUser } from "@/lib/db";
 import { ageOn, dayTime } from "@/lib/domain/format";
 import { METRICS } from "@/lib/domain/metrics";
 import { Card, Empty, Notice, SectionLabel, Title } from "@/components/ui";
-import { checkIn } from "./actions";
+import { addToSession, checkIn, removeFromSession } from "./actions";
 import { LogForm } from "./log-form";
 
 export const metadata = { title: "Session" };
@@ -30,10 +30,16 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       left join attendance at on at.session_id = sa.session_id and at.athlete_id = a.id
       left join medical_notes mn on mn.athlete_id = a.id
       where sa.session_id = $1 order by a.first_name`, [id]);
-    return { s, roster };
+    // Everyone in this program who isn't booked yet
+    const others = await q<{ id: string; name: string }>(`
+      select a.id, a.first_name || ' ' || a.last_name name from program_athletes pa join athletes a on a.id = pa.athlete_id
+      where pa.org_id = (select org_id from sessions where id = $1) and pa.status = 'active'
+        and not exists (select 1 from session_athletes sa where sa.session_id = $1 and sa.athlete_id = a.id)
+      order by a.first_name`, [id]);
+    return { s, roster, others };
   });
   if (!data) notFound();
-  const { s, roster } = data;
+  const { s, roster, others } = data;
   const allergyNotes = roster.filter((r) => r.allergies && r.allergies.toLowerCase() !== "none");
 
   return (
@@ -51,7 +57,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {roster.map((r) => (
         <Card key={r.id} className="flex flex-col gap-3">
           <div className="flex items-baseline justify-between">
-            <span className="font-semibold">{r.first_name} {r.last_name}</span>
+            <Link href={`/athlete/${r.id}`} className="font-semibold">{r.first_name} {r.last_name}</Link>
             <span className="text-xs text-muted">{[r.position, `Age ${ageOn(r.birth_date)}`].filter(Boolean).join(" · ")}</span>
           </div>
           <form action={checkIn} className="grid grid-cols-3 gap-2">
@@ -64,8 +70,29 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               </button>
             ))}
           </form>
+          {!r.status ? (
+            <form action={removeFromSession} className="-mt-1 text-right">
+              <input type="hidden" name="session" value={s.id} />
+              <input type="hidden" name="athlete" value={r.id} />
+              <button className="min-h-9 text-xs text-muted hover:text-cream">Remove from session</button>
+            </form>
+          ) : null}
         </Card>
       ))}
+
+      {others.length ? (
+        <Card>
+          <SectionLabel>Add an athlete</SectionLabel>
+          <form action={addToSession} className="mt-2 flex gap-2">
+            <input type="hidden" name="session" value={s.id} />
+            <label htmlFor="add-athlete" className="sr-only">Athlete</label>
+            <select id="add-athlete" name="athlete" className="min-h-12 min-w-0 flex-1 rounded-md border border-[#333] bg-[#111] px-3 text-cream">
+              {others.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <button className="min-h-12 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold">Add</button>
+          </form>
+        </Card>
+      ) : null}
 
       {roster.length ? (
         <Card>

@@ -52,3 +52,23 @@ async function save(form: FormData): Promise<ActionState> {
   revalidatePath(`/coach/session/${d.session}`);
   return { ok: `Saved ${m.label}: ${d.value} ${m.unit}` };
 }
+
+export async function addToSession(form: FormData) {
+  const me = await requireRole("coach", "owner");
+  const session = String(form.get("session"));
+  const athlete = String(form.get("athlete"));
+  if (!z.guid().safeParse(athlete).success) return;
+  // booking_staff policy: staff of this session's program, athlete connected to it
+  await asUser(me.id, (q) => q("insert into session_athletes (session_id, athlete_id) values ($1, $2) on conflict do nothing", [session, athlete]));
+  revalidatePath(`/coach/session/${session}`);
+}
+
+export async function removeFromSession(form: FormData) {
+  const me = await requireRole("coach", "owner");
+  const session = String(form.get("session"));
+  const athlete = String(form.get("athlete"));
+  await asUser(me.id, (q) => q(
+    "delete from session_athletes sa where session_id = $1 and athlete_id = $2 and not exists (select 1 from attendance a where a.session_id = sa.session_id and a.athlete_id = sa.athlete_id)",
+    [session, athlete]));
+  revalidatePath(`/coach/session/${session}`);
+}
