@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { dayTime, isSameLocalDay } from "@/lib/domain/format";
@@ -10,6 +12,19 @@ export const metadata = { title: "Today" };
 
 type S = { id: string; title: string; starts_at: string; location: string | null; booked: number; marked: number; mine: boolean };
 
+async function makeMeOwner() {
+  "use server";
+  const me = await requireMe();
+  if (!me.isPlatformAdmin || !me.orgId || !me.email) return;
+  await asUser(me.id, async (q) => {
+    await q("select invite_staff($1, $2, 'owner')", [me.orgId, me.email]);
+    await q("select invite_staff($1, $2, 'coach')", [me.orgId, me.email]);
+    await q("select claim_invites()");
+  });
+  revalidatePath("/", "layout");
+  redirect("/coach");
+}
+
 export default async function CoachToday({ searchParams }: { searchParams: Promise<{ posted?: string }> }) {
   const { posted } = await searchParams;
   const me = await requireMe();
@@ -19,7 +34,14 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
         <Title sub={me.email ?? undefined}>Coach access</Title>
         <Card>
           <div className="font-semibold">You&apos;re signed in, but not set up as a coach here yet.</div>
-          <p className="mt-1 text-sm text-soft">Ask your program owner to invite this email from Settings → Coaches. Then sign out and back in.</p>
+          <p className="mt-1 text-sm text-soft">
+            {me.isPlatformAdmin ? "You're a ProLyt admin, so you can add yourself in one tap." : "Ask your program owner to add this email in Settings → Coaches. You'll have access as soon as they do."}
+          </p>
+          {me.isPlatformAdmin && me.orgId ? (
+            <form action={makeMeOwner} className="mt-3">
+              <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-on-gold">Add me as owner &amp; coach</button>
+            </form>
+          ) : null}
         </Card>
         {me.roles.includes("guardian") ? <Link href="/family" className="text-sm font-semibold">Go to my family page →</Link> : null}
       </>

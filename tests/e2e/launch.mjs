@@ -133,6 +133,16 @@ async function signIn(sub, email, path = "/login") {
   await ctx.close();
 }
 
+// ── ProLyt admin opens Coach login on the program's address and adds themself in one tap
+{
+  const { ctx, page } = await signIn("gamefit-loomis", "marcus@prolyt.test", "/login?as=coach");
+  check("admin sees one-tap self add", await seen(page.getByRole("button", { name: /Add me as owner/ })));
+  await page.getByRole("button", { name: /Add me as owner/ }).click();
+  check("admin is now on coach Today", await seen(page.getByRole("link", { name: "+ New session" })));
+  check("admin also has coach Earnings", await seen(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Earnings" })));
+  await ctx.close();
+}
+
 // ── Someone not invited tries Coach login
 {
   const { ctx, page } = await signIn("gamefit-loomis", "stranger@nowhere.test", "/login?as=coach");
