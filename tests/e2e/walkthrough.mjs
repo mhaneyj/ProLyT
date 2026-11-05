@@ -82,6 +82,14 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await page.getByRole("button", { name: /Jordan Morgan: tap to mark here/ }).click();
   check("one tap checks in", await seen(page.getByRole("button", { name: /Jordan Morgan: here/ })));
   check("here count updates", await seen(page.getByText("1/2")));
+  // Voice: typed transcript (same as keyboard dictation), confirm, save
+  await page.getByLabel("What you said").fill("Jordan forty five two one. Noah five oh four. Jordan, hands inside on pass sets, next focus staying low.");
+  check("voice log is read back for checking", await seen(page.getByText("Check before saving")) && (await page.getByLabel(/Jordan Morgan 40-yard dash/).inputValue()) === "5.21");
+  check("voice picks up the coach note", await seen(page.getByText("Next focus: staying low")));
+  await page.getByRole("button", { name: /^Save 2/ }).click();
+  check("voice log saves results and note", await seen(page.getByText(/Saved 2 results and 1 note/)));
+  await page.getByRole("tab", { name: "Quick entry" }).click();
+  await page.waitForURL(/mode=quick/);
   await page.getByRole("textbox", { name: /Jordan Morgan/ }).fill("52.1");
   await page.getByRole("button", { name: "Save results" }).click();
   check("typo guard catches 52.1s 40", await seen(page.getByText(/Check for a typo/)));

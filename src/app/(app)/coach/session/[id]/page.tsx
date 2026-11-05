@@ -9,12 +9,13 @@ import { Card, SectionLabel } from "@/components/ui";
 import { addNote } from "@/app/(app)/athlete/[id]/actions";
 import { addToSession, allHere, removeFromSession, toggleHere } from "./actions";
 import { QuickEntry } from "./quick-entry";
+import { VoiceEntry } from "./voice-entry";
 
 export const metadata = { title: "Session" };
 
 type R = { id: string; first_name: string; last_name: string; position: string | null; birth_date: string; status: string | null; allergies: string | null; conditions: string | null };
 
-export default async function SessionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ t?: string }> }) {
+export default async function SessionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ t?: string; mode?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const me = await requireRole("coach", "owner");
@@ -43,6 +44,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const unmarked = roster.filter((r) => !r.status).length;
   const tests = Object.keys(METRICS);
   const t = sp.t && tests.includes(sp.t) ? sp.t : "40yd";
+  const mode = sp.mode === "quick" ? "quick" : "voice";
+  const q = (o: { t?: string; mode?: string }) => `?t=${o.t ?? t}&mode=${o.mode ?? mode}#results`;
   const medical = (r: R) => [r.allergies, r.conditions].filter((x) => x && x.toLowerCase() !== "none").join(" · ");
 
   return (
@@ -134,19 +137,32 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {roster.length ? (
         <section id="results" className="flex scroll-mt-4 flex-col gap-2">
           <SectionLabel>Log results</SectionLabel>
+          <div className="grid grid-cols-2 gap-1 rounded-full border border-line p-1" role="tablist" aria-label="How to log">
+            {(["voice", "quick"] as const).map((x) => (
+              <Link key={x} role="tab" aria-selected={mode === x} href={q({ mode: x })} scroll={false}
+                className={`flex min-h-10 items-center justify-center rounded-full text-sm font-bold ${mode === x ? "bg-gold text-on-gold" : "text-soft"}`}>
+                {x === "voice" ? "Voice" : "Quick entry"}
+              </Link>
+            ))}
+          </div>
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1" role="tablist" aria-label="Test">
             {tests.map((x) => (
-              <Link key={x} role="tab" aria-selected={x === t} href={`?t=${x}#results`} scroll={false}
+              <Link key={x} role="tab" aria-selected={x === t} href={q({ t: x })} scroll={false}
                 className={`flex min-h-11 flex-none items-center rounded-full px-4 text-sm font-semibold ${x === t ? "border-2 border-gold bg-gold text-on-gold" : "border border-line"}`}>
                 {metricLabel(x)}
               </Link>
             ))}
           </div>
-          <QuickEntry session={s.id} metric={t} unit={METRICS[t].unit}
+          {mode === "voice" ? (
+            <VoiceEntry session={s.id} metric={t} athletes={roster.map((r) => ({
+              id: r.id, first: r.first_name, last: r.last_name,
+              best: bestOfficial(t, results.filter((x) => x.athlete_id === r.id && x.metric === t)),
+            }))} />
+          ) : <QuickEntry session={s.id} metric={t} unit={METRICS[t].unit}
             athletes={roster.map((r) => {
               const b = bestOfficial(t, results.filter((x) => x.athlete_id === r.id && x.metric === t));
               return { id: r.id, name: `${r.first_name} ${r.last_name}`, best: b === null ? null : formatValue(t, b) };
-            })} />
+            })} />}
         </section>
       ) : null}
 

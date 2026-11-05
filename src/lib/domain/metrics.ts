@@ -9,6 +9,9 @@ export const METRICS: Record<string, { label: string; short: string; unit: strin
   bench_reps: { label: "Bench reps", short: "Bench", unit: "reps", lowerIsBetter: false, decimals: 0 },
 };
 
+/** Plausible ranges, to catch typos and mishears (52.1 for 5.21). */
+export const BOUNDS: Record<string, [number, number]> = { "40yd": [3.8, 9], pro_agility: [3.5, 8], vertical: [5, 50], broad: [30, 150], sled_lb: [20, 1500], bench_reps: [1, 60] };
+
 export function metricShort(key: string) {
   return METRICS[key]?.short ?? metricLabel(key);
 }

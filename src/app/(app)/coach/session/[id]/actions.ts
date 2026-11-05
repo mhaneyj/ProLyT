@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
-import { METRICS } from "@/lib/domain/metrics";
+import { BOUNDS, METRICS } from "@/lib/domain/metrics";
 
 export type ActionState = { ok?: string; error?: string; values?: { athlete?: string; metric?: string; value?: string } };
 
@@ -73,7 +73,6 @@ export async function removeFromSession(form: FormData) {
   revalidatePath(`/coach/session/${session}`);
 }
 
-const BOUNDS: Record<string, [number, number]> = { "40yd": [3.8, 9], pro_agility: [3.5, 8], vertical: [5, 50], broad: [30, 150], sled_lb: [20, 1500], bench_reps: [1, 60] };
 
 export type BatchState = { ok?: string; error?: string; bad?: Record<string, string>; values?: Record<string, string> };
 
@@ -129,4 +128,50 @@ export async function allHere(form: FormData) {
     for (const r of rows) await q("select check_in($1, $2, 'present')", [session, r.athlete_id]);
   });
   revalidatePath(`/coach/session/${session}`);
+}
+
+const voiceSchema = z.object({
+  session: z.guid(),
+  metric: z.string().refine((m) => m in METRICS),
+  items: z.array(z.object({
+    athleteId: z.guid(),
+    value: z.number().positive().nullable(),
+    note: z.string().trim().max(1000).nullable(),
+    focus: z.string().trim().max(200).nullable(),
+  })).min(1).max(60),
+});
+
+/** Saves what the coach confirmed from a spoken log: results plus notes. */
+export async function saveVoice(input: z.infer<typeof voiceSchema>): Promise<{ ok?: string; error?: string }> {
+  const me = await requireRole("coach", "owner");
+  const p = voiceSchema.safeParse(input);
+  if (!p.success) return { error: "Nothing to save yet" };
+  const { session, metric, items } = p.data;
+  const m = METRICS[metric];
+  const [lo, hi] = BOUNDS[metric];
+  const off = items.find((i) => i.value !== null && (i.value < lo || i.value > hi));
+  if (off) return { error: `Check ${off.value} ${m.unit}: ${m.label} should be ${lo}–${hi} ${m.unit}. Fix it, then save.` };
+  let results = 0, notes = 0;
+  try {
+    await asUser(me.id, async (q) => {
+      const [s] = await q<{ org_id: string }>("select org_id from sessions where id = $1", [session]);
+      if (!s) throw new Error("Unknown session");
+      for (const i of items) {
+        if (i.value !== null) {
+          await q("insert into results (athlete_id, session_id, metric, value, unit, source) values ($1,$2,$3,$4,$5,'coach_logged')", [i.athleteId, session, metric, i.value, m.unit]);
+          results++;
+        }
+        if (i.note && i.note.length >= 2) {
+          await q("insert into coach_notes (athlete_id, org_id, coach_id, session_id, body, focus) values ($1,$2,$3,$4,$5,$6)",
+            [i.athleteId, s.org_id, me.id, session, i.note, i.focus || null]);
+          notes++;
+        }
+      }
+    });
+  } catch (e) {
+    return { error: dbMessage(e) };
+  }
+  revalidatePath(`/coach/session/${session}`);
+  const parts = [results ? `${results} result${results > 1 ? "s" : ""}` : null, notes ? `${notes} note${notes > 1 ? "s" : ""}` : null].filter(Boolean);
+  return { ok: `Saved ${parts.join(" and ")}. Families see them now.` };
 }
