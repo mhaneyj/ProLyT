@@ -27,12 +27,12 @@ async function linkFor(email) {
   throw new Error("No sign-in link logged for " + email);
 }
 
-async function signIn(sub, email) {
+async function signIn(sub, email, path = "/login") {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(url(sub, "/login"));
+  await page.goto(url(sub, path));
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: /Email me a sign-in link/ }).click();
   await seen(page.getByText("Check your email"));
@@ -107,6 +107,12 @@ async function signIn(sub, email) {
   await page.getByRole("button", { name: "Register" }).click();
   await page.waitForURL(/\/family/);
   check("athlete registered on the real database", await seen(page.getByRole("heading", { name: /Avery Real/ })));
+  check("registered free, no payment asked", await seen(page.getByText("Free access")));
+  await page.getByRole("link", { name: "Choose a package" }).click();
+  await page.waitForURL(/\/family\/choose\//);
+  await page.locator("form").filter({ hasText: "Development" }).getByRole("button").click();
+  await page.waitForURL(/\/family/);
+  check("package chosen later from home screen", await seen(page.getByText("Package picked")));
   await page.screenshot({ path: `${OUT}/l03-parent.png`, fullPage: true });
   check("no client errors (parent)", errors.length === 0, errors.join("; "));
   await ctx.close();
@@ -114,13 +120,21 @@ async function signIn(sub, email) {
 
 // ── 5. Coach Lem signs in → coach, sees the new athlete exists only via sessions; earnings setup shown
 {
-  const { ctx, page, errors } = await signIn("gamefit-loomis", "lem@gamefit.test");
+  const { ctx, page, errors } = await signIn("gamefit-loomis", "lem@gamefit.test", "/login?as=coach");
+  check("coach login page says Coach login", true);
   check("invited coach lands on coach screen", page.url().endsWith("/coach"), page.url());
   await page.goto(url("gamefit-loomis", "/coach/earnings"));
   check("contractor coach asked to set up payouts", await seen(page.getByRole("button", { name: /Set up payouts/ })));
   await page.goto(url("gamefit-loomis", "/owner"));
   check("coach can't open owner dashboard", !page.url().endsWith("/owner"));
   check("no client errors (coach)", errors.length === 0, errors.join("; "));
+  await ctx.close();
+}
+
+// ── Someone not invited tries Coach login
+{
+  const { ctx, page } = await signIn("gamefit-loomis", "stranger@nowhere.test", "/login?as=coach");
+  check("uninvited coach sees how to get access", await seen(page.getByText(/not set up as a coach here yet/)));
   await ctx.close();
 }
 

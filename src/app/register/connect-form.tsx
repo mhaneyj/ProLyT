@@ -6,7 +6,7 @@ import { connectAthlete, type RegisterState } from "./actions";
 type Plan = { id: string; name: string; price_cents: number };
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 
-export function ConnectForm({ athletes, plans, stripe }: { athletes: { id: string; first_name: string; last_name: string; programs: string | null }[]; plans: Plan[]; stripe: boolean }) {
+export function ConnectForm({ athletes, plans }: { athletes: { id: string; first_name: string; last_name: string; programs: string | null }[]; plans: Plan[] }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(connectAthlete, {});
   const v = state.values ?? {};
   return (
@@ -20,8 +20,9 @@ export function ConnectForm({ athletes, plans, stripe }: { athletes: { id: strin
         </select>
       </div>
       <div>
-        <label htmlFor="c-plan" className="mb-1.5 block text-sm text-soft">Membership</label>
-        <select id="c-plan" name="plan" defaultValue={v.plan} className={input}>
+        <label htmlFor="c-plan" className="mb-1.5 block text-sm text-soft">Package</label>
+        <select id="c-plan" name="plan" defaultValue={v.plan ?? ""} className={input}>
+          <option value="">Free for now (choose later)</option>
           {plans.map((p) => <option key={p.id} value={p.id}>{p.name} · ${p.price_cents / 100}/mo</option>)}
         </select>
       </div>
@@ -39,7 +40,7 @@ export function ConnectForm({ athletes, plans, stripe }: { athletes: { id: strin
       </div>
       {state.error ? <div role="alert" className="rounded-lg border border-bad p-3 text-sm">{state.error}</div> : null}
       <button disabled={pending} className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold disabled:opacity-60">
-        {pending ? "Connecting…" : stripe ? "Connect and pay" : "Connect"}
+        {pending ? "Connecting…" : "Connect"}
       </button>
     </form>
   );

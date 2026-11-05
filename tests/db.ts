@@ -39,6 +39,8 @@ export async function makeDb(): Promise<PGlite> {
   await db.exec(readFileSync(join(root, "db/00_auth.sql"), "utf8"));
   await db.exec(readFileSync(join(root, "db/01_schema.sql"), "utf8"));
   await db.exec(readFileSync(join(root, "db/02_seed.sql"), "utf8"));
+  const { applyMigrations, pgliteExec } = await import("../src/lib/migrations");
+  await applyMigrations(pgliteExec(db as never), root);
   return db;
 }
 

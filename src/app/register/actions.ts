@@ -15,7 +15,7 @@ const schema = z.object({
   grad_year: z.coerce.number().int().min(2026).max(2040).optional().or(z.literal("").transform(() => undefined)),
   position: z.string().trim().max(20).optional(),
   school: z.string().trim().max(120).optional(),
-  plan: z.guid("Pick a membership"),
+  plan: z.union([z.guid(), z.literal("")]).optional(),
   emergency_name: z.string().trim().min(1, "Add an emergency contact"),
   emergency_phone: z.string().trim().min(7, "Add an emergency phone number"),
   allergies: z.string().trim().max(500).optional(),
@@ -58,7 +58,7 @@ async function register(form: FormData): Promise<RegisterState | void> {
       if (!org) throw new Error("Program not found");
       const [r] = await q<{ id: string }>(
         `select register_athlete($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) id`,
-        [org.id, d.first, d.last, d.birth, d.grad_year ?? null, d.position || null, d.school || null, d.plan, d.signer,
+        [org.id, d.first, d.last, d.birth, d.grad_year ?? null, d.position || null, d.school || null, d.plan || null, d.signer,
          d.media === "on", age < 13 && d.verify === "on", d.emergency_name, d.emergency_phone, d.allergies || null, d.conditions || null],
       );
       return r.id;
@@ -68,13 +68,13 @@ async function register(form: FormData): Promise<RegisterState | void> {
   }
 
   revalidatePath("/", "layout"); // new program membership changes the header and menu
-  if (stripeConfigured) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
+  if (stripeConfigured && d.plan) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
   redirect("/family?registered=1");
 }
 
 const connectSchema = z.object({
   athlete: z.guid("Pick an athlete"),
-  plan: z.guid("Pick a membership"),
+  plan: z.union([z.guid(), z.literal("")]).optional(),
   signer: z.string().trim().min(2, "Type your full name to sign"),
   agree: z.literal("on", { error: "Agree to the program's terms and waiver" }),
   media: z.string().optional(),
@@ -91,12 +91,12 @@ export async function connectAthlete(prev: RegisterState, form: FormData): Promi
     await asUser(me.id, async (q) => {
       const [org] = await q<{ id: string }>("select id from orgs where slug = $1", [await currentOrgSlug()]);
       if (!org) throw new Error("Program not found");
-      await q("select connect_athlete($1, $2, $3, $4, $5)", [org.id, d.athlete, d.plan, d.signer, d.media === "on"]);
+      await q("select connect_athlete($1, $2, $3, $4, $5)", [org.id, d.athlete, d.plan || null, d.signer, d.media === "on"]);
     });
   } catch (e) {
     return { error: dbMessage(e), values };
   }
   revalidatePath("/", "layout");
-  if (stripeConfigured) redirect(`/api/stripe/checkout?athlete_id=${d.athlete}`);
+  if (stripeConfigured && d.plan) redirect(`/api/stripe/checkout?athlete_id=${d.athlete}`);
   redirect("/family?connected=1");
 }

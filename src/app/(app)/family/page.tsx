@@ -62,7 +62,7 @@ export default async function FamilyHome() {
                     {[a.position, `Age ${ageOn(a.birth_date)}`, a.grad_year ? `Class of ${a.grad_year}` : null].filter(Boolean).join(" · ")}
                   </p>
                 </div>
-                {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status ? <Pill>{a.status}</Pill> : null}
+                {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Package picked</Pill> : a.status ? <Pill>{a.status}</Pill> : <Pill>Free access</Pill>}
               </div>
               {a.plan ? (
                 <p className="mt-3 text-sm text-soft">
@@ -79,7 +79,14 @@ export default async function FamilyHome() {
                 <form action="/api/stripe/checkout" method="post" className="mt-3">
                   <input type="hidden" name="athlete_id" value={a.id} />
                   <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold">Finish payment</button>
+                  <Link href={`/family/choose/${a.id}`} className="mt-2 block text-center text-sm font-semibold">Change package</Link>
                 </form>
+              ) : null}
+              {!a.status || a.status === "canceled" ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  <p className="text-sm text-soft">{a.first_name} has free access to the app. Choose a package when you&apos;re ready to train.</p>
+                  <LinkButton href={`/family/choose/${a.id}`} kind="ghost">Choose a package</LinkButton>
+                </div>
               ) : null}
             </Card>
 

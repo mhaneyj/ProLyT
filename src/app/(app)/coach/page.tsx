@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { dayTime, isSameLocalDay } from "@/lib/domain/format";
 import { Card, Empty, Pill, Title } from "@/components/ui";
@@ -9,7 +9,19 @@ export const metadata = { title: "Today" };
 type S = { id: string; title: string; starts_at: string; location: string | null; booked: number; marked: number; mine: boolean };
 
 export default async function CoachToday() {
-  const me = await requireRole("coach", "owner");
+  const me = await requireMe();
+  if (!me.roles.includes("coach") && !me.roles.includes("owner")) {
+    return (
+      <>
+        <Title sub={me.email ?? undefined}>Coach access</Title>
+        <Card>
+          <div className="font-semibold">You&apos;re signed in, but not set up as a coach here yet.</div>
+          <p className="mt-1 text-sm text-soft">Ask your program owner to invite this email from Settings → Coaches. Then sign out and back in.</p>
+        </Card>
+        {me.roles.includes("guardian") ? <Link href="/family" className="text-sm font-semibold">Go to my family page →</Link> : null}
+      </>
+    );
+  }
   const sessions = await asUser(me.id, (q) =>
     q<S>(`
       select s.id, s.title, s.starts_at, s.location, s.coach_id = $1 mine,

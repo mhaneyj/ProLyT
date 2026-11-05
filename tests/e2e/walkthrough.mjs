@@ -41,7 +41,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await shot(page, "03-schedule");
   // Coach-only pages bounce parents
   await page.goto(`${BASE}/coach`);
-  check("parent blocked from coach pages", page.url().endsWith("/family"));
+  check("parent sees no coach data, gets told how to get access", await page.getByText(/not set up as a coach here yet/).isVisible());
   // Register a second athlete
   await page.goto(`${BASE}/register`);
   await page.getByLabel("First name").fill("Casey");

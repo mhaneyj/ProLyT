@@ -52,7 +52,7 @@ export default async function Register() {
         <Card accent>
           <div className="font-semibold">Already on ProLyt?</div>
           <p className="mb-3 mt-1 text-sm text-soft">Bring their profile and verified results with them. {brand.name} only sees it once you connect.</p>
-          <ConnectForm athletes={existing} plans={plans} stripe={stripeConfigured} />
+          <ConnectForm athletes={existing} plans={plans} />
         </Card>
       ) : null}
 

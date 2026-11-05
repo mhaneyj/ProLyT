@@ -27,11 +27,13 @@ async function finish(form: FormData) {
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
-  redirect("/home");
+  // Only same-site paths, never another site
+  const next = String(form.get("next") ?? "");
+  redirect(/^\/[a-z/]*$/.test(next) && !next.startsWith("//") ? next : "/home");
 }
 
-export default async function Verify({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token } = await searchParams;
+export default async function Verify({ searchParams }: { searchParams: Promise<{ token?: string; next?: string }> }) {
+  const { token, next } = await searchParams;
   if (!token) redirect("/login");
   const brand = await brandBySlug(await currentOrgSlug());
   return (
@@ -43,6 +45,7 @@ export default async function Verify({ searchParams }: { searchParams: Promise<{
       </div>
       <form action={finish}>
         <input type="hidden" name="token" value={token} />
+        {next ? <input type="hidden" name="next" value={next} /> : null}
         <Button type="submit">Finish signing in</Button>
       </form>
     </main>

@@ -29,7 +29,7 @@ function under13(birth: string) {
 export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAthlete, {});
   const [birth, setBirth] = useState(state.values?.birth ?? "");
-  const [plan, setPlan] = useState(plans[1]?.id ?? plans[0]?.id);
+  const [plan, setPlan] = useState(state.values?.plan ?? ""); // "" = free for now
   const young = under13(birth);
   const v = state.values ?? {};
 
@@ -52,7 +52,15 @@ export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">2 · Membership</legend>
+        <legend className="mb-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">2 · Package</legend>
+        <label className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 ${plan === "" ? "border-2 border-gold bg-gold/5" : "border-line bg-panel"}`}>
+          <input type="radio" name="plan" value="" checked={plan === ""} onChange={() => setPlan("")} className="size-5 accent-[var(--color-gold)]" />
+          <span className="flex-1">
+            <span className="block font-semibold">Free for now</span>
+            <span className="block text-xs text-muted">Try the app. Choose a package anytime from your home screen.</span>
+          </span>
+          <span className="tabular font-display text-2xl">$0</span>
+        </label>
         {plans.map((p) => (
           <label key={p.id} className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 ${plan === p.id ? "border-2 border-gold bg-gold/5" : "border-line bg-panel"}`}>
             <input type="radio" name="plan" value={p.id} checked={plan === p.id} onChange={() => setPlan(p.id)} className="size-5 accent-[var(--color-gold)]" />
@@ -98,7 +106,7 @@ export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean
 
       {state.error ? <div role="alert" className="rounded-lg border border-bad p-3 text-sm text-cream">{state.error}</div> : null}
       <button disabled={pending} className="min-h-14 w-full rounded-md bg-gold font-cond text-[19px] font-extrabold uppercase tracking-[2px] text-on-gold disabled:opacity-60">
-        {pending ? "Saving…" : stripe ? "Continue to payment" : "Register"}
+        {pending ? "Saving…" : stripe && plan ? "Continue to payment" : "Register"}
       </button>
     </form>
   );

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { asService, isDemo } from "@/lib/db";
@@ -24,6 +25,7 @@ async function demoSignIn(form: FormData) {
 async function emailSignIn(form: FormData) {
   "use server";
   if (isDemo) return;
+  const coach = form.get("as") === "coach";
   const h = await headers();
   // Link back to the same program address they signed in from
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
@@ -33,22 +35,25 @@ async function emailSignIn(form: FormData) {
   try {
     const { email, token } = await asService((q) => requestLink(q, String(form.get("email") ?? "")));
     const brand = await brandBySlug(await currentOrgSlug());
-    await sendSignInEmail(email, `${origin}/auth/verify?token=${encodeURIComponent(token)}`, brand?.name ?? null);
+    const next = coach ? "&next=%2Fcoach" : "";
+    await sendSignInEmail(email, `${origin}/auth/verify?token=${encodeURIComponent(token)}${next}`, brand?.name ?? null);
   } catch (e) {
     message = e instanceof RateLimited || e instanceof Error ? e.message : "Something went wrong. Try again.";
   }
-  redirect(message ? `/login?error=${encodeURIComponent(message)}` : "/login?sent=1");
+  const as = coach ? "&as=coach" : "";
+  redirect(message ? `/login?error=${encodeURIComponent(message)}${as}` : `/login?sent=1${as}`);
 }
 
-export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string }> }) {
+export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string; as?: string }> }) {
   const sp = await searchParams;
+  const coach = sp.as === "coach";
   const brand = await brandBySlug(await currentOrgSlug());
   return (
     <main style={brand ? (themeVars(brand.brand_color) as React.CSSProperties) : undefined} className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
       {brand ? <ProgramLogo brand={brand} size={80} /> : <ProLytMark className="text-4xl" />}
       <div>
         <Kicker>{brand ? brand.name : "ProLyt"}</Kicker>
-        <h1 className="mt-1 font-display text-[40px] uppercase leading-none">Sign up or log in</h1>
+        <h1 className="mt-1 font-display text-[40px] uppercase leading-none">{coach ? "Coach login" : "Sign up or log in"}</h1>
       </div>
 
       {isDemo ? (
@@ -78,6 +83,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
         </Card>
       ) : (
         <form action={emailSignIn} className="flex flex-col gap-3">
+          {coach ? <input type="hidden" name="as" value="coach" /> : null}
           {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
           <label htmlFor="email" className="text-sm text-soft">Email</label>
           <input
@@ -89,9 +95,18 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             className="min-h-12 rounded-md border border-[#333] bg-[#111] px-3 text-cream"
           />
           <Button type="submit">Email me a sign-in link</Button>
-          <p className="text-xs text-muted">No passwords. New here? Enter your email and we&apos;ll create your account, then you&apos;ll register your athlete.</p>
+          {coach ? (
+            <p className="text-xs text-muted">Use the email your program invited you with. No passwords.</p>
+          ) : (
+            <p className="text-xs text-muted">No passwords. New here? Enter your email and we&apos;ll create your account, then you&apos;ll register your athlete.</p>
+          )}
         </form>
       )}
+      {!isDemo ? (
+        <p className="text-center text-sm text-muted">
+          {coach ? <>Parent or athlete? <Link href="/login" className="font-semibold">Family sign in</Link></> : <>Coach? <Link href="/login?as=coach" className="font-semibold">Coach login</Link></>}
+        </p>
+      ) : null}
       {brand ? <div className="mt-auto text-center"><PoweredBy /></div> : null}
     </main>
   );

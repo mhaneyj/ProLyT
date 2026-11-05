@@ -55,6 +55,8 @@ describe("demo data", () => {
     await db.exec(readFileSync("db/00_auth.sql", "utf8"));
     await db.exec(readFileSync("db/01_schema.sql", "utf8"));
     await db.exec(readFileSync("db/02_seed.sql", "utf8"));
+    const { applyMigrations, pgliteExec } = await import("../src/lib/migrations");
+    await applyMigrations(pgliteExec(db as never), process.cwd());
     await db.exec(DEMO_SEED_SQL);
     const r = await db.query<{ n: number }>("select count(*)::int n from sessions");
     expect(r.rows[0].n).toBe(12);

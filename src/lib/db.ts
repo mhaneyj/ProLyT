@@ -10,6 +10,7 @@ import { join } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
 import type { Pool } from "pg";
 import { DEMO_SEED_SQL } from "./demo-seed";
+import { applyMigrations, pgliteExec } from "./migrations";
 
 export type Q = <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;
 
@@ -26,6 +27,7 @@ async function pglite(): Promise<PGlite> {
       await db.exec(readFileSync(join(root, "db/00_auth.sql"), "utf8"));
       await db.exec(readFileSync(join(root, "db/01_schema.sql"), "utf8"));
       await db.exec(readFileSync(join(root, "db/02_seed.sql"), "utf8"));
+      await applyMigrations(pgliteExec(db as never), root);
       await db.exec(DEMO_SEED_SQL);
       return db;
     })();
@@ -57,18 +59,18 @@ async function pool(): Promise<Pool> {
 async function ensureSchema(p: Pool) {
   const client = await p.connect();
   try {
-    const [{ ready }] = (await client.query("select to_regclass('public.orgs') is not null as ready")).rows;
-    if (ready) return;
     const root = process.cwd();
     await client.query("begin");
     await client.query("select pg_advisory_xact_lock(782301)");
-    const [{ ready: done }] = (await client.query("select to_regclass('public.orgs') is not null as ready")).rows;
-    if (!done) {
+    const [{ ready }] = (await client.query("select to_regclass('public.orgs') is not null as ready")).rows;
+    if (!ready) {
       for (const f of ["00_auth.sql", "01_schema.sql", "02_seed.sql"]) {
         await client.query(readFileSync(join(root, "db", f), "utf8"));
       }
       console.log("[db] New database: ProLyt schema and Game-Fit Loomis program created.");
     }
+    const applied = await applyMigrations((sql, params) => client.query(sql, params as unknown[]), root);
+    if (applied.length) console.log("[db] Applied updates:", applied.join(", "));
     await client.query("commit");
   } catch (e) {
     await client.query("rollback").catch(() => undefined);

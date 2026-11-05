@@ -290,3 +290,36 @@ describe("program branding and ProLyt admin", () => {
     await expect(as(db, OWNER, () => db.query("insert into org_invites (org_id, email, role) values ($1,'x@example.com','owner')", [ORG]))).rejects.toThrow();
   });
 });
+
+describe("free access and choosing a package later", () => {
+  const PARENT_F = "10000000-0000-0000-0000-0000000000f1";
+  let kid: string;
+  beforeAll(async () => {
+    await addUser(db, PARENT_F, "free@example.com");
+    kid = (await as(db, PARENT_F, () => db.query<{ id: string }>(
+      `select register_athlete($1,'Free','Kid',$2,2030,'WR',null,null,'Free Parent',false,false,'Free Parent','555-0110') id`,
+      [ORG, yearsAgo(14)]))).rows[0].id;
+  });
+  it("a family can register without picking a package", async () => {
+    expect((await db.query("select * from memberships where athlete_id=$1", [kid])).rows).toHaveLength(0);
+    expect((await db.query("select status from program_athletes where athlete_id=$1 and org_id=$2", [kid, ORG])).rows).toEqual([{ status: "active" }]);
+    expect((await db.query("select kind from consents where athlete_id=$1", [kid])).rows.length).toBe(2);
+  });
+  it("coaches see free athletes in their program", async () => {
+    expect((await as(db, COACH, () => db.query("select id from athletes where id=$1", [kid]))).rows).toHaveLength(1);
+  });
+  it("the parent can choose a package later, and change an unpaid pick", async () => {
+    await as(db, PARENT_F, () => db.query("select choose_plan($1, $2)", [kid, PLAN]));
+    await as(db, PARENT_F, () => db.query("select choose_plan($1, '00000000-0000-0000-0000-0000000000b3')", [kid]));
+    const m = await db.query<{ status: string; plan_id: string }>("select status, plan_id from memberships where athlete_id=$1", [kid]);
+    expect(m.rows).toEqual([{ status: "pending", plan_id: "00000000-0000-0000-0000-0000000000b3" }]);
+  });
+  it("nobody else can choose a package for someone's athlete", async () => {
+    await expect(as(db, COACH, () => db.query("select choose_plan($1, $2)", [kid, PLAN]))).rejects.toThrow(/parent or guardian/);
+    await expect(as(db, PARENT_A, () => db.query("select choose_plan($1, $2)", [kid, PLAN]))).rejects.toThrow(/parent or guardian/);
+  });
+  it("can't double up on an active package", async () => {
+    await db.query("update memberships set status='active' where athlete_id=$1", [kid]);
+    await expect(as(db, PARENT_F, () => db.query("select choose_plan($1, $2)", [kid, PLAN]))).rejects.toThrow(/already has a package/);
+  });
+});
