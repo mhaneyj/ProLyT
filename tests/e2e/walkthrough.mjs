@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright"); // uses NODE_PATH or a local install
 import { mkdirSync } from "node:fs";
 
-const BASE = process.env.BASE ?? "http://localhost:3100";
+const BASE = process.env.BASE ?? "http://gamefit-loomis.localhost:3100";
 const OUT = process.env.OUT ?? "./shots";
 mkdirSync(OUT, { recursive: true });
 
