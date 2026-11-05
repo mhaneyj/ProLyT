@@ -36,7 +36,7 @@ describe("weekly settlement", () => {
 
 describe("metrics", () => {
   it("treats a faster 40 as an improvement", () => {
-    expect(improvement("40yd", 5.42, 5.21)).toEqual({ better: expect.closeTo(0.21, 5), text: "+0.21 s" });
+    expect(improvement("40yd", 5.42, 5.21)).toEqual({ better: expect.closeTo(0.21, 5), text: "−0.21s" });
     expect(improvement("sled_lb", 255, 315).text).toBe("+60 lb");
   });
   it("ignores self-reported numbers for official bests", () => {

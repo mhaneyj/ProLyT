@@ -1,4 +1,6 @@
 "use server";
+import { cookies } from "next/headers";
+import { KID_COOKIE } from "@/lib/kid";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -69,7 +71,9 @@ async function register(form: FormData): Promise<RegisterState | void> {
 
   revalidatePath("/", "layout"); // new program membership changes the header and menu
   if (stripeConfigured && d.plan) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
-  redirect("/family?registered=1");
+  // Show the new athlete on home, with a welcome
+  (await cookies()).set(KID_COOKIE, athleteId, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
+  redirect("/family?welcome=1");
 }
 
 const connectSchema = z.object({
@@ -98,5 +102,6 @@ export async function connectAthlete(prev: RegisterState, form: FormData): Promi
   }
   revalidatePath("/", "layout");
   if (stripeConfigured && d.plan) redirect(`/api/stripe/checkout?athlete_id=${d.athlete}`);
+  (await cookies()).set(KID_COOKIE, d.athlete, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
   redirect("/family?connected=1");
 }

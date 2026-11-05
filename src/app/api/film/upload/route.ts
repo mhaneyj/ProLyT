@@ -18,12 +18,17 @@ export async function POST(request: Request) {
       onBeforeGenerateToken: async (pathname) => {
         const me = await getMe();
         if (!me) throw new Error("Sign in first");
-        const athlete = pathname.split("/")[1] ?? "";
-        if (!/^[0-9a-f-]{36}$/.test(athlete) || !pathname.startsWith(uploadPrefix(athlete))) throw new Error("Bad upload path");
+        const [kind, athlete = ""] = pathname.split("/");
+        const photo = kind === "photos";
+        if (!/^[0-9a-f-]{36}$/.test(athlete) || (!photo && !pathname.startsWith(uploadPrefix(athlete))) || (photo && !pathname.startsWith(`photos/${athlete}/`)))
+          throw new Error("Bad upload path");
+        // Film: family or the athlete's coaches. Photo: family only.
         const [ok] = await asUser(me.id, (q) =>
-          q<{ ok: boolean }>("select is_guardian($1) or staff_sees_athlete($1) ok", [athlete]));
-        if (!ok?.ok) throw new Error("You can't add film for this athlete");
-        return { allowedContentTypes: ["video/*"], maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
+          q<{ ok: boolean }>(photo ? "select is_guardian($1) ok" : "select is_guardian($1) or staff_sees_athlete($1) ok", [athlete]));
+        if (!ok?.ok) throw new Error("You can't add this for this athlete");
+        return photo
+          ? { allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic"], maximumSizeInBytes: 15 * 1024 ** 2, addRandomSuffix: true }
+          : { allowedContentTypes: ["video/*"], maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
       },
       onUploadCompleted: async () => {
         // The film row is saved by the browser right after upload (addFilm), so nothing to do here.

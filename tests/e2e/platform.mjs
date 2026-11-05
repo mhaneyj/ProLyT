@@ -101,11 +101,14 @@ async function signIn(sub, userName) {
   await page.locator("#c-signer").fill("Pat Morgan");
   await page.getByRole("button", { name: /^Connect/ }).click();
   await page.waitForURL(/\/family/);
-  check("connected and landed on family home", await seen(page.getByRole("heading", { name: /Jordan Morgan/ })));
+  check("connected and landed on family home", await seen(page.getByText(/is connected to this program/)));
   const speedAccent = await page.evaluate(() => getComputedStyle(document.querySelector("header").parentElement.parentElement).getPropertyValue("--color-gold").trim().toUpperCase());
   check("second program themed in its color", speedAccent === "#3EC1F3", speedAccent);
-  await page.getByRole("region", { name: "Jordan Morgan" }).getByRole("link", { name: "See all" }).click();
-  await page.waitForURL(/\/family\/athlete\//);
+  await page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" }).click();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
+  await page.waitForURL(/\/progress/);
+  await page.getByText(/All 40-yard dash results/).click();
   check("Jordan's verified record came along", await seen(page.getByText("Verified")));
   await shot(page, "p05-speed-family");
   check("no client errors (parent)", errors.length === 0, errors.join("; "));

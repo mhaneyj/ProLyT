@@ -45,6 +45,7 @@ export async function addFilm(_: FilmState, form: FormData): Promise<FilmState> 
     return { error: dbMessage(e) };
   }
   revalidatePath(`/athlete/${d.athlete}`);
+  revalidatePath(`/athlete/${d.athlete}/film`);
   return { ok: "Film added." };
 }
 
@@ -53,6 +54,7 @@ export async function toggleHighlight(form: FormData) {
   const film = String(form.get("film")), athlete = String(form.get("athlete"));
   await asUser(me.id, (q) => q("update film set is_highlight = not is_highlight where id = $1", [film]));
   revalidatePath(`/athlete/${athlete}`);
+  revalidatePath(`/athlete/${athlete}/film`);
 }
 
 export async function deleteFilm(form: FormData) {
@@ -64,4 +66,34 @@ export async function deleteFilm(form: FormData) {
     await del(row.storage_path.slice(5)).catch(() => undefined);
   }
   revalidatePath(`/athlete/${athlete}`);
+  revalidatePath(`/athlete/${athlete}/film`);
+}
+
+export async function setPhoto(athlete: string, pathname: string | null) {
+  const me = await requireMe();
+  if (!z.guid().safeParse(athlete).success) return { error: "Unknown athlete" };
+  if (pathname && (!pathname.startsWith(`photos/${athlete}/`) || pathname.includes(".."))) return { error: "Upload didn't match this athlete" };
+  const rows = await asUser(me.id, (q) =>
+    q("update athletes set photo_path = $2 where id = $1 and is_guardian(id) returning id", [athlete, pathname ? `blob:${pathname}` : null]));
+  if (!rows.length) return { error: "Only a parent can change the photo" };
+  revalidatePath(`/athlete/${athlete}`);
+  revalidatePath("/family");
+  return { ok: true };
+}
+
+export async function addNote(form: FormData) {
+  const me = await requireMe();
+  const athlete = String(form.get("athlete") ?? "");
+  const body = String(form.get("body") ?? "").trim();
+  const focus = String(form.get("focus") ?? "").trim() || null;
+  const session = String(form.get("session") ?? "") || null;
+  if (!z.guid().safeParse(athlete).success || body.length < 2) return;
+  await asUser(me.id, (q) => q(`
+    insert into coach_notes (athlete_id, org_id, coach_id, session_id, body, focus)
+    select $1, pa.org_id, $2, $3, $4, $5 from program_athletes pa
+    where pa.athlete_id = $1 and pa.status = 'active' and is_staff(pa.org_id)
+    order by (pa.org_id = $6) desc nulls last limit 1`, [athlete, me.id, session, body.slice(0, 1000), focus?.slice(0, 200) ?? null, me.orgId]));
+  revalidatePath(`/athlete/${athlete}`);
+  revalidatePath(`/athlete/${athlete}/progress`);
+  if (session) revalidatePath(`/coach/session/${session}`);
 }

@@ -1,7 +1,7 @@
 "use client";
 import { startTransition, useActionState, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { addFilm, type FilmState } from "./actions";
+import { addFilm, type FilmState } from "../actions";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 

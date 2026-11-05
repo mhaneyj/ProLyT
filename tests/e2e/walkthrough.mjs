@@ -29,12 +29,15 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
 {
   const { ctx, page, errors } = await as("Pat Morgan");
   check("parent lands on family home", page.url().endsWith("/family"));
-  check("parent sees Jordan", await page.getByRole("heading", { name: /Jordan Morgan/ }).isVisible());
+  check("parent sees Jordan's next session", await seen(page.getByText("Next session")));
+  check("home shows headline numbers and coach note", await seen(page.getByText(/Next focus:/)) && await seen(page.getByText("40 yd")));
   check("parent does NOT see other families", (await page.getByText(/Riley|Eli Park|Noah Park/).count()) === 0);
   await shot(page, "01-family-home");
-  await page.getByRole("link", { name: "See all" }).click();
-  await page.waitForURL(/\/family\/athlete\//);
-  check("progress shows verified 40", await page.getByText("Verified").first().isVisible());
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
+  await page.waitForURL(/\/progress/);
+  check("progress shows chart and coach notes", await seen(page.getByRole("img", { name: /40-yard dash trend/ })) && await seen(page.getByText("Coach notes")));
+  await page.getByText(/All 40-yard dash results/).click();
+  check("progress shows verified 40", await seen(page.getByText("Verified")));
   await shot(page, "02-progress");
   await page.goto(`${BASE}/schedule`);
   check("schedule shows the program's sessions with booking", (await page.getByText("7v7 · Skill positions").count()) === 1 && (await page.getByRole("button", { name: "Book Jordan" }).count()) >= 1);
@@ -60,7 +63,10 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await page.getByLabel(/My athlete is under 13/).check();
   await page.getByRole("button", { name: "Register" }).click();
   await page.waitForURL(/\/family/);
-  check("registration creates athlete", await page.getByRole("heading", { name: /Casey Morgan/ }).isVisible());
+  check("registration lands on the new athlete with next steps", await seen(page.getByText("Casey is all set")) && await seen(page.getByText("Get started")));
+  check("kid switcher shows both athletes", await seen(page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" })));
+  await page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" }).click();
+  check("switching kids changes the home screen", await seen(page.getByText(/Next focus:/)));
   check("no client errors (parent)", errors.length === 0, errors.join("; "));
   await ctx.close();
 }
@@ -73,19 +79,22 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await page.getByText("In The Trenches · OL/DL").click();
   await page.waitForLoadState("networkidle");
   await shot(page, "06-session-before");
-  const jordanCard = page.locator("div").filter({ has: page.getByText("Jordan Morgan", { exact: true }) }).filter({ has: page.getByRole("button", { name: "Here" }) }).last();
-  await jordanCard.getByRole("button", { name: "Here" }).click();
+  await page.getByRole("button", { name: /Jordan Morgan: tap to mark here/ }).click();
+  check("one tap checks in", await seen(page.getByRole("button", { name: /Jordan Morgan: here/ })));
+  check("here count updates", await seen(page.getByText("1/2")));
+  await page.getByRole("textbox", { name: /Jordan Morgan/ }).fill("52.1");
+  await page.getByRole("button", { name: "Save results" }).click();
+  check("typo guard catches 52.1s 40", await seen(page.getByText(/Check for a typo/)));
+  check("typo keeps the number to fix", (await page.getByRole("textbox", { name: /Jordan Morgan/ }).inputValue()) === "52.1");
+  await page.getByRole("textbox", { name: /Jordan Morgan/ }).fill("5.18");
+  await page.getByRole("button", { name: "Save results" }).click();
+  check("results save in one tap", await seen(page.getByText(/Saved 1 40-yard dash result/)));
+  await page.getByPlaceholder("What you saw today").fill("Great get-off on the snap count.");
+  await page.getByPlaceholder("Next focus (optional)").fill("hand placement");
+  await page.getByRole("button", { name: "Send to family" }).click();
   await page.waitForLoadState("networkidle");
-  check("check-in marks present", await seen(page.getByText("1/2 marked")));
-  await page.getByLabel("Test").selectOption("40yd");
-  await page.getByLabel("Result").fill("52.1");
-  await page.getByRole("button", { name: "Save" }).click();
-  check("typo guard catches 52.1 s 40", await seen(page.getByText(/Check for a typo/)));
-  check("typo keeps the number to fix", (await page.getByLabel("Result").inputValue()) === "52.1");
-  await page.getByLabel("Result").fill("5.18");
-  await page.getByRole("button", { name: "Save" }).click();
-  check("result saves", await seen(page.getByText(/Saved 40-yard dash: 5.18 s/)));
-  check("test stays selected for next entry", (await page.getByLabel("Test").inputValue()) === "40yd");
+  await page.getByRole("button", { name: "All here" }).click();
+  check("all here marks everyone", await seen(page.getByText("2/2")));
   await shot(page, "07-session-after");
   await page.goto(`${BASE}/coach/earnings`);
   check("earnings show today's credit", (await page.getByText("pending").count()) >= 2);
@@ -100,10 +109,11 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
 {
   const { ctx, page } = await as("Pat Morgan");
   await page.goto(`${BASE}/family`);
-  await page.getByRole("region", { name: "Jordan Morgan" }).getByRole("link", { name: "See all" }).click();
-  await page.waitForURL(/\/family\/athlete\//);
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
+  await page.waitForURL(/\/progress/);
   await shot(page, "11-progress-after-coach");
-  check("parent sees coach's new 5.18", await seen(page.getByText("5.18 s")));
+  check("parent sees coach's new 5.18", await seen(page.getByText("5.18s")));
+  check("parent sees the coach's new note", await seen(page.getByText("Next focus: hand placement")));
   await ctx.close();
 }
 
@@ -150,13 +160,16 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   check("spot count goes down", await seen(booked.getByText("7 spots left")));
   await shot(page, "13-booked");
   await page.goto(`${BASE}/family`);
-  await page.getByRole("region", { name: "Jordan Morgan" }).getByRole("link", { name: /Profile, film/ }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
   await page.waitForURL(/\/athlete\//);
   check("profile shows the athlete", await seen(page.getByRole("heading", { name: "Jordan Morgan" })));
   check("profile shows upcoming booked session", await seen(page.getByText("Speed & agility")));
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Film" }).click();
+  await page.waitForURL(/\/film/);
+  await page.getByText("Add a clip").click();
   await page.getByLabel("Link").fill("https://youtu.be/dQw4w9WgXcQ");
   await page.getByLabel("Title").fill("Pass pro reps");
-  await page.getByLabel("Highlight").check();
+  await page.getByRole("checkbox", { name: "Highlight" }).check();
   await page.getByRole("button", { name: "Add film" }).click();
   check("film added as a highlight with a player", await seen(page.locator('iframe[title="Pass pro reps"]')));
   await page.getByLabel("Link").fill("not a link");
@@ -179,10 +192,11 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await page.goto(`${BASE}/coach`);
   await page.getByRole("link", { name: /Speed & agility/ }).first().click().catch(() => undefined);
   if (/\/coach\/session\//.test(page.url())) {
-    check("coach sees Jordan booked", await seen(page.getByRole("link", { name: "Jordan Morgan" })));
-    await page.getByRole("button", { name: "Add" }).click();
-    check("coach adds an athlete to the session", (await page.getByRole("button", { name: "Here" }).count()) >= 2);
-    await page.getByRole("link", { name: "Jordan Morgan" }).click();
+    check("coach sees Jordan booked", await seen(page.getByRole("button", { name: /Jordan Morgan/ })));
+    await page.getByText("Edit roster").click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    check("coach adds an athlete to the session", await seen(page.getByRole("button", { name: /tap to mark here/ }).nth(1)));
+    await page.getByRole("link", { name: "Jordan's profile" }).click();
     await page.waitForURL(/\/athlete\//);
     check("coach sees the family's highlight", await seen(page.locator('iframe[title="Pass pro reps"]')));
   } else check("new session shows on coach Today (next 3 days)", true, "posted for a later date");

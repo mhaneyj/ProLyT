@@ -72,3 +72,61 @@ export async function removeFromSession(form: FormData) {
     [session, athlete]));
   revalidatePath(`/coach/session/${session}`);
 }
+
+const BOUNDS: Record<string, [number, number]> = { "40yd": [3.8, 9], pro_agility: [3.5, 8], vertical: [5, 50], broad: [30, 150], sled_lb: [20, 1500], bench_reps: [1, 60] };
+
+export type BatchState = { ok?: string; error?: string; bad?: Record<string, string>; values?: Record<string, string> };
+
+/** Quick entry: one test, a number for each athlete, one Save. Blank boxes are skipped. */
+export async function saveBatch(_: BatchState, form: FormData): Promise<BatchState> {
+  const me = await requireRole("coach", "owner");
+  const session = String(form.get("session") ?? "");
+  const metric = String(form.get("metric") ?? "");
+  const m = METRICS[metric];
+  if (!m || !z.guid().safeParse(session).success) return { error: "Pick a test" };
+  const entries = [...form.entries()].filter(([k, v]) => k.startsWith("v:") && String(v).trim() !== "")
+    .map(([k, v]) => ({ athlete: k.slice(2), raw: String(v).trim() }));
+  const values = Object.fromEntries(entries.map((e) => [e.athlete, e.raw]));
+  if (!entries.length) return { error: "Enter at least one number" };
+  const [lo, hi] = BOUNDS[metric];
+  const bad: Record<string, string> = {};
+  for (const e of entries) {
+    const n = Number(e.raw.replace(",", "."));
+    if (!Number.isFinite(n) || n <= 0) bad[e.athlete] = "Enter a number";
+    else if (n < lo || n > hi) bad[e.athlete] = `Check for a typo (${lo}–${hi} ${m.unit})`;
+  }
+  if (Object.keys(bad).length) return { error: "Fix the highlighted numbers. Nothing was saved yet.", bad, values };
+  try {
+    await asUser(me.id, async (q) => {
+      for (const e of entries) {
+        if (!z.guid().safeParse(e.athlete).success) continue;
+        await q("insert into results (athlete_id, session_id, metric, value, unit, source) values ($1,$2,$3,$4,$5,'coach_logged')",
+          [e.athlete, session, metric, Number(e.raw.replace(",", ".")), m.unit]);
+      }
+    });
+  } catch (err) {
+    return { error: dbMessage(err), values };
+  }
+  revalidatePath(`/coach/session/${session}`);
+  return { ok: `Saved ${entries.length} ${m.label} result${entries.length > 1 ? "s" : ""}. Families see them now.` };
+}
+
+export async function toggleHere(form: FormData) {
+  const me = await requireRole("coach", "owner");
+  const session = String(form.get("session")), athlete = String(form.get("athlete"));
+  const next = form.get("here") === "1" ? "absent" : "present";
+  await asUser(me.id, (q) => q("select check_in($1, $2, $3::attendance_status)", [session, athlete, next]));
+  revalidatePath(`/coach/session/${session}`);
+}
+
+export async function allHere(form: FormData) {
+  const me = await requireRole("coach", "owner");
+  const session = String(form.get("session"));
+  await asUser(me.id, async (q) => {
+    const rows = await q<{ athlete_id: string }>(`
+      select sa.athlete_id from session_athletes sa
+      where sa.session_id = $1 and not exists (select 1 from attendance a where a.session_id = $1 and a.athlete_id = sa.athlete_id)`, [session]);
+    for (const r of rows) await q("select check_in($1, $2, 'present')", [session, r.athlete_id]);
+  });
+  revalidatePath(`/coach/session/${session}`);
+}

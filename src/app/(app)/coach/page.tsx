@@ -3,6 +3,8 @@ import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { dayTime, isSameLocalDay } from "@/lib/domain/format";
 import { Card, Empty, LinkButton, Notice, Pill, Title } from "@/components/ui";
+import { Hero } from "@/components/athlete";
+import { time } from "@/lib/domain/format";
 
 export const metadata = { title: "Today" };
 
@@ -35,6 +37,9 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
   const mine = me.roles.includes("owner") ? sessions : sessions.filter((s) => s.mine);
   const today = mine.filter((s) => isSameLocalDay(s.starts_at));
   const later = mine.filter((s) => !isSameLocalDay(s.starts_at));
+  // The session happening now, or the next one today, gets the big card.
+  const focus = today.find((s) => new Date(s.starts_at).getTime() > Date.now() - 2 * 3600_000 && !(s.marked >= s.booked && s.booked > 0)) ?? null;
+  const rest = today.filter((s) => s !== focus);
 
   const row = (s: S) => (
     <Link key={s.id} href={`/coach/session/${s.id}`} className="block">
@@ -50,16 +55,28 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <Title sub="Tap a session to check athletes in and log results.">Today</Title>
+      <Title sub={me.name ?? undefined}>Today</Title>
       {posted ? <Notice tone="good">{posted === "1" ? "Session posted." : `${posted} weekly sessions posted.`} Families see it on their schedule.</Notice> : null}
-      <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton>
-      {today.length ? today.map(row) : <Empty title="No sessions today" />}
+      
+      {focus ? (
+        <Link href={`/coach/session/${focus.id}`} className="block">
+          <Hero kicker={new Date(focus.starts_at).getTime() <= Date.now() ? "On now" : "Up next"} title={focus.title}
+            sub={`${time(focus.starts_at)}${focus.location ? ` · ${focus.location}` : ""}`}>
+            <div className="mt-2 flex items-center gap-3">
+              <span className="inline-flex min-h-11 items-center rounded-md bg-gold px-4 font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">Check in</span>
+              <span className="tabular text-sm text-soft">{focus.marked}/{focus.booked} marked</span>
+            </div>
+          </Hero>
+        </Link>
+      ) : null}
+      {rest.length ? rest.map(row) : !focus ? <Empty title="No sessions today">Post one and families can book it right away.</Empty> : null}
       {later.length ? (
         <>
           <h2 className="mt-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Coming up</h2>
           {later.map(row)}
         </>
       ) : null}
+      <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton>
     </>
   );
 }

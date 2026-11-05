@@ -1,26 +1,35 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon, type IconName } from "./icons";
 
-export function NavLinks({ items }: { items: { href: string; label: string }[] }) {
+export type NavItem = { href: string; label: string; icon: IconName; match?: string };
+
+export function NavLinks({ items }: { items: NavItem[] }) {
   const path = usePathname();
-  const active = (href: string) => path === href || (href !== "/coach" && path.startsWith(href + "/")) || (href === "/coach" && path.startsWith("/coach/session"));
+  // Most specific match wins, so /athlete/x/film lights "Film", not "Profile".
+  const score = (i: NavItem) => {
+    const m = i.match ?? i.href;
+    if (path === m || path === i.href) return 1000;
+    return path.startsWith(m + "/") ? m.length : -1;
+  };
+  const best = items.reduce((b, i) => (score(i) > score(b) ? i : b), items[0]);
+  const activeHref = best && score(best) >= 0 ? best.href : null;
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-ink/95 backdrop-blur">
-      <ul className="mx-auto flex max-w-md">
-        {items.map((i) => (
-          <li key={i.href} className="flex-1">
-            <Link
-              href={i.href}
-              aria-current={active(i.href) ? "page" : undefined}
-              className={`flex min-h-16 items-center justify-center font-cond text-[14px] font-extrabold uppercase tracking-[1.5px] ${
-                active(i.href) ? "text-gold" : "text-muted hover:text-cream"
-              }`}
-            >
-              {i.label}
-            </Link>
-          </li>
-        ))}
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 border-t border-[#1f1f1f] bg-[#0b0b0b]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+      <ul className="mx-auto flex max-w-md px-1">
+        {items.map((i) => {
+          const on = i.href === activeHref;
+          return (
+            <li key={i.href} className="flex-1">
+              <Link href={i.href} aria-current={on ? "page" : undefined}
+                className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-semibold ${on ? "text-gold" : "text-[#8c877c] hover:text-cream"}`}>
+                <Icon name={i.icon} />
+                {i.label}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

@@ -401,3 +401,19 @@ describe("film and highlights", () => {
     expect((await as(db, PARENT_A, () => db.query("delete from film where id=$1 returning id", [clip]))).rows).toHaveLength(1);
   });
 });
+
+describe("coach notes", () => {
+  it("coaches write notes for their program's athletes; only that family and staff read them", async () => {
+    await as(db, COACH, () => db.query("insert into coach_notes (athlete_id, org_id, coach_id, body, focus) values ($1,$2,$3,'Good hands','footwork')", [jordan, ORG, COACH]));
+    expect((await as(db, PARENT_A, () => db.query("select body from coach_notes where athlete_id=$1", [jordan]))).rows).toEqual([{ body: "Good hands" }]);
+    expect((await as(db, PARENT_B, () => db.query("select body from coach_notes where athlete_id=$1", [jordan]))).rows).toHaveLength(0);
+  });
+  it("parents can't write coach notes, and nobody can sign as someone else", async () => {
+    await expect(as(db, PARENT_A, () => db.query("insert into coach_notes (athlete_id, org_id, coach_id, body) values ($1,$2,$3,'x x')", [jordan, ORG, PARENT_A]))).rejects.toThrow();
+    await expect(as(db, COACH, () => db.query("insert into coach_notes (athlete_id, org_id, coach_id, body) values ($1,$2,$3,'x x')", [jordan, ORG, OWNER]))).rejects.toThrow();
+  });
+  it("only a parent can set the athlete's photo", async () => {
+    expect((await as(db, COACH, () => db.query("update athletes set photo_path='blob:photos/x' where id=$1 returning id", [jordan]))).rows).toHaveLength(0);
+    expect((await as(db, PARENT_A, () => db.query("update athletes set photo_path='blob:photos/x' where id=$1 returning id", [jordan]))).rows).toHaveLength(1);
+  });
+});

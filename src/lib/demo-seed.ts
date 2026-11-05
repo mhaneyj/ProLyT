@@ -126,6 +126,14 @@ insert into results (athlete_id, metric, value, unit, source, logged_by, recorde
   ('${A.riley}', 'vertical', 19, 'in', 'coach_logged', '${MARCO}', now() - interval '7 days');
 update results set org_id = '${ORG_ID}' where source <> 'self_reported';
 
+insert into coach_notes (athlete_id, org_id, coach_id, body, focus, created_at) values
+  ('${A.jordan}', '${ORG_ID}', '${LEM}', 'Hands are inside on pass sets now. Big jump in the last two weeks.', 'staying low through the second step', now() - interval '2 days'),
+  ('${A.jordan}', '${ORG_ID}', '${LEM}', 'First-step burst is cleaner. Still rising out of the stance late in the set.', 'conditioning so form holds late', now() - interval '16 days'),
+  ('${A.riley}', '${ORG_ID}', '${MARCO}', 'Sharper breaks on the out route.', 'catching the ball away from the body', now() - interval '5 days');
+
+insert into film (org_id, athlete_id, storage_path, title, kind, is_highlight, uploaded_by, created_at) values
+  ('${ORG_ID}', '${A.jordan}', 'https://www.hudl.com/video/demo', 'Pass pro vs. Granite Bay', 'game', true, '${LEM}', now() - interval '3 days');
+
 insert into coach_earnings (org_id, coach_id, session_id, amount_cents, basis, status, created_at)
 select '${ORG_ID}', '${LEM}', ('60000000-0000-0000-0000-0000000000' || lpad(w::text, 2, '0'))::uuid, 14000,
        'group session flat rate', case when w > 1 then 'paid' else 'pending' end::earning_status, now() - (w || ' weeks')::interval

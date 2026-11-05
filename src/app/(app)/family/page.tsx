@@ -1,127 +1,140 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
+import { familyKids } from "@/lib/kid";
+import { blobConfigured } from "@/lib/film";
 import { money, dayTime, ageOn } from "@/lib/domain/format";
-import { improvement, metricLabel } from "@/lib/domain/metrics";
-import { Card, LinkButton, Notice, Pill, SectionLabel, Title } from "@/components/ui";
+import { METRICS, bestOfficial, formatValue, improvement, metricShort, type Source } from "@/lib/domain/metrics";
+import { Checklist, Hero, KidSwitcher, NoteCard, StatTile, Tile } from "@/components/athlete";
+import { LinkButton, Notice, Pill } from "@/components/ui";
 
 export const metadata = { title: "Home" };
 
-type AthleteRow = {
-  id: string; first_name: string; last_name: string; birth_date: string; position: string | null; grad_year: number | null;
+type A = {
+  id: string; first_name: string; last_name: string; birth_date: string; position: string | null; grad_year: number | null; has_photo: boolean;
   plan: string | null; price_cents: number | null; status: string | null; current_period_end: string | null;
-  next_title: string | null; next_at: string | null;
+  next_title: string | null; next_at: string | null; next_where: string | null;
+  booked_ever: number; film: number; highlights: number;
 };
-type Trend = { athlete_id: string; metric: string; first: number; latest: number; n: number };
+type R = { metric: string; value: number; source: Source };
+type N = { body: string; focus: string | null; coach: string | null; created_at: string };
 
-export default async function FamilyHome() {
+export default async function FamilyHome({ searchParams }: { searchParams: Promise<{ chosen?: string; welcome?: string; connected?: string }> }) {
+  const { chosen, welcome, connected } = await searchParams;
   const me = await requireRole("guardian");
-  const { athletes, trends } = await asUser(me.id, async (q) => {
-    const athletes = await q<AthleteRow>(`
-      select a.id, a.first_name, a.last_name, a.birth_date::text, a.position, a.grad_year,
+  const { kids, current } = await familyKids(me.id);
+
+  if (!current) {
+    return (
+      <>
+        <Hero kicker={`Hi, ${me.name?.split(" ")[0] ?? "there"}`} title="Let's get your athlete set up" sub="Takes about 2 minutes. It's free to start." />
+        <LinkButton href="/register">Register your athlete</LinkButton>
+      </>
+    );
+  }
+
+  const d = await asUser(me.id, async (q) => {
+    const [a] = await q<A>(`
+      select a.id, a.first_name, a.last_name, a.birth_date::text, a.position, a.grad_year, a.photo_path is not null has_photo,
              p.name plan, p.price_cents, m.status, m.current_period_end,
-             nx.title next_title, nx.starts_at next_at
+             nx.title next_title, nx.starts_at next_at, nx.location next_where,
+             (select count(*)::int from session_athletes where athlete_id = a.id) booked_ever,
+             (select count(*)::int from film where athlete_id = a.id) film,
+             (select count(*)::int from film where athlete_id = a.id and is_highlight) highlights
       from athletes a
-      join guardians g on g.athlete_id = a.id and g.user_id = $1
       left join lateral (select * from memberships where athlete_id = a.id order by created_at desc limit 1) m on true
       left join plans p on p.id = m.plan_id
       left join lateral (
-        select s.title, s.starts_at from session_athletes sa join sessions s on s.id = sa.session_id
-        where sa.athlete_id = a.id and s.starts_at > now() order by s.starts_at limit 1) nx on true
-      order by a.first_name`, [me.id]);
-    const trends = await q<Trend>(`
-      select athlete_id, metric,
-             (array_agg(value order by recorded_at))[1]::float first,
-             (array_agg(value order by recorded_at desc))[1]::float latest, count(*)::int n
-      from results where source <> 'self_reported' group by athlete_id, metric having count(*) > 1`);
-    return { athletes, trends };
+        select s.title, s.starts_at, s.location from session_athletes sa join sessions s on s.id = sa.session_id
+        where sa.athlete_id = a.id and s.starts_at > now() - interval '1 hour' order by s.starts_at limit 1) nx on true
+      where a.id = $1`, [current.id]);
+    const results = await q<R>("select metric, value::float value, source from results where athlete_id = $1 order by recorded_at", [current.id]);
+    const [note] = await q<N>(`
+      select n.body, n.focus, p.full_name coach, n.created_at from coach_notes n left join profiles p on p.id = n.coach_id
+      where n.athlete_id = $1 order by n.created_at desc limit 1`, [current.id]);
+    return { a, results, note };
   });
+  const { a, results, note } = d;
+
+  // Three headline numbers: best official result, with change since the first one.
+  const stats = Object.keys(METRICS)
+    .map((m) => {
+      const rows = results.filter((r) => r.metric === m);
+      const official = rows.filter((r) => r.source !== "self_reported");
+      const best = bestOfficial(m, rows);
+      if (best === null) return null;
+      const imp = official.length > 1 ? improvement(m, official[0].value, official.at(-1)!.value) : null;
+      return { m, value: formatValue(m, best), delta: imp ? imp.text : null, good: (imp?.better ?? 0) >= 0, n: official.length };
+    })
+    .filter((x) => x !== null)
+    .sort((x, y) => y.n - x.n)
+    .slice(0, 3);
+
+  const packaged = a.status === "active" || a.status === "pending" || a.status === "past_due";
+  const steps = [
+    { done: a.booked_ever > 0, label: `Book ${a.first_name}'s first session`, href: "/schedule" },
+    ...(blobConfigured ? [{ done: a.has_photo, label: `Add a photo of ${a.first_name}`, href: `/athlete/${a.id}#photo` }] : []),
+    { done: a.film > 0, label: "Add a clip to the film room", href: `/athlete/${a.id}/film` },
+    { done: packaged, label: "Choose a training package", href: `/family/choose/${a.id}` },
+  ];
 
   return (
     <>
-      <Title sub="Everything for your athletes in one place.">Home</Title>
-      {athletes.length === 0 ? (
-        <Card>
-          <div className="font-semibold">No athletes yet</div>
-          <p className="mt-1 text-sm text-muted">Register your athlete to pick a membership and book sessions.</p>
-          <LinkButton href="/register" className="mt-3">Register an athlete</LinkButton>
-        </Card>
+      <KidSwitcher kids={kids} current={a.id} to="/family" />
+      {welcome ? <Notice tone="good">{a.first_name} is all set. Start with the steps below.</Notice> : null}
+      {connected ? <Notice tone="good">{a.first_name} is connected to this program.</Notice> : null}
+      {chosen ? <Notice tone="good">Package saved. Your coach will be in touch about payment.</Notice> : null}
+      {a.status === "past_due" ? <Notice tone="bad">Your last payment didn&apos;t go through. Update your card to keep {a.first_name} training.</Notice> : null}
+
+      <Link href={a.next_at ? "/schedule" : "/schedule"} className="block rounded-[14px] focus-visible:outline-3">
+        <Hero
+          photo={a.has_photo ? `/api/photo/${a.id}` : null}
+          kicker={a.next_at ? "Next session" : a.first_name}
+          title={a.next_at ? a.next_title : "Book a session"}
+          sub={a.next_at ? [dayTime(a.next_at), a.next_where].filter(Boolean).join(" · ") : "See open sessions and save a spot in one tap."}
+        >
+          {!a.next_at ? <span className="mt-2 inline-flex w-fit min-h-11 items-center rounded-md bg-gold px-4 font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">See schedule</span> : null}
+        </Hero>
+      </Link>
+
+      <Checklist items={steps} />
+
+      {stats.length ? (
+        <Link href={`/athlete/${a.id}/progress`} aria-label={`${a.first_name}'s progress`} className="grid grid-cols-3 gap-2">
+          {stats.map((s) => <StatTile key={s.m} label={metricShort(s.m)} value={s.value} delta={s.delta} good={s.good} />)}
+        </Link>
       ) : null}
 
-      {athletes.map((a) => {
-        const t = trends.filter((x) => x.athlete_id === a.id).slice(0, 2);
-        return (
-          <section key={a.id} className="flex flex-col gap-3" aria-labelledby={`ath-${a.id}`}>
-            <Card>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 id={`ath-${a.id}`} className="font-display text-[26px] uppercase leading-none">
-                    <Link href={`/athlete/${a.id}`} className="hover:text-gold">{a.first_name} {a.last_name}</Link>
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {[a.position, `Age ${ageOn(a.birth_date)}`, a.grad_year ? `Class of ${a.grad_year}` : null].filter(Boolean).join(" · ")}
-                  </p>
-                  <Link href={`/athlete/${a.id}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold">Profile, film &amp; highlights →</Link>
-                </div>
-                {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Package picked</Pill> : a.status ? <Pill>{a.status}</Pill> : <Pill>Free access</Pill>}
-              </div>
-              {a.plan ? (
-                <p className="mt-3 text-sm text-soft">
-                  {a.plan} · {money(a.price_cents ?? 0)}/month
-                  {a.current_period_end && a.status === "active" ? ` · renews ${new Date(a.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
-                </p>
-              ) : null}
-              {a.status === "past_due" ? (
-                <div className="mt-3">
-                  <Notice>Your last payment didn&apos;t go through. Update your card to keep {a.first_name} training.</Notice>
-                </div>
-              ) : null}
-              {a.status === "pending" ? (
-                <form action="/api/stripe/checkout" method="post" className="mt-3">
-                  <input type="hidden" name="athlete_id" value={a.id} />
-                  <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold">Finish payment</button>
-                  <Link href={`/family/choose/${a.id}`} className="mt-2 block text-center text-sm font-semibold">Change package</Link>
-                </form>
-              ) : null}
-              {!a.status || a.status === "canceled" ? (
-                <div className="mt-3 flex flex-col gap-2">
-                  <p className="text-sm text-soft">{a.first_name} has free access to the app. Choose a package when you&apos;re ready to train.</p>
-                  <LinkButton href={`/family/choose/${a.id}`} kind="ghost">Choose a package</LinkButton>
-                </div>
-              ) : null}
-            </Card>
+      {note ? (
+        <Link href={`/athlete/${a.id}/progress`} className="block">
+          <NoteCard coach={note.coach} date={note.created_at} body={note.body} focus={note.focus} />
+        </Link>
+      ) : null}
 
-            <Card>
-              <SectionLabel>Next up</SectionLabel>
-              {a.next_at ? (
-                <p className="mt-2"><span className="font-semibold">{a.next_title}</span><br /><span className="text-sm text-muted">{dayTime(a.next_at)}</span></p>
-              ) : (
-                <p className="mt-2 text-sm text-muted">Nothing booked yet.</p>
-              )}
-            </Card>
+      <div className="grid grid-cols-2 gap-2">
+        <Tile href={`/athlete/${a.id}/film`} icon="film" title="Film room" sub={a.film ? `${a.film} clip${a.film > 1 ? "s" : ""} · ${a.highlights} highlight${a.highlights === 1 ? "" : "s"}` : "Add the first clip"} accent={a.film > 0} />
+        <Tile href={`/athlete/${a.id}`} icon="profile" title="Profile" sub={[a.position, `Age ${ageOn(a.birth_date)}`].filter(Boolean).join(" · ")} />
+      </div>
 
-            <Card>
-              <SectionLabel right={<Link href={`/family/athlete/${a.id}`} className="text-sm font-semibold">See all</Link>}>Progress</SectionLabel>
-              {t.length ? (
-                <ul className="mt-2 divide-y divide-line">
-                  {t.map((x) => {
-                    const imp = improvement(x.metric, x.first, x.latest);
-                    return (
-                      <li key={x.metric} className="flex items-center justify-between py-2.5">
-                        <span>{metricLabel(x.metric)}</span>
-                        <span className={`tabular font-display text-xl ${imp.better >= 0 ? "text-good" : "text-warn"}`}>{imp.text}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-muted">Results show here once a coach logs two or more.</p>
-              )}
-            </Card>
-          </section>
-        );
-      })}
-      {athletes.length ? <LinkButton href="/register" kind="ghost">Add another athlete</LinkButton> : null}
+      <Link href={packaged ? (a.status === "pending" ? `/family/choose/${a.id}` : "/family") : `/family/choose/${a.id}`}
+        className="flex items-center justify-between gap-3 rounded-[10px] border border-line px-4 py-3.5 hover:border-gold">
+        <span className="flex flex-col">
+          <span className="text-[13px] text-muted">Membership</span>
+          <span className="font-semibold">
+            {a.plan ? `${a.plan} · ${money(a.price_cents ?? 0)}/mo` : "Free access"}
+            {a.current_period_end && a.status === "active" ? ` · renews ${new Date(a.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+          </span>
+        </span>
+        {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Picked</Pill> : <span className="text-sm font-semibold text-gold">Choose →</span>}
+      </Link>
+      {a.status === "pending" ? (
+        <form action="/api/stripe/checkout" method="post">
+          <input type="hidden" name="athlete_id" value={a.id} />
+          <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold">Finish payment</button>
+        </form>
+      ) : null}
+
+      <Link href="/register" className="mt-1 flex min-h-12 items-center justify-center text-sm font-semibold text-muted hover:text-cream">+ Add another athlete</Link>
     </>
   );
 }

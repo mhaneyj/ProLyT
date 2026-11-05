@@ -106,13 +106,14 @@ async function signIn(sub, email, path = "/login") {
   await page.getByLabel("Type your full name to sign").fill("Jamie Real");
   await page.getByRole("button", { name: "Register" }).click();
   await page.waitForURL(/\/family/);
-  check("athlete registered on the real database", await seen(page.getByRole("heading", { name: /Avery Real/ })));
+  check("athlete registered on the real database", await seen(page.getByText("Avery is all set")));
   check("registered free, no payment asked", await seen(page.getByText("Free access")));
-  await page.getByRole("link", { name: "Choose a package" }).click();
+  check("new family gets a get-started checklist", await seen(page.getByText("Get started")));
+  await page.getByRole("link", { name: "Choose a training package" }).click();
   await page.waitForURL(/\/family\/choose\//);
   await page.locator("form").filter({ hasText: "Development" }).getByRole("button").click();
   await page.waitForURL(/\/family/);
-  check("package chosen later from home screen", await seen(page.getByText("Package picked")));
+  check("package chosen later from home screen", await seen(page.getByText("Picked", { exact: true })));
   await page.screenshot({ path: `${OUT}/l03-parent.png`, fullPage: true });
   check("no client errors (parent)", errors.length === 0, errors.join("; "));
   await ctx.close();
