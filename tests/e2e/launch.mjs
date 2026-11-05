@@ -59,9 +59,10 @@ async function signIn(sub, email, path = "/login") {
 {
   const { ctx, page, errors, link } = await signIn("", "marcus@prolyt.test");
   check("admin email lands on ProLyt admin", page.url().endsWith("/admin"), page.url());
-  await page.getByLabel("Invite an owner for Game-Fit Loomis").fill("josh@gamefit.test");
-  await page.getByRole("button", { name: "Invite", exact: true }).click();
-  check("owner invited", await seen(page.getByText(/becomes owner/)));
+  await page.getByLabel("Add staff to Game-Fit Loomis").fill("josh@gamefit.test");
+  await page.getByLabel("Role").first().selectOption("owner");
+  await page.getByRole("button", { name: "Add", exact: true }).first().click();
+  check("owner invited", await seen(page.getByText(/Invited as owner/)));
   await page.screenshot({ path: `${OUT}/l01-admin.png`, fullPage: true });
   // the one-time link can't be reused
   const other = await browser.newContext();
