@@ -49,12 +49,18 @@ export async function setDomain(_: AdminState, form: FormData): Promise<AdminSta
 export async function inviteOwner(_: AdminState, form: FormData): Promise<AdminState> {
   const me = await requirePlatformAdmin();
   const org = String(form.get("org") ?? "");
-  const email = z.email("Enter the owner's email").safeParse(String(form.get("email") ?? "").trim());
+  const role = form.get("role") === "coach" ? "coach" : "owner";
+  const raw = form.get("me") === "1" ? me.email ?? "" : String(form.get("email") ?? "").trim();
+  const email = z.email("Enter their email").safeParse(raw);
   if (!email.success) return { error: email.error.issues[0].message };
   try {
-    await asUser(me.id, (q) => q("select invite_owner($1, $2)", [org, email.data]));
+    await asUser(me.id, (q) => q("select invite_staff($1, $2, $3::member_role)", [org, email.data, role]));
   } catch (e) {
     return { error: dbMessage(e) };
   }
-  return { ok: `Invited. ${email.data} becomes owner the first time they sign in.` };
+  revalidatePath("/", "layout");
+  const who = form.get("me") === "1" ? "You're" : email.data;
+  return { ok: form.get("me") === "1"
+    ? `${who} now an owner here. Open the program's app address to see the Dashboard and Today screens.`
+    : `Invited as ${role}. ${email.data} gets access the moment they sign in with that email.` };
 }

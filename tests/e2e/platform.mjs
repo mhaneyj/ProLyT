@@ -128,6 +128,16 @@ async function signIn(sub, userName) {
   await page.getByRole("button", { name: "Create program" }).click();
   check("duplicate web address refused", await seen(page.getByText(/taken|Enter the owner/)));
   await shot(page, "p06-admin");
+  await page.getByRole("button", { name: "Add me as owner of Game-Fit Loomis" }).click();
+  check("admin adds themself as owner", await seen(page.getByText(/You're now an owner here/)));
+  {
+    // Sign-in is per address, so sign in on the program's own address
+    const gf = await signIn("gamefit-loomis", "ProLyt Admin");
+    await gf.page.goto(url("gamefit-loomis", "/coach"));
+    check("admin-turned-owner sees coach Today", await seen(gf.page.getByRole("heading", { name: "Today" })));
+    check("owner can post sessions", await seen(gf.page.getByRole("link", { name: "+ New session" })));
+    await gf.ctx.close();
+  }
   await page.goto(url("", "/family"));
   check("admin can't open family pages", !page.url().endsWith("/family"));
   check("no client errors (admin)", errors.length === 0, errors.join("; "));

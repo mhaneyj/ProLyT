@@ -442,3 +442,27 @@ describe("recruiting profile link", () => {
     expect((await as(db, PARENT_B, () => db.query("select * from profile_shares where athlete_id=$1", [jordan]))).rows).toHaveLength(0);
   });
 });
+
+describe("ProLyt admin adds staff", () => {
+  const ADMIN2 = "10000000-0000-0000-0000-0000000000d1";
+  const NEWCOACH = "10000000-0000-0000-0000-0000000000d2";
+  beforeAll(async () => {
+    await addUser(db, ADMIN2, "boss@prolyt.test");
+    await db.query("insert into platform_admins (user_id) values ($1)", [ADMIN2]);
+  });
+  it("admins add a coach, who joins on next sign-in", async () => {
+    await as(db, ADMIN2, () => db.query("select invite_staff($1, 'NewCoach@Example.com', 'coach')", [ORG]));
+    await addUser(db, NEWCOACH, "newcoach@example.com");
+    await as(db, NEWCOACH, () => db.query("select claim_invites()"));
+    expect((await db.query("select role, pay_type from org_members where org_id=$1 and user_id=$2", [ORG, NEWCOACH])).rows).toEqual([{ role: "coach", pay_type: "contractor" }]);
+  });
+  it("admins can make themselves owner", async () => {
+    await as(db, ADMIN2, () => db.query("select invite_staff($1, 'boss@prolyt.test', 'owner')", [ORG]));
+    await as(db, ADMIN2, () => db.query("select claim_invites()"));
+    expect((await db.query("select role from org_members where org_id=$1 and user_id=$2", [ORG, ADMIN2])).rows).toEqual([{ role: "owner" }]);
+  });
+  it("nobody else can use it", async () => {
+    await expect(as(db, OWNER, () => db.query("select invite_staff($1, 'x@example.com', 'coach')", [ORG]))).rejects.toThrow(/admins only/);
+    await expect(as(db, PARENT_A, () => db.query("select invite_staff($1, 'x@example.com', 'owner')", [ORG]))).rejects.toThrow(/admins only/);
+  });
+});
