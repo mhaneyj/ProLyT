@@ -42,7 +42,7 @@ async function pool(): Promise<Pool> {
     const { Pool } = await import("pg");
     // Neon URLs say sslmode=require; pg treats that as verify-full and logs a warning on every start. Say it explicitly.
     const url = (process.env.DATABASE_URL ?? "").replace(/sslmode=(require|prefer|verify-ca)\b/, "sslmode=verify-full");
-    g.__gfPool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 10_000 });
+    g.__gfPool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 5 * 60_000 }) // keep connections warm between page views;
   }
   gs.__gfSchema ??= ensureSchema(g.__gfPool).catch((e) => {
     gs.__gfSchema = undefined; // try again on the next request
@@ -86,6 +86,7 @@ async function ensureSchema(p: Pool) {
 let chain: Promise<unknown> = Promise.resolve();
 
 async function run<T>(uid: string | null, service: boolean, fn: (q: Q) => Promise<T>): Promise<T> {
+  if (uid && !/^[0-9a-f-]{36}$/i.test(uid)) throw new Error("Bad user id");
   const claims = uid ? JSON.stringify({ sub: uid, role: "authenticated" }) : "";
   if (isDemo) {
     const db = await pglite();
@@ -102,9 +103,9 @@ async function run<T>(uid: string | null, service: boolean, fn: (q: Q) => Promis
   }
   const client = await (await pool()).connect();
   try {
-    await client.query("begin");
-    await client.query("select set_config('request.jwt.claims', $1, true)", [claims]);
-    if (!service) await client.query("set local role authenticated");
+    // One round trip to start: begin, who's asking, and (for user queries) the restricted role.
+    // claims holds only a validated uuid, so it's safe to inline.
+    await client.query(`begin; select set_config('request.jwt.claims', '${claims}', true)${service ? "" : "; set local role authenticated"}`);
     const q: Q = async (sql, params) => (await client.query(sql, params as unknown[])).rows;
     const out = await fn(q);
     await client.query("commit");

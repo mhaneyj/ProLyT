@@ -52,10 +52,16 @@ export const getMe = cache(async (): Promise<Me | null> => {
     let rows = await load();
     const [inv] = await q<{ n: number }>("select claim_invites() n"); // staff invited by email join on first sign-in
     if (inv?.n) rows = await load();
-    const [p] = await q<{ full_name: string; email: string | null }>("select full_name, email from profiles where id = $1", [uid]);
-    const [adm] = await q<{ ok: boolean }>("select is_platform_admin() ok");
-    const [self] = await q<{ id: string }>("select id from athletes where user_id = $1", [uid]);
-    const [kid] = await q<{ ok: boolean }>("select exists (select 1 from guardians where user_id = $1) ok", [uid]);
+    // Who they are, in one trip.
+    const [w] = await q<{ full_name: string | null; email: string | null; admin: boolean; self_id: string | null; parent: boolean }>(`
+      select p.full_name, p.email, is_platform_admin() admin,
+        (select id from athletes where user_id = $1) self_id,
+        exists (select 1 from guardians where user_id = $1) parent
+      from (select 1) x left join profiles p on p.id = $1`, [uid]);
+    const p = { full_name: w?.full_name ?? "", email: w?.email ?? null };
+    const adm = { ok: Boolean(w?.admin) };
+    const self = w?.self_id ? { id: w.self_id } : undefined;
+    const kid = { ok: Boolean(w?.parent) };
 
     const orgInfo = async (orgId: string | null) => {
       if (!orgId) return { perms: [] as Perm[], paused: false, features: ALL_ON };
