@@ -1,6 +1,7 @@
 "use client";
 import { useActionState } from "react";
 import { saveProfile, type ProfileState } from "../actions";
+import { METRICS, SHOWCASE_ORDER } from "@/lib/domain/metrics";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 const label = "mb-1.5 block text-sm text-soft";
@@ -9,7 +10,7 @@ const THEMES = [["#F8C40A", "Gold"], ["#E03A3E", "Red"], ["#2F80ED", "Blue"], ["
 
 export type ProfileValues = {
   athlete: string; position: string; grad_year: string; sport: string; hometown: string; school: string; bio: string;
-  highlight_url: string; gpa: string; intended_major: string; show_academics: boolean; theme_color: string; height: string; weight: string;
+  highlight_url: string; gpa: string; intended_major: string; show_academics: boolean; theme_color: string; height: string; weight: string; wingspan: string; featured: string[]; has: string[];
 };
 
 export function ProfileForm({ v }: { v: ProfileValues }) {
@@ -29,7 +30,8 @@ export function ProfileForm({ v }: { v: ProfileValues }) {
           <div><label htmlFor="height" className={label}>Height (in)</label><input id="height" name="height" inputMode="decimal" defaultValue={v.height} placeholder="72" className={input} /></div>
           <div><label htmlFor="weight" className={label}>Weight (lb)</label><input id="weight" name="weight" inputMode="numeric" defaultValue={v.weight} placeholder="185" className={input} /></div>
         </div>
-        <p className="-mt-1 text-xs text-muted">Height and weight you enter show as self-reported until a coach measures them.</p>
+        <div><label htmlFor="wingspan" className={label}>Wingspan (in)</label><input id="wingspan" name="wingspan" inputMode="decimal" defaultValue={v.wingspan} placeholder="76" className={input} /></div>
+        <p className="-mt-1 text-xs text-muted">Height, weight and wingspan you enter show as self-reported until a coach measures them.</p>
         <div><label htmlFor="hometown" className={label}>Hometown</label><input id="hometown" name="hometown" defaultValue={v.hometown} placeholder="Loomis, CA" className={input} /></div>
         <div>
           <label htmlFor="bio" className={label}>Bio</label>
@@ -52,6 +54,21 @@ export function ProfileForm({ v }: { v: ProfileValues }) {
           <input type="checkbox" name="show_academics" defaultChecked={v.show_academics} className="size-5 accent-[var(--color-gold)]" />
           Show GPA and major on my recruiting link
         </label>
+      </fieldset>
+      <fieldset id="featured" className="scroll-mt-4">
+        <legend className="mb-1 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Featured stats</legend>
+        <p className="mb-2 text-xs text-muted">Pick up to 4 to show big at the top. The first one gets the spotlight. Leave all off and we feature the best ones, speed first.</p>
+        <div className="flex flex-wrap gap-2">
+          {SHOWCASE_ORDER.map((k) => (
+            <label key={k} className="cursor-pointer">
+              <input type="checkbox" name="featured" value={k} defaultChecked={v.featured.includes(k)} className="peer sr-only"
+                onChange={(e) => { const f = e.currentTarget.form; if (f && f.querySelectorAll('input[name="featured"]:checked').length > 4) { e.currentTarget.checked = false; } }} />
+              <span className={`flex min-h-11 items-center rounded-full border border-line px-3 text-sm peer-checked:border-2 peer-checked:border-gold peer-checked:text-gold peer-focus-visible:outline-2 ${v.has.includes(k) ? "" : "opacity-60"}`}>
+                {METRICS[k].short}
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
       <fieldset>
         <legend className="mb-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Profile color</legend>

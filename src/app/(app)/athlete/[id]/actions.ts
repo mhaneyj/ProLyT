@@ -203,9 +203,37 @@ const profileSchema = z.object({
   theme_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   height: z.union([z.literal(""), z.coerce.number().min(48, "Height should be 48 to 90 inches").max(90, "Height should be 48 to 90 inches")]).optional(),
   weight: z.union([z.literal(""), z.coerce.number().min(60, "Weight should be 60 to 400 lb").max(400, "Weight should be 60 to 400 lb")]).optional(),
+  wingspan: z.union([z.literal(""), z.coerce.number().min(48, "Wingspan should be 48 to 96 inches").max(96, "Wingspan should be 48 to 96 inches")]).optional(),
 });
 
 export type ProfileState = { error?: string };
+
+/** The athlete or a parent adds a number (self-reported, with an optional proof link). */
+export async function addStat(form: FormData) {
+  const me = await requireMe();
+  const athlete = String(form.get("athlete") ?? "");
+  const metric = String(form.get("metric") ?? "");
+  const raw = String(form.get("value") ?? "").trim().replace(/[^\d.]/g, "");
+  const proof = String(form.get("proof") ?? "").trim();
+  const date = String(form.get("date") ?? "");
+  let msg = "stat=added";
+  try {
+    if (!z.guid().safeParse(athlete).success) throw new Error("Unknown athlete");
+    const { METRICS } = await import("@/lib/domain/metrics");
+    const m = METRICS[metric];
+    if (!m) throw new Error("Pick a test");
+    const value = Number(raw);
+    if (!raw || !Number.isFinite(value)) throw new Error("Enter the result as a number, like 4.65");
+    if (proof && !/^https:\/\/[^\s]+\.[^\s]+/.test(proof)) throw new Error("Proof link must start with https://");
+    const when = /^\d{4}-\d{2}-\d{2}$/.test(date) && new Date(date) <= new Date() ? `${date}T12:00:00-08:00` : null;
+    await asUser(me.id, (q) => q(`insert into results (athlete_id, metric, value, unit, source, proof_url, recorded_at)
+      values ($1, $2, $3, $4, 'self_reported', $5, coalesce($6::timestamptz, now()))`, [athlete, metric, value, m.unit, proof || null, when]));
+  } catch (e) {
+    msg = `stat_error=${encodeURIComponent(dbMessage(e))}`;
+  }
+  revalidatePath(`/athlete/${athlete}`);
+  redirect(`/athlete/${athlete}?${msg}`);
+}
 
 export async function saveProfile(_: ProfileState, form: FormData): Promise<ProfileState> {
   const me = await requireMe();
@@ -214,21 +242,25 @@ export async function saveProfile(_: ProfileState, form: FormData): Promise<Prof
   if (!p.success || !z.guid().safeParse(athlete).success) return { error: p.success ? "Unknown athlete" : p.error.issues[0].message };
   const d = p.data;
   const empty = (x: unknown) => (x === "" || x === undefined ? null : x);
+  const { SHOWCASE_ORDER } = await import("@/lib/domain/metrics");
+  const picked = form.getAll("featured").map(String).filter((k) => SHOWCASE_ORDER.includes(k));
+  if (picked.length > 4) return { error: "Pick up to 4 featured stats" };
+  const featured = picked.length ? picked : null;
   try {
     await asUser(me.id, async (q) => {
       const rows = await q(`update athletes set position = $2, grad_year = $3, sport = $4, hometown = $5, school = $6, bio = $7,
-          highlight_url = $8, gpa = $9, intended_major = $10, show_academics = $11, theme_color = $12
+          highlight_url = $8, gpa = $9, intended_major = $10, show_academics = $11, theme_color = $12, featured_metrics = $13
         where id = $1 and is_family(id) returning id`,
         [athlete, empty(d.position), empty(d.grad_year), d.sport.toLowerCase(), empty(d.hometown), empty(d.school), empty(d.bio),
-          empty(d.highlight_url), empty(d.gpa), empty(d.intended_major), form.get("show_academics") === "on", d.theme_color ?? null]);
+          empty(d.highlight_url), empty(d.gpa), empty(d.intended_major), form.get("show_academics") === "on", d.theme_color ?? null, featured]);
       if (!rows.length) throw new Error("Only the athlete or a parent can edit this profile");
       // Height and weight typed here are self-reported; a coach's measurement outranks them.
-      for (const [metric, v] of [["height_in", d.height], ["weight_lb", d.weight]] as const) {
+      for (const [metric, v] of [["height_in", d.height], ["weight_lb", d.weight], ["wingspan_in", d.wingspan]] as const) {
         if (v === "" || v === undefined) continue;
         const [last] = await q<{ value: number }>(
           "select value::float value from results where athlete_id = $1 and metric = $2 and source = 'self_reported' order by recorded_at desc limit 1", [athlete, metric]);
         if (!last || Number(last.value) !== Number(v)) {
-          await q("insert into results (athlete_id, metric, value, unit, source) values ($1, $2, $3, $4, 'self_reported')", [athlete, metric, v, metric === "height_in" ? "in" : "lb"]);
+          await q("insert into results (athlete_id, metric, value, unit, source) values ($1, $2, $3, $4, 'self_reported')", [athlete, metric, v, metric === "weight_lb" ? "lb" : "in"]);
         }
       }
     });

@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { ageOn, dayTime } from "@/lib/domain/format";
-import { METHOD_LABEL, PERFORMANCE, SOURCE_LABEL, bestOfficial, formatValue, latestBody, metricShort, type Source } from "@/lib/domain/metrics";
+import { METRICS, SHOWCASE_ORDER, type Source } from "@/lib/domain/metrics";
+import { StatShowcase } from "@/components/stat-showcase";
 import { NoteCard } from "@/components/athlete";
 import { Icon } from "@/components/icons";
 import { Player } from "@/components/player";
@@ -12,13 +13,13 @@ import { loadAthlete, sportName } from "./header";
 import { PhotoButton } from "./photo-button";
 import { heroBackground } from "@/lib/domain/brand";
 import { CopyLink } from "./share-card";
-import { addStint, giveLogin, setTeenPassword, inviteParent, removeStint, shareProfile, stopSharing, updateOrgStint } from "./actions";
+import { addStat, addStint, giveLogin, setTeenPassword, inviteParent, removeStint, shareProfile, stopSharing, updateOrgStint } from "./actions";
 
 export const metadata = { title: "Profile" };
 
-type R = { metric: string; value: number; source: Source; method: string | null; recorded_at: string; org: string | null };
+type R = { metric: string; value: number; source: Source; method: string | null; recorded_at: string; org: string | null; proof_url: string | null };
 type Stint = { id: string; org_id: string | null; org: string; team: string | null; team_id: string | null; level: string | null; position: string | null; jersey: string | null; started_on: string; ended_on: string | null; source: "org" | "athlete"; mine: boolean };
-type SP = { shared?: string; share_error?: string; welcome?: string; parent?: string; parent_error?: string; login?: string; login_error?: string; linked?: string; saved?: string; timeline_error?: string };
+type SP = { stat?: string; stat_error?: string; shared?: string; share_error?: string; welcome?: string; parent?: string; parent_error?: string; login?: string; login_error?: string; linked?: string; saved?: string; timeline_error?: string };
 
 const LEVELS: Record<string, string> = { youth: "Youth", middle_school: "Middle school", freshman: "Freshman", jv: "JV", varsity: "Varsity", club: "Club", college: "College", adult: "Adult" };
 const monthYear = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" });
@@ -30,8 +31,8 @@ export default async function AthleteProfile({ params, searchParams }: { params:
   const me = await requireMe();
   const { a, switcher } = await loadAthlete(me, id, "");
   const d = await asUser(me.id, async (q) => ({
-    results: await q<R>(`select r.metric, r.value::float value, r.source, r.method, r.recorded_at, o.name org
-      from results r left join orgs o on o.id = r.org_id where r.athlete_id = $1`, [id]),
+    results: await q<R>(`select r.metric, r.value::float value, r.source, r.method, r.recorded_at, o.name org, r.proof_url
+      from results r left join orgs o on o.id = r.org_id where r.athlete_id = $1 and r.voided_at is null`, [id]),
     stints: await q<Stint>(`
       select s.id, s.org_id, coalesce(o.name, s.org_name) org, coalesce(t.name, s.team_name) team, s.team_id, coalesce(s.level, t.level) level,
         s.position, s.jersey, s.started_on::text, s.ended_on::text, s.source, (s.org_id is not null and has_perm(s.org_id, 'roster.manage')) mine
@@ -59,13 +60,6 @@ export default async function AthleteProfile({ params, searchParams }: { params:
   const age = ageOn(a.birth_date);
   const minor = age < 18;
   const needsParent = minor && !a.approved;
-  const bests = PERFORMANCE.map((m) => {
-    const rows = d.results.filter((r) => r.metric === m);
-    const best = bestOfficial(m, rows);
-    return best === null ? null : { m, best, row: rows.find((r) => r.source !== "self_reported" && Number(r.value) === best)! };
-  }).filter((x) => x !== null);
-  const height = latestBody(d.results.filter((r) => r.metric === "height_in"));
-  const weight = latestBody(d.results.filter((r) => r.metric === "weight_lb"));
   const accent = a.theme_color ? { ["--color-gold" as string]: a.theme_color } as React.CSSProperties : undefined;
 
   const action = (href: string, icon: Parameters<typeof Icon>[0]["name"], label: string) => (
@@ -73,13 +67,6 @@ export default async function AthleteProfile({ params, searchParams }: { params:
       <Icon name={icon} className="text-gold" />{label}
     </Link>
   );
-  const body = (label: string, r: typeof height, key: string) => r ? (
-    <span className="flex items-baseline gap-1.5">
-      <span className="text-[11px] uppercase tracking-[1px] text-muted">{label}</span>
-      <span className="tabular font-display text-xl">{formatValue(key, r.value)}</span>
-      {r.source === "self_reported" ? <span className="text-[10px] text-muted">self</span> : <Icon name="check" size={12} className="text-good" />}
-    </span>
-  ) : null;
 
   return (
     <div style={accent} className="flex flex-col gap-4">
@@ -118,7 +105,6 @@ export default async function AthleteProfile({ params, searchParams }: { params:
           <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-cream/80">{[sportName(a.sport), a.programs].filter(Boolean).join(" · ")}</div>
           <h1 className="font-display text-[38px] uppercase leading-none">{a.first_name} {a.last_name}</h1>
           <div className="text-sm text-soft">{[a.position, a.grad_year ? `Class of ${a.grad_year}` : null, a.hometown, a.family || isStaff ? `Age ${age}` : null].filter(Boolean).join(" · ")}</div>
-          {height || weight ? <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{body("Ht", height, "height_in")}{body("Wt", weight, "weight_lb")}</div> : null}
         </div>
       </div>
 
@@ -140,21 +126,33 @@ export default async function AthleteProfile({ params, searchParams }: { params:
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <SectionLabel>Verified numbers</SectionLabel>
-        {bests.length ? (
-          <div className="grid grid-cols-2 gap-2">
-            {bests.map((b) => (
-              <div key={b.m} className="flex flex-col gap-0.5 rounded-[10px] border border-line bg-panel p-3">
-                <div className="text-[11px] uppercase tracking-[1px] text-muted">{metricShort(b.m)}</div>
-                <div className="tabular font-display text-[26px] leading-tight">{formatValue(b.m, b.best)}</div>
-                <div className={`flex items-center gap-1 text-[11px] font-semibold ${b.row.source === "verified_event" ? "text-good" : "text-gold"}`}>
-                  <Icon name="check" size={12} />{SOURCE_LABEL[b.row.source]}{b.row.method && b.row.method !== "self" ? ` · ${METHOD_LABEL[b.row.method]}` : ""}
-                </div>
-                {b.row.org ? <div className="truncate text-[11px] text-muted">{b.row.org}</div> : null}
+        <SectionLabel right={a.family ? <Link href={`/athlete/${a.id}/edit#featured`} className="text-sm font-semibold">Pick featured</Link> : null}>Stats</SectionLabel>
+        {sp.stat === "added" ? <Notice tone="good">Stat added. It shows as self-reported until a coach records it.</Notice> : null}
+        {sp.stat_error ? <Notice tone="bad">{sp.stat_error}</Notice> : null}
+        <StatShowcase rows={d.results} picks={a.featured_metrics}
+          empty={<p className="text-sm text-muted">{a.family ? `No numbers yet. Coaches' testing shows up here automatically, or add ${a.self ? "your" : a.first_name + "'s"} 40, 100m, vertical and more below.` : "No numbers yet."}</p>} />
+        {a.family ? (
+          <details className="rounded-[12px] border border-line" open={!d.results.length}>
+            <summary className="flex min-h-12 cursor-pointer list-none items-center px-3 text-sm font-semibold text-gold">+ Add a stat (40, 100m, vertical, maxes…)</summary>
+            <form action={addStat} className="flex flex-col gap-2 px-3 pb-3">
+              <input type="hidden" name="athlete" value={a.id} />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-soft">Test
+                  <select name="metric" required className={`${input} mt-1`}>
+                    {[...SHOWCASE_ORDER, "wingspan_in"].map((k) => <option key={k} value={k}>{METRICS[k].label} ({METRICS[k].unit})</option>)}
+                  </select>
+                </label>
+                <label className="text-xs text-soft">Result<input name="value" required inputMode="decimal" placeholder="4.65" className={`${input} mt-1 tabular`} /></label>
               </div>
-            ))}
-          </div>
-        ) : <p className="text-sm text-muted">Numbers show up here when a coach or testing event records them. Self-reported numbers stay on your Progress page.</p>}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-soft">Date<input name="date" type="date" max={new Date().toISOString().slice(0, 10)} className={`${input} mt-1`} /></label>
+                <label className="text-xs text-soft">Proof link (optional)<input name="proof" type="url" placeholder="Athletic.net, MaxPreps, video" className={`${input} mt-1`} /></label>
+              </div>
+              <button className="min-h-11 rounded-md bg-gold text-sm font-bold text-on-gold">Add stat</button>
+              <p className="text-[11px] text-muted">Stats you add are labeled self-reported. A proof link (meet results, a video) makes them count with recruiters. Coach-recorded numbers always rank first.</p>
+            </form>
+          </details>
+        ) : null}
         <p className="text-xs text-muted">{d.att} session{d.att === 1 ? "" : "s"} attended with ProLyt programs.</p>
       </section>
 

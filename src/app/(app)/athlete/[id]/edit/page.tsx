@@ -13,7 +13,7 @@ export default async function EditProfile({ params }: { params: Promise<{ id: st
   const { a, switcher } = await loadAthlete(me, id, "/edit");
   if (!a.family) notFound();
   const body = await asUser(me.id, (q) => q<{ metric: string; value: number }>(`
-    select distinct on (metric) metric, value::float value from results where athlete_id = $1 and metric in ('height_in', 'weight_lb')
+    select distinct on (metric) metric, value::float value from results where athlete_id = $1 and voided_at is null
     order by metric, recorded_at desc`, [id]));
   const val = (k: string) => { const r = body.find((x) => x.metric === k); return r ? String(r.value) : ""; };
   return (
@@ -25,7 +25,8 @@ export default async function EditProfile({ params }: { params: Promise<{ id: st
         athlete: id, position: a.position ?? "", grad_year: a.grad_year ? String(a.grad_year) : "", sport: a.sport, hometown: a.hometown ?? "",
         school: a.school ?? "", bio: a.bio ?? "", highlight_url: a.highlight_url ?? "", gpa: a.gpa ? String(a.gpa) : "",
         intended_major: a.intended_major ?? "", show_academics: a.show_academics, theme_color: a.theme_color ?? "#F8C40A",
-        height: val("height_in"), weight: val("weight_lb"),
+        height: val("height_in"), weight: val("weight_lb"), wingspan: val("wingspan_in"),
+        featured: a.featured_metrics ?? [], has: body.map((b) => b.metric),
       }} />
     </>
   );

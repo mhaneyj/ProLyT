@@ -101,10 +101,27 @@ describe("metric catalog", () => {
   it("code matches the database catalog", async () => {
     const { readFileSync } = await import("node:fs");
     const { METRICS } = await import("../src/lib/domain/metrics");
-    const sql = readFileSync("db/migrations/0008_athlete_record.sql", "utf8");
+    const sql = ["0008_athlete_record.sql", "0014_showcase.sql"].map((f) => readFileSync(`db/migrations/${f}`, "utf8")).join("\n");
     for (const [k, m] of Object.entries(METRICS)) {
       const row = new RegExp(`\\('${k}', '${m.label}', '${m.short}', '${m.unit}', ${m.lowerIsBetter}, ${m.decimals}, ${m.lo}, ${m.hi}, '${m.kind}'`);
       expect(sql, k).toMatch(row);
     }
+  });
+});
+
+describe("showcase", () => {
+  it("features speed first, prefers official numbers, labels self-reported ones", async () => {
+    const { showcase } = await import("../src/lib/domain/metrics");
+    const r = (metric: string, value: number, source: "coach_logged" | "self_reported" | "verified_event") => ({ metric, value, source, recorded_at: "2026-10-01" });
+    const s = showcase([r("40yd", 4.9, "coach_logged"), r("40yd", 4.5, "self_reported"), r("100m", 11.6, "self_reported"), r("vertical", 28, "coach_logged"),
+      r("vertical", 30, "coach_logged"), r("bench_max", 225, "coach_logged"), r("broad", 100, "coach_logged")]);
+    expect(s.featured.map((f) => [f.metric, f.value, f.official])).toEqual([["40yd", 4.9, true], ["100m", 11.6, false], ["vertical", 30, true], ["broad", 100, true]]);
+    expect(s.rest.map((f) => f.metric)).toEqual(["bench_max"]);
+  });
+  it("respects the athlete's picks, ignoring ones with no number", async () => {
+    const { showcase } = await import("../src/lib/domain/metrics");
+    const s = showcase([{ metric: "bench_max", value: 225, source: "coach_logged", recorded_at: "2026-10-01" }, { metric: "40yd", value: 5, source: "coach_logged", recorded_at: "2026-10-01" }], ["bench_max", "squat_max"]);
+    expect(s.featured.map((f) => f.metric)).toEqual(["bench_max"]);
+    expect(s.rest.map((f) => f.metric)).toEqual(["40yd"]);
   });
 });

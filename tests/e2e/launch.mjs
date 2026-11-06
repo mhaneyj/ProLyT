@@ -491,6 +491,33 @@ let coachLink = "";
   await s2.ctx.close();
 }
 
+// ── 15. Stats showcase: a parent adds Avery's 100m (with proof) and a vertical; a typo is caught
+{
+  const p = await signIn("gamefit-loomis", "parent@family.test");
+  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await p.page.waitForURL(/\/athlete\/[0-9a-f-]{36}$/);
+  const id = p.page.url().split("/").at(-1);
+  const add = async (metric, value, proof) => {
+    await p.page.locator('select[name="metric"]').evaluate((s) => { s.closest("details").open = true; });
+    await p.page.locator('select[name="metric"]').selectOption(metric);
+    await p.page.locator('input[name="value"]').fill(value);
+    if (proof) await p.page.locator('input[name="proof"]').fill(proof);
+    await p.page.getByRole("button", { name: "Add stat" }).click();
+    await p.page.waitForURL(/stat/);
+  };
+  await add("100m", "11.42", "https://www.athletic.net/");
+  check("parent adds a 100m with a proof link", await seen(p.page.getByRole("region", { name: "Stats" }).getByText("11.42s")));
+  await add("40yd", "52.1");
+  check("a typo'd 40 time is refused", await seen(p.page.getByText(/40-yard dash should be/)));
+  await add("vertical", "29.5");
+  const stats = p.page.getByRole("region", { name: "Stats" });
+  check("speed is the spotlight stat", (await stats.locator("div.font-cond").first().textContent())?.includes("100-meter dash") ?? false);
+  await p.page.goto(url("gamefit-loomis", `/a/${id}`));
+  const net = p.page.getByRole("region", { name: "Stats" });
+  check("network profile shows the stats with a proof link", (await seen(net.getByText("11.42s"))) && (await seen(net.getByRole("link", { name: /proof/ }))));
+  await p.ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);
