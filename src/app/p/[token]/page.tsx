@@ -2,15 +2,17 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { asService } from "@/lib/db";
 import { shareHash } from "@/lib/share";
-import { METRICS, SOURCE_LABEL, bestOfficial, formatValue, metricShort, type Source } from "@/lib/domain/metrics";
+import { METHOD_LABEL, PERFORMANCE, SOURCE_LABEL, bestOfficial, formatValue, latestBody, metricShort, type Source } from "@/lib/domain/metrics";
 import { shortDate } from "@/lib/domain/format";
 import { Player } from "@/components/player";
 import { ProLytMark } from "@/components/brand";
 
 type P = {
   first_name: string; last_name: string; position: string | null; grad_year: number | null; attended: number;
+  sport: string; bio: string | null; hometown: string | null; gpa: number | null; intended_major: string | null; highlight_url: string | null;
+  timeline: { org: string; team: string | null; level: string | null; position: string | null; started_on: string; ended_on: string | null; confirmed: boolean }[];
   programs: { name: string }[];
-  results: { metric: string; value: number; source: Source; recorded_at: string; org: string | null }[];
+  results: { metric: string; value: number; source: Source; method: string | null; recorded_at: string; org: string | null }[];
   highlights: { title: string; url: string; kind: string }[];
 };
 
@@ -27,7 +29,11 @@ export default async function PublicProfile({ params }: { params: Promise<{ toke
   const { token } = await params;
   const p = await load(token);
   if (!p) notFound();
-  const metrics = Object.keys(METRICS).filter((m) => p.results.some((r) => r.metric === m));
+  const metrics = PERFORMANCE.filter((m) => p.results.some((r) => r.metric === m));
+  const ht = latestBody(p.results.filter((r) => r.metric === "height_in"));
+  const wt = latestBody(p.results.filter((r) => r.metric === "weight_lb"));
+  const my = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const sport = (p.sport ?? "").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
@@ -35,9 +41,13 @@ export default async function PublicProfile({ params }: { params: Promise<{ toke
         style={{ background: "radial-gradient(120% 90% at 100% 0%, rgba(248,196,10,0.35), transparent 60%), linear-gradient(160deg, #1b1b1b, #0b0b0b)" }}>
         <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{p.programs.map((x) => x.name).join(" · ") || "Athlete"}</div>
         <h1 className="mt-1 font-display text-[44px] uppercase leading-none">{p.first_name} {p.last_name}</h1>
-        <div className="mt-2 text-soft">{[p.position, p.grad_year ? `Class of ${p.grad_year}` : null].filter(Boolean).join(" · ")}</div>
+        <div className="mt-2 text-soft">{[sport, p.position, p.grad_year ? `Class of ${p.grad_year}` : null, p.hometown].filter(Boolean).join(" · ")}</div>
+        {ht || wt ? <div className="mt-1 text-sm">{[ht ? `${formatValue("height_in", ht.value)}` : null, wt ? formatValue("weight_lb", wt.value) : null].filter(Boolean).join(" · ")} <span className="text-xs text-good">measured</span></div> : null}
         <div className="mt-1 text-xs text-muted">{p.attended} training session{Number(p.attended) === 1 ? "" : "s"} attended</div>
       </div>
+
+      {p.bio ? <p className="text-[15px] leading-relaxed text-soft">{p.bio}</p> : null}
+      {p.highlight_url ? <Player id="" storagePath={p.highlight_url} title={`${p.first_name}'s highlight reel`} /> : null}
 
       {metrics.length ? (
         <section className="flex flex-col gap-2">
@@ -52,13 +62,35 @@ export default async function PublicProfile({ params }: { params: Promise<{ toke
                   <div className="text-[11px] uppercase tracking-[1px] text-muted">{metricShort(m)}</div>
                   <div className="tabular font-display text-[28px] leading-tight">{formatValue(m, best)}</div>
                   <div className={`text-[11px] font-semibold ${top.source === "verified_event" ? "text-good" : "text-gold"}`}>
-                    {SOURCE_LABEL[top.source]} · {shortDate(top.recorded_at)}
+                    {SOURCE_LABEL[top.source]}{top.method && top.method !== "self" ? ` · ${METHOD_LABEL[top.method]}` : ""} · {shortDate(top.recorded_at)}
                   </div>
                 </div>
               );
             })}
           </div>
           <p className="text-xs text-muted">Verified results are from timed testing events. Coach-logged results are recorded by the athlete&apos;s program coaches. Self-reported numbers are never shown.</p>
+        </section>
+      ) : null}
+
+      {p.timeline.length ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Career</h2>
+          <ol className="flex flex-col gap-3 border-l-2 border-line pl-4">
+            {p.timeline.map((t, i) => (
+              <li key={i}>
+                <div className="font-semibold">{t.org} {t.confirmed ? <span className="text-xs font-normal text-good">confirmed</span> : null}</div>
+                <div className="text-sm text-soft">{[t.team, t.position].filter(Boolean).join(" · ")}</div>
+                <div className="text-xs text-muted">{my(t.started_on)} to {t.ended_on ? my(t.ended_on) : "now"}</div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {p.gpa || p.intended_major ? (
+        <section className="flex gap-6 text-sm">
+          {p.gpa ? <span><span className="text-muted">GPA </span><span className="font-semibold">{Number(p.gpa).toFixed(2)}</span></span> : null}
+          {p.intended_major ? <span><span className="text-muted">Intended major </span><span className="font-semibold">{p.intended_major}</span></span> : null}
         </section>
       ) : null}
 

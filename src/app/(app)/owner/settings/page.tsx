@@ -3,7 +3,7 @@ import { can, requireRole } from "@/lib/auth";
 import { shortDate } from "@/lib/domain/format";
 import { PermFields } from "@/components/perm-editor";
 import { CopyLink } from "@/app/(app)/athlete/[id]/share-card";
-import { coachInviteLink, coachPerms, removeCoach, turnOffInvite } from "./actions";
+import { archiveTeam, coachInviteLink, coachPerms, createTeam, removeCoach, turnOffInvite } from "./actions";
 import { asUser } from "@/lib/db";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { BrandingForm, CoachPayForm, InviteForm } from "./forms";
@@ -26,7 +26,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       "select * from admin_program_staff($1) where role = 'coach'", [me.orgId]) : [];
     const links = staffOk ? await q<{ id: string; label: string | null; expires_at: string; max_uses: number | null; uses: number }>(
       "select id, label, expires_at, max_uses, uses from invite_links where org_id = $1 and role = 'coach' and revoked_at is null and expires_at > now() and (max_uses is null or uses < max_uses) order by created_at desc", [me.orgId]) : [];
-    return { org, staff, invites, team, links };
+    const teams = can(me, "roster.manage") ? await q<{ id: string; name: string; level: string | null; season: string | null; n: number }>(`
+      select t.id, t.name, t.level, t.season, (select count(*)::int from stints s where s.team_id = t.id and s.ended_on is null) n
+      from teams t where t.org_id = $1 and t.active order by t.name`, [me.orgId]) : [];
+    return { org, staff, invites, team, links, teams };
   });
   const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
 
@@ -125,6 +128,31 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </details>
         </section>
       </Card>
+      ) : null}
+
+      {can(me, "roster.manage") ? (
+        <Card>
+          <SectionLabel>Teams</SectionLabel>
+          <p className="mb-2 mt-1 text-xs text-muted">Teams show on each athlete&apos;s career. Set an athlete&apos;s team from their profile.</p>
+          <ul className="mb-3 divide-y divide-line">
+            {d.teams.map((t) => (
+              <li key={t.id} className="flex min-h-12 items-center justify-between gap-2">
+                <span><span className="font-semibold">{t.name}</span><span className="block text-xs text-muted">{[t.level, t.season, `${t.n} athlete${t.n === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</span></span>
+                <form action={archiveTeam}><input type="hidden" name="team" value={t.id} /><button className="min-h-11 px-2 text-xs text-muted hover:text-cream">Archive</button></form>
+              </li>
+            ))}
+            {d.teams.length === 0 ? <li className="py-2 text-sm text-muted">No teams yet.</li> : null}
+          </ul>
+          <form action={createTeam} className="grid grid-cols-2 gap-2">
+            <input name="name" required placeholder="Team name (e.g. 7v7 14U)" aria-label="Team name" className="col-span-2 min-h-11 rounded-md border border-[#333] bg-[#111] px-3 text-sm text-cream" />
+            <select name="level" aria-label="Level" defaultValue="" className="min-h-11 rounded-md border border-[#333] bg-[#111] px-2 text-sm text-cream">
+              <option value="">Level</option><option value="youth">Youth</option><option value="middle_school">Middle school</option><option value="freshman">Freshman</option>
+              <option value="jv">JV</option><option value="varsity">Varsity</option><option value="club">Club</option><option value="college">College</option>
+            </select>
+            <input name="season" placeholder="Season (e.g. Spring 2027)" aria-label="Season" className="min-h-11 rounded-md border border-[#333] bg-[#111] px-3 text-sm text-cream" />
+            <button className="col-span-2 min-h-11 rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Add team</button>
+          </form>
+        </Card>
       ) : null}
 
       {can(me, "billing.manage") ? <Card>

@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireParent } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { familyKids } from "@/lib/kid";
 import { blobConfigured } from "@/lib/film";
 import { money, dayTime, ageOn } from "@/lib/domain/format";
-import { METRICS, bestOfficial, formatValue, improvement, metricShort, type Source } from "@/lib/domain/metrics";
+import { PERFORMANCE, bestOfficial, formatValue, improvement, metricShort, type Source } from "@/lib/domain/metrics";
 import { Checklist, Hero, KidSwitcher, NoteCard, StatTile, Tile } from "@/components/athlete";
 import { LinkButton, Notice, Pill } from "@/components/ui";
 
@@ -14,14 +14,14 @@ type A = {
   id: string; first_name: string; last_name: string; birth_date: string; position: string | null; grad_year: number | null; has_photo: boolean;
   plan: string | null; price_cents: number | null; status: string | null; current_period_end: string | null;
   next_title: string | null; next_at: string | null; next_where: string | null;
-  booked_ever: number; film: number; highlights: number;
+  booked_ever: number; film: number; highlights: number; programs: number;
 };
 type R = { metric: string; value: number; source: Source };
 type N = { body: string; focus: string | null; coach: string | null; created_at: string };
 
 export default async function FamilyHome({ searchParams }: { searchParams: Promise<{ chosen?: string; welcome?: string; connected?: string }> }) {
   const { chosen, welcome, connected } = await searchParams;
-  const me = await requireRole("guardian");
+  const me = await requireParent();
   const { kids, current } = await familyKids(me.id);
 
   if (!current) {
@@ -40,7 +40,8 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
              nx.title next_title, nx.starts_at next_at, nx.location next_where,
              (select count(*)::int from session_athletes where athlete_id = a.id) booked_ever,
              (select count(*)::int from film where athlete_id = a.id) film,
-             (select count(*)::int from film where athlete_id = a.id and is_highlight) highlights
+             (select count(*)::int from film where athlete_id = a.id and is_highlight) highlights,
+             (select count(*)::int from program_athletes where athlete_id = a.id and status = 'active') programs
       from athletes a
       left join lateral (select * from memberships where athlete_id = a.id order by created_at desc limit 1) m on true
       left join plans p on p.id = m.plan_id
@@ -57,7 +58,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
   const { a, results, note } = d;
 
   // Three headline numbers: best official result, with change since the first one.
-  const stats = Object.keys(METRICS)
+  const stats = PERFORMANCE
     .map((m) => {
       const rows = results.filter((r) => r.metric === m);
       const official = rows.filter((r) => r.source !== "self_reported");
@@ -75,7 +76,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
     { done: a.booked_ever > 0, label: `Book ${a.first_name}'s first session`, href: "/schedule" },
     ...(blobConfigured ? [{ done: a.has_photo, label: `Add a photo of ${a.first_name}`, href: `/athlete/${a.id}#photo` }] : []),
     { done: a.film > 0, label: "Add a clip to the film room", href: `/athlete/${a.id}/film` },
-    { done: packaged, label: "Choose a training package", href: `/family/choose/${a.id}` },
+    ...(a.programs ? [{ done: packaged, label: "Choose a training package", href: `/family/choose/${a.id}` }] : [{ done: false, label: `Finish ${a.first_name}'s profile`, href: `/athlete/${a.id}/edit` }]),
   ];
 
   return (
@@ -116,7 +117,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         <Tile href={`/athlete/${a.id}`} icon="profile" title="Profile" sub={[a.position, `Age ${ageOn(a.birth_date)}`].filter(Boolean).join(" · ")} />
       </div>
 
-      <Link href={packaged ? (a.status === "pending" ? `/family/choose/${a.id}` : "/family") : `/family/choose/${a.id}`}
+      {a.programs ? <Link href={packaged ? (a.status === "pending" ? `/family/choose/${a.id}` : "/family") : `/family/choose/${a.id}`}
         className="flex items-center justify-between gap-3 rounded-[10px] border border-line px-4 py-3.5 hover:border-gold">
         <span className="flex flex-col">
           <span className="text-[13px] text-muted">Membership</span>
@@ -126,7 +127,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
           </span>
         </span>
         {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Picked</Pill> : <span className="text-sm font-semibold text-gold">Choose →</span>}
-      </Link>
+      </Link> : null}
       {a.status === "pending" && me.features.payments ? (
         <form action="/api/stripe/checkout" method="post">
           <input type="hidden" name="athlete_id" value={a.id} />

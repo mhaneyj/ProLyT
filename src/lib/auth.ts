@@ -24,6 +24,8 @@ export type Me = {
   roles: Role[];                 // roles in that program
   isPlatformAdmin: boolean;      // ProLyt staff
   programs: { id: string; name: string; slug: string }[];
+  athleteId: string | null;      // their own athlete profile (13+), if they have one
+  isParent: boolean;             // guardian of at least one athlete (in any program, or none)
   perms: Perm[];                 // what this person may do in that program
   orgPaused: boolean;
   features: Features;
@@ -52,6 +54,8 @@ export const getMe = cache(async (): Promise<Me | null> => {
     if (inv?.n) rows = await load();
     const [p] = await q<{ full_name: string; email: string | null }>("select full_name, email from profiles where id = $1", [uid]);
     const [adm] = await q<{ ok: boolean }>("select is_platform_admin() ok");
+    const [self] = await q<{ id: string }>("select id from athletes where user_id = $1", [uid]);
+    const [kid] = await q<{ ok: boolean }>("select exists (select 1 from guardians where user_id = $1) ok", [uid]);
 
     const orgInfo = async (orgId: string | null) => {
       if (!orgId) return { perms: [] as Perm[], paused: false, features: ALL_ON };
@@ -67,6 +71,8 @@ export const getMe = cache(async (): Promise<Me | null> => {
       : programs[0] ?? null;
     const info = await orgInfo(org?.id ?? null);
     return {
+      athleteId: self?.id ?? null,
+      isParent: Boolean(kid?.ok),
       perms: info.perms,
       orgPaused: info.paused,
       features: info.features,
@@ -94,6 +100,13 @@ export async function requireRole(...allowed: Role[]): Promise<Me & { orgId: str
   return me as Me & { orgId: string };
 }
 
+/** A parent of any athlete, whether or not this program is theirs. */
+export async function requireParent(): Promise<Me> {
+  const me = await requireMe();
+  if (!me.isParent) redirect(homeFor(me));
+  return me;
+}
+
 export async function requirePlatformAdmin(): Promise<Me> {
   const me = await requireMe();
   if (!me.isPlatformAdmin) redirect(homeFor(me));
@@ -112,7 +125,8 @@ export function homeFor(me: Me) {
   if (me.orgPaused && !me.isPlatformAdmin) return "/paused";
   if (me.roles.includes("owner")) return "/owner";
   if (me.roles.includes("coach")) return "/coach";
-  if (me.roles.includes("guardian")) return "/family";
+  if (me.roles.includes("guardian") || me.isParent) return "/family";
+  if (me.athleteId) return `/athlete/${me.athleteId}`;
   if (me.isPlatformAdmin) return "/admin";
-  return "/register";
+  return "/start";
 }

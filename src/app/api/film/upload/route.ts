@@ -23,9 +23,9 @@ export async function POST(request: Request) {
         const photo = kind === "photos";
         if (!/^[0-9a-f-]{36}$/.test(athlete) || (!photo && !pathname.startsWith(uploadPrefix(athlete))) || (photo && !pathname.startsWith(`photos/${athlete}/`)))
           throw new Error("Bad upload path");
-        // Film: family or the athlete's coaches. Photo: family only.
+        // Film: the athlete, a parent, or their coaches. Photo: the athlete or a parent.
         const [ok] = await asUser(me.id, (q) =>
-          q<{ ok: boolean }>(photo ? "select is_guardian($1) ok" : "select is_guardian($1) or staff_sees_athlete($1) ok", [athlete]));
+          q<{ ok: boolean }>(photo ? "select is_family($1) ok" : "select is_family($1) or staff_sees_athlete($1) ok", [athlete]));
         if (!ok?.ok) throw new Error("You can't add this for this athlete");
         return photo
           ? { allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic"], maximumSizeInBytes: 15 * 1024 ** 2, addRandomSuffix: true }

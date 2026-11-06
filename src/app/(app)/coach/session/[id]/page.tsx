@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { ageOn, dayTime, time } from "@/lib/domain/format";
-import { METRICS, bestOfficial, formatValue, metricLabel, metricShort, type Source } from "@/lib/domain/metrics";
+import { METRICS, PERFORMANCE, bestOfficial, formatValue, metricLabel, metricShort, type Source } from "@/lib/domain/metrics";
 import { Icon } from "@/components/icons";
 import { Card, SectionLabel } from "@/components/ui";
 import { addNote } from "@/app/(app)/athlete/[id]/actions";
@@ -42,7 +42,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const { s, roster, results, others } = data;
   const here = roster.filter((r) => r.status === "present").length;
   const unmarked = roster.filter((r) => !r.status).length;
-  const tests = Object.keys(METRICS);
+  const tests = PERFORMANCE;
   const canRoster = me.perms.includes("roster.manage");
   const canLog = me.perms.includes("results.log");
   const voiceOn = me.features.voice;

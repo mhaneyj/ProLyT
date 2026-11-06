@@ -17,8 +17,8 @@ const schema = z.object({
   minutes: z.coerce.number().int().min(15).max(600),
   location: z.string().trim().max(120).optional(),
   coach: z.union([z.guid(), z.literal("")]).optional(),
-  capacity: z.union([z.coerce.number().int().min(1, "Spots must be at least 1").max(500), z.literal("")]).optional(),
-  price: z.union([z.coerce.number().min(0).max(5000), z.literal("")]).optional(),
+  capacity: z.union([z.literal(""), z.coerce.number().int().min(1, "Spots must be at least 1").max(500)]).optional(),
+  price: z.union([z.literal(""), z.coerce.number().min(0).max(5000)]).optional(),
   weeks: z.coerce.number().int().min(1).max(26),
 });
 

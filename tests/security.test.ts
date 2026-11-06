@@ -511,3 +511,88 @@ describe("platform permissions", () => {
     expect((await as(db, BOSS, () => db.query<{ n: number }>("select count(*)::int n from admin_activity(50)"))).rows[0].n).toBeGreaterThan(3);
   });
 });
+
+describe("phase 1: athlete-owned record", () => {
+  const TEEN = "10000000-0000-0000-0000-0000000007a1";
+  const MOM = "10000000-0000-0000-0000-0000000007a2";
+  const ADULT = "10000000-0000-0000-0000-0000000007a3";
+  const KIDLOGIN = "10000000-0000-0000-0000-0000000007a4";
+  const h = (c: string) => ("7" + c).repeat(32);
+  let teen: string;
+  beforeAll(async () => {
+    for (const [id, email] of [[TEEN, "teen@example.com"], [MOM, "mom@example.com"], [ADULT, "adult@example.com"], [KIDLOGIN, "jordan.own@example.com"]]) await addUser(db, id, email);
+  });
+  it("athletes 13+ sign themselves up; under 13 can't", async () => {
+    await expect(as(db, TEEN, () => db.query("select start_athlete_profile('Kid','Young',$1,'football','WR',2034)", [yearsAgo(11)]))).rejects.toThrow(/under 13 need a parent/);
+    teen = (await as(db, TEEN, () => db.query<{ id: string }>("select start_athlete_profile('Taylor','Teen',$1,'football','WR',2029) id", [yearsAgo(15)]))).rows[0].id;
+    const [a] = (await db.query<{ approved: boolean; user_id: string }>("select parent_approved_at is not null approved, user_id from athletes where id=$1", [teen])).rows;
+    expect(a).toEqual({ approved: false, user_id: TEEN });
+    await expect(as(db, TEEN, () => db.query("select start_athlete_profile('Taylor','Again',$1,'football','WR',2029)", [yearsAgo(15)]))).rejects.toThrow(/already have/);
+  });
+  it("a new teen profile is private: other families and coaches can't see it", async () => {
+    expect((await as(db, PARENT_A, () => db.query("select id from athletes where id=$1", [teen]))).rows).toHaveLength(0);
+    expect((await as(db, COACH, () => db.query("select id from athletes where id=$1", [teen]))).rows).toHaveLength(0);
+    expect((await as(db, TEEN, () => db.query("select id from athletes where id=$1", [teen]))).rows).toHaveLength(1);
+  });
+  it("the teen invites a parent; the parent approves with a signature", async () => {
+    await as(db, TEEN, () => db.query("select create_athlete_link($1,'parent','mom@example.com',$2)", [teen, h("7")]));
+    await expect(as(db, TEEN, () => db.query("select accept_athlete_link($1,'Taylor Teen')", [h("7")]))).rejects.toThrow(/parent's email, not yours/);
+    await expect(as(db, MOM, () => db.query("select accept_athlete_link($1, null)", [h("7")]))).rejects.toThrow(/full name/);
+    await as(db, MOM, () => db.query("select accept_athlete_link($1,'Morgan Teen')", [h("7")]));
+    expect((await db.query<{ ok: boolean }>("select parent_approved_at is not null ok from athletes where id=$1", [teen])).rows[0].ok).toBe(true);
+    expect((await db.query("select kind from consents where athlete_id=$1 and guardian_user_id=$2", [teen, MOM])).rows).toEqual([{ kind: "parental_verification" }]);
+    await expect(as(db, MOM, () => db.query("select accept_athlete_link($1,'Morgan Teen')", [h("7")]))).rejects.toThrow(/already used/);
+  });
+  it("teens edit their profile but can't change their birth date, owner or approval", async () => {
+    await as(db, TEEN, () => db.query("update athletes set bio='Route runner' where id=$1", [teen]));
+    await expect(as(db, TEEN, () => db.query("update athletes set birth_date=$2 where id=$1", [teen, yearsAgo(19)]))).rejects.toThrow(/Only a parent/);
+    await expect(as(db, TEEN, () => db.query("update athletes set user_id=$2 where id=$1", [teen, ADULT]))).rejects.toThrow(/can't be changed/);
+    await as(db, MOM, () => db.query("update athletes set birth_date=$2 where id=$1", [teen, yearsAgo(16)]));
+  });
+  it("a parent gives a 13+ athlete their own login; the parent can't claim it themself", async () => {
+    await as(db, PARENT_A, () => db.query("select create_athlete_link($1,'athlete','jordan.own@example.com',$2)", [jordan, h("8")]));
+    await expect(as(db, PARENT_A, () => db.query("select accept_athlete_link($1, null)", [h("8")]))).rejects.toThrow(/own email, not yours/);
+    await as(db, KIDLOGIN, () => db.query("select accept_athlete_link($1, null)", [h("8")]));
+    expect((await as(db, KIDLOGIN, () => db.query("select first_name from athletes where id=$1", [jordan]))).rows).toEqual([{ first_name: "Jordan" }]);
+    await expect(as(db, PARENT_B, () => db.query("select create_athlete_link($1,'athlete','x@example.com',$2)", [riley, h("9")]))).rejects.toThrow(/at 13/);
+  });
+  it("joining a program starts a confirmed stint; families add self-added history", async () => {
+    expect((await as(db, PARENT_A, () => db.query("select source from stints where athlete_id=$1 and org_id=$2", [jordan, ORG]))).rows).toEqual([{ source: "org" }]);
+    await as(db, KIDLOGIN, () => db.query("insert into stints (athlete_id, org_name, started_on, source) values ($1,'Del Oro HS','2025-08-01','athlete')", [jordan]));
+    await expect(as(db, KIDLOGIN, () => db.query("insert into stints (athlete_id, org_id, started_on, source) values ($1,$2,'2025-08-01','org')", [jordan, ORG]))).rejects.toThrow();
+    expect((await as(db, PARENT_B, () => db.query("select id from stints where athlete_id=$1", [jordan]))).rows).toHaveLength(0);
+    expect((await as(db, COACH, () => db.query<{ name: string }>("select coalesce(org_name, 'org') name from stints where athlete_id=$1", [jordan]))).rows.map((r) => r.name)).toContain("Del Oro HS");
+  });
+  it("staff set team and jersey on their own stint only", async () => {
+    const team = (await as(db, COACH, () => db.query<{ id: string }>("insert into teams (org_id, name) values ($1,'7v7 15U') returning id", [ORG]))).rows[0].id;
+    await as(db, COACH, () => db.query("update stints set team_id=$2, jersey='72' where athlete_id=$1 and org_id=$3", [jordan, team, ORG]));
+    expect((await db.query("select jersey from stints where athlete_id=$1 and org_id=$2", [jordan, ORG])).rows).toEqual([{ jersey: "72" }]);
+    expect((await as(db, COACH, () => db.query("update stints set org_name='Hacked' where athlete_id=$1 and source='athlete' returning id", [jordan]))).rows).toHaveLength(0);
+  });
+  it("results are a record: checked against the catalog, never edited, only voided", async () => {
+    await expect(as(db, KIDLOGIN, () => db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'40yd',52.1,'s','self_reported')", [jordan]))).rejects.toThrow(/Check for a typo/);
+    await expect(as(db, KIDLOGIN, () => db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'warp_speed',1,'s','self_reported')", [jordan]))).rejects.toThrow(/Unknown test/);
+    const r = (await as(db, KIDLOGIN, () => db.query<{ id: string; method: string }>("insert into results (athlete_id, metric, value, unit, source) values ($1,'weight_lb',185,'x','self_reported') returning id, method", [jordan]))).rows[0];
+    expect(r.method).toBe("self");
+    // Direct edits change nothing (no update rights; the trigger also refuses)
+    await as(db, KIDLOGIN, () => db.query("update results set value=190 where id=$1", [r.id])).catch(() => undefined);
+    expect((await db.query<{ v: number }>("select value::float v from results where id=$1", [r.id])).rows[0].v).toBe(185);
+    await as(db, KIDLOGIN, () => db.query("select void_result($1,'typo')", [r.id]));
+    expect((await as(db, KIDLOGIN, () => db.query("select id from results where id=$1", [r.id]))).rows).toHaveLength(0);
+    const c = (await as(db, COACH, () => db.query<{ id: string }>("insert into results (athlete_id, metric, value, unit, source, method) values ($1,'40yd',5.11,'s','coach_logged','laser') returning id", [jordan]))).rows[0];
+    await expect(as(db, KIDLOGIN, () => db.query("select void_result($1,'x')", [c.id]))).rejects.toThrow(/can't void/);
+    await as(db, COACH, () => db.query("select void_result($1,'wrong athlete')", [c.id]));
+  });
+  it("public link shows the career but never the school; adults share their own, teens can't", async () => {
+    await expect(as(db, KIDLOGIN, () => db.query("select create_profile_share($1,$2)", [jordan, h("a")]))).rejects.toThrow(/parent or guardian/);
+    await as(db, PARENT_A, () => db.query("select create_profile_share($1,$2)", [jordan, h("b")]));
+    const p = (await as(db, null, () => db.query<{ p: { timeline: { org: string }[] } }>("select public_profile($1) p", [h("b")]))).rows[0].p;
+    expect(p.timeline.map((t) => t.org)).toContain("Del Oro HS");
+    expect(JSON.stringify(p)).not.toContain("Sample High");
+    const adult = (await as(db, ADULT, () => db.query<{ id: string }>("select start_athlete_profile('Alex','Adult',$1,'track and field','400m',2026) id", [yearsAgo(19)]))).rows[0].id;
+    await as(db, ADULT, () => db.query("select create_profile_share($1,$2)", [adult, h("c")]));
+    expect((await db.query<{ ok: boolean }>("select parent_approved_at is not null ok from athletes where id=$1", [adult])).rows[0].ok).toBe(true);
+    await as(db, KIDLOGIN, () => db.query("select revoke_profile_share($1)", [jordan]));
+    expect((await as(db, null, () => db.query<{ p: unknown }>("select public_profile($1) p", [h("b")]))).rows[0].p).toBeNull();
+  });
+});

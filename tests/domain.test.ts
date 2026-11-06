@@ -96,3 +96,15 @@ describe("program web addresses on prolyt.com", () => {
     expect(isPlatformHost("gamefit-loomis.prolyt.com", r)).toBe(true);
   });
 });
+
+describe("metric catalog", () => {
+  it("code matches the database catalog", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { METRICS } = await import("../src/lib/domain/metrics");
+    const sql = readFileSync("db/migrations/0008_athlete_record.sql", "utf8");
+    for (const [k, m] of Object.entries(METRICS)) {
+      const row = new RegExp(`\\('${k}', '${m.label}', '${m.short}', '${m.unit}', ${m.lowerIsBetter}, ${m.decimals}, ${m.lo}, ${m.hi}, '${m.kind}'`);
+      expect(sql, k).toMatch(row);
+    }
+  });
+});

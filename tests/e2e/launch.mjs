@@ -134,7 +134,9 @@ let coachLink = "";
 // ── 4. A brand-new parent registers an athlete
 {
   const { ctx, page, errors } = await signIn("gamefit-loomis", "parent@family.test");
-  check("new parent sent to registration", page.url().endsWith("/register"), page.url());
+  check("new user asked who's signing up", page.url().endsWith("/start"), page.url());
+  await page.getByRole("link", { name: /I'm a parent/ }).click();
+  await page.waitForURL(/\/register/);
   await page.getByLabel("First name").fill("Avery");
   await page.getByLabel("Last name").fill("Real");
   await page.getByLabel("Birth date").fill("2011-04-09");
@@ -204,6 +206,95 @@ let coachLink = "";
   await page.goto(url("gamefit-loomis", "/coach"));
   check("non-staff sees how to get access", await seen(page.getByText(/not set up as a coach here yet/)));
   await ctx.close();
+}
+
+// ── 7. A teen signs themself up, invites a parent; the parent approves
+{
+  const { ctx, page, errors } = await signIn("gamefit-loomis", "taylor.teen@example.test");
+  check("new user without a role lands on the chooser", await seen(page.getByRole("heading", { name: /Who.s signing up/ })));
+  await page.getByRole("link", { name: /I'm an athlete/ }).click();
+  await page.getByLabel("First name").fill("Taylor");
+  await page.getByLabel("Last name").fill("Teen");
+  await page.getByLabel("Birth date").fill("2011-03-14");
+  await page.getByLabel("Position").fill("WR");
+  await page.getByLabel("Class of").fill("2029");
+  await page.getByLabel("Parent's email").fill("taylor.mom@example.test");
+  const n = logLines();
+  await page.getByRole("button", { name: "Create my profile" }).click();
+  await page.waitForURL(/\/athlete\/.*welcome=1/, { timeout: 15000 });
+  check("teen profile created and parent emailed", await seen(page.getByText(/emailed your parent/)));
+  check("profile stays private until approved", await seen(page.getByText("Waiting for a parent to approve")));
+  const link = readFileSync(LOG, "utf8").split("\n").slice(n - 1).find((l) => l.includes("[athlete link] parent taylor.mom@example.test"))?.split(" → ")[1];
+  check("parent approval link sent", Boolean(link), String(link));
+  // Teen adds a past team and a bio
+  await page.getByText("+ Add a past or current team").click();
+  await page.getByLabel("School or club").fill("Del Oro HS");
+  await page.getByLabel("Level").selectOption("freshman");
+  await page.getByLabel("Started").fill("2025-08");
+  await page.getByRole("button", { name: "Add to career" }).click();
+  check("teen adds a self-added team to the career", await seen(page.getByText("Self-added")));
+  await page.goto(page.url().split("?")[0].split("#")[0] + "/edit");
+  await page.getByLabel("Bio").fill("Slot receiver who loves contested catches.");
+  await page.getByLabel("Height (in)").fill("70");
+  await page.getByRole("button", { name: "Save profile" }).click();
+  check("teen edits profile", await seen(page.getByText("Profile saved.")) && await seen(page.getByText(/contested catches/)));
+  const profileUrl = page.url().split("?")[0];
+  check("no client errors (teen)", errors.length === 0, errors.join("; "));
+  await ctx.close();
+  // Parent approves
+  const pc = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const pp = await pc.newPage();
+  await pp.goto(String(link));
+  await pp.getByRole("link", { name: "Sign in to approve" }).click();
+  const n2 = logLines();
+  await pp.getByLabel("Email").fill("taylor.mom@example.test");
+  await pp.getByRole("button", { name: /Email me a code/ }).click();
+  await pp.getByLabel("Code").fill(await logged("code", "taylor.mom@example.test", n2 - 1));
+  await pp.getByRole("button", { name: "Sign in" }).click();
+  await pp.waitForURL(/\/link\//, { timeout: 15000 });
+  await pp.getByLabel("Type your full name to approve").fill("Casey Teen");
+  await pp.getByRole("button", { name: "Approve" }).click();
+  await pp.waitForURL(/linked=1/, { timeout: 15000 });
+  check("parent approves and lands on the profile", await seen(pp.getByText(/You're now Taylor's parent/)));
+  check("parent sees the teen's career", await seen(pp.getByText("Del Oro HS")));
+  await pp.screenshot({ path: `${OUT}/l07-teen-profile.png`, fullPage: true });
+  await pc.close();
+  const t2 = await signIn("gamefit-loomis", "taylor.teen@example.test");
+  check("teen goes straight to their profile next time", t2.page.url().startsWith(profileUrl.replace(/\/$/, "")), t2.page.url());
+  check("approval banner gone", (await t2.page.getByText("Waiting for a parent to approve").count()) === 0);
+  const id = profileUrl.split("/").at(-1);
+  const body = await t2.page.evaluate(async (u) => { const r = await fetch(u); return r.ok ? r.json() : {}; }, `/api/athlete/${id}/export`);
+  check("teen can download their whole record", body.format === "prolyt-athlete-record/1" && body.career?.length === 1 && body.athlete?.gpa === null);
+  await t2.ctx.close();
+}
+
+// ── 8. A parent gives their registered 13+ athlete their own login
+{
+  const { ctx, page } = await signIn("gamefit-loomis", "parent@family.test");
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await page.waitForURL(/\/athlete\//);
+  const n = logLines();
+  await page.getByPlaceholder("Avery's email").fill("avery.real@example.test");
+  await page.getByRole("button", { name: "Send" }).last().click();
+  check("parent sends Avery a login link", await seen(page.getByText(/emailed Avery a link/)));
+  check("parent's profile view shows a confirmed program stint", await seen(page.getByText("Confirmed")));
+  await ctx.close();
+  const link = readFileSync(LOG, "utf8").split("\n").slice(n - 1).find((l) => l.includes("[athlete link] athlete avery.real@example.test"))?.split(" → ")[1];
+  const ac = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const ap = await ac.newPage();
+  await ap.goto(String(link));
+  await ap.getByRole("link", { name: "Sign in" }).click();
+  const n2 = logLines();
+  await ap.getByLabel("Email").fill("avery.real@example.test");
+  await ap.getByRole("button", { name: /Email me a code/ }).click();
+  await ap.getByLabel("Code").fill(await logged("code", "avery.real@example.test", n2 - 1));
+  await ap.getByRole("button", { name: "Sign in" }).click();
+  await ap.waitForURL(/\/link\//, { timeout: 15000 });
+  await ap.getByRole("button", { name: /This is me/ }).click();
+  await ap.waitForURL(/linked=1/, { timeout: 15000 });
+  check("Avery connects their own login", await seen(ap.getByText(/This profile is yours/)));
+  check("athlete gets the athlete menu", await seen(ap.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Me" })));
+  await ac.close();
 }
 
 await browser.close();

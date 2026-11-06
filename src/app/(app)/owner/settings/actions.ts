@@ -142,3 +142,23 @@ export async function turnOffInvite(form: FormData) {
   await asUser(me.id, (q) => q("select revoke_invite_link($1)", [String(form.get("id"))]));
   back({ ok: "Invite link turned off." });
 }
+
+export async function createTeam(form: FormData) {
+  const me = await requirePerm("roster.manage");
+  const name = String(form.get("name") ?? "").trim();
+  try {
+    await asUser(me.id, (q) => q("insert into teams (org_id, name, sport, level, season) values ($1, $2, $3, $4, $5)",
+      [me.orgId, name, String(form.get("sport") ?? "football").toLowerCase(), String(form.get("level") ?? "") || null, String(form.get("season") ?? "").trim() || null]));
+  } catch (e) {
+    back({ error: /check/.test(dbMessage(e)) ? "Give the team a name (2 to 80 characters)." : dbMessage(e) }, "&t=1");
+  }
+  revalidatePath("/owner/settings");
+  back({ ok: `${name} added.` });
+}
+
+export async function archiveTeam(form: FormData) {
+  const me = await requirePerm("roster.manage");
+  await asUser(me.id, (q) => q("update teams set active = false where id = $1 and org_id = $2", [String(form.get("team")), me.orgId]));
+  revalidatePath("/owner/settings");
+  back({ ok: "Team archived. Athletes keep it on their career." });
+}

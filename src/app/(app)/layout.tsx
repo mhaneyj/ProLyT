@@ -20,8 +20,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     items.push({ href: "/coach", label: "Today", icon: "today" });
     if (me.orgId) items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
     if (me.roles.includes("coach")) items.push({ href: "/coach/earnings", label: "Earnings", icon: "money" });
-    if (me.roles.includes("guardian")) items.push({ href: "/family", label: "Family", icon: "home" });
-  } else if (me.roles.includes("guardian")) {
+    if (me.roles.includes("guardian") || me.isParent) items.push({ href: "/family", label: "Family", icon: "home" });
+  } else if (me.roles.includes("guardian") || me.isParent) {
     const { current } = await familyKids(me.id);
     items.push({ href: "/family", label: "Home", icon: "home" });
     if (current) {
@@ -30,6 +30,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
     items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
     if (current) items.push({ href: `/athlete/${current.id}`, label: "Profile", icon: "profile" });
+  } else if (me.athleteId) {
+    items.push({ href: `/athlete/${me.athleteId}`, label: "Me", icon: "profile" });
+    items.push({ href: `/athlete/${me.athleteId}/progress`, label: "Progress", icon: "progress" });
+    items.push({ href: `/athlete/${me.athleteId}/film`, label: "Film", icon: "film" });
+    items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
   }
   if (me.isPlatformAdmin) items.push({ href: "/admin", label: "ProLyt", icon: "admin" });
 
