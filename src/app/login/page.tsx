@@ -5,11 +5,12 @@ import { BadCode, requestLink, verifyCode, RateLimited, SESSION_DAYS, signInWith
 import { sendSignInEmail } from "@/lib/email";
 import { DEMO_COOKIE, sessionCookieName } from "@/lib/auth";
 import { DEMO_USERS } from "@/lib/demo-seed";
-import { Button, Kicker, Notice } from "@/components/ui";
+import { Kicker, Notice } from "@/components/ui";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
-import { CodeInput, PasskeySignIn } from "@/components/passkey";
+import { CodeInput, PasskeySignIn, SubmitButton } from "@/components/passkey";
+import { getMe } from "@/lib/auth";
 import { googleConfigured } from "@/lib/sign-in";
 
 export const metadata = { title: "Sign in" };
@@ -59,7 +60,9 @@ async function checkCode(form: FormData) {
   const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
   let result: { session: string } | null = null;
   try {
-    result = await asService((q) => verifyCode(q, email, String(form.get("code") ?? ""), admins));
+    // The email cookie marks the browser that asked for this code (it's what makes a double tap safe to accept).
+    const sameBrowser = jar.get(EMAIL_COOKIE)?.value === email.trim().toLowerCase();
+    result = await asService((q) => verifyCode(q, email, String(form.get("code") ?? ""), admins, sameBrowser));
   } catch (e) {
     const msg = e instanceof BadCode ? e.message : "Something went wrong. Try again.";
     redirect(withNext(`/login?sent=1&error=${encodeURIComponent(msg)}`, next));
@@ -104,8 +107,11 @@ async function startOver() {
 export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string; next?: string }> }) {
   const sp = await searchParams;
   const next = safeNext(sp.next);
+  // Already signed in (e.g. a second tap finished after the first): skip the form.
+  if (!isDemo && (await getMe())) redirect(next || "/home");
   const brand = await brandBySlug(await currentOrgSlug());
   const sentTo = sp.sent ? ((await cookies()).get(EMAIL_COOKIE)?.value ?? "") : undefined;
+  const primaryBtn = "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-gold px-4 font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold hover:bg-gold-hover";
   const input = "min-h-12 rounded-md border border-[#333] bg-[#111] px-3 text-cream";
   return (
     <main style={brand ? (themeVars(brand.brand_color) as React.CSSProperties) : undefined} className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
@@ -147,7 +153,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             )}
             <label htmlFor="code" className="text-sm text-soft">Code</label>
             <CodeInput className={`${input} tabular text-center font-display text-3xl tracking-[10px]`} />
-            <Button type="submit">Sign in</Button>
+            <SubmitButton busy="Signing in…" className={primaryBtn}>Sign in</SubmitButton>
           </form>
           <form action={startOver} className="text-center">
             <button className="min-h-11 text-sm text-muted hover:text-cream">Wrong email or no code? Send a new one</button>
@@ -171,8 +177,8 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             <input id="email" name="email" type="email" autoComplete="username email" required placeholder="you@email.com" aria-label="Email" className={input} />
             <label htmlFor="password" className="sr-only">Password</label>
             <input id="password" name="password" type="password" autoComplete="current-password" placeholder="Password (if you set one)" aria-label="Password" className={input} />
-            <Button type="submit">Sign in</Button>
-            <button formAction={sendCode} className="min-h-12 rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-cream hover:border-gold">Email me a code</button>
+            <SubmitButton busy="One moment…" className={primaryBtn}>Sign in</SubmitButton>
+            <SubmitButton busy="Sending…" formAction={sendCode} className="min-h-12 w-full rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-cream hover:border-gold">Email me a code</SubmitButton>
           </form>
           <p className="text-center text-xs text-muted">No password or forgot it? Use a code. You stay signed in for a year.</p>
         </div>

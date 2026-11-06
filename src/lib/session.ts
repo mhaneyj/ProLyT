@@ -40,7 +40,7 @@ export class BadCode extends Error {}
  * (people often tap "send" twice and type the first one). Five wrong tries across all of
  * them and they all stop working.
  */
-export async function verifyCode(q: Run, rawEmail: string, rawCode: string, adminEmails: string[] = []) {
+export async function verifyCode(q: Run, rawEmail: string, rawCode: string, adminEmails: string[] = [], sameBrowser = false) {
   const email = normalizeEmail(rawEmail);
   const code = rawCode.replace(/\D/g, "");
   if (!email) throw new BadCode("Enter the email you used.");
@@ -48,7 +48,17 @@ export async function verifyCode(q: Run, rawEmail: string, rawCode: string, admi
   const links = await q<{ token_hash: string; code_hash: string; attempts: number }>(
     "select token_hash, code_hash, attempts from auth.magic_links where email = $1 and used_at is null and expires_at > now() and code_hash is not null order by created_at desc limit 10",
     [email]);
-  if (!links.length) throw new BadCode("That code expired. Send a new one.");
+  if (!links.length) {
+    // Double submit (auto-submit plus a tap) from the browser that asked for the code:
+    // the same correct code, used seconds ago, still signs in.
+    const [again] = !sameBrowser ? [] : await q<{ token_hash: string }>(
+      "select token_hash from auth.magic_links where email = $1 and code_hash = $2 and used_at > now() - interval '60 seconds'", [email, hash(`${email}:${code}`)]);
+    if (again) {
+      const [u] = await q<{ id: string; disabled: boolean }>("select id, disabled_at is not null disabled from auth.users where email = $1", [email]);
+      if (u && !u.disabled) return { userId: u.id, session: await createSession(q, u.id) };
+    }
+    throw new BadCode("That code expired. Send a new one.");
+  }
   const tries = Math.max(...links.map((l) => l.attempts));
   if (tries >= MAX_CODE_TRIES) throw new BadCode("Too many tries. Send a new code.");
   const hit = links.find((l) => l.code_hash === hash(`${email}:${code}`));

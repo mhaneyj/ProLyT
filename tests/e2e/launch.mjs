@@ -439,6 +439,31 @@ let coachLink = "";
   await m.ctx.close();
 }
 
+// ── 13. Double taps: tapping "Email me a code" three times and "Sign in" right after the code auto-submits still signs in
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.goto(url("gamefit-loomis", "/login"));
+  const before = logLines();
+  await page.getByLabel("Email").fill("lem@gamefit.test");
+  await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /Email me a code/.test(x.textContent)); b.click(); b.click(); b.click(); });
+  await seen(page.getByText("Enter your code"));
+  const code = await logged("code", "lem@gamefit.test", before - 1);
+  // Fire a second submit right as the auto-submit goes out (what a fast thumb does on a phone).
+  await page.evaluate((c) => {
+    const i = document.querySelector("#code");
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    set.call(i, c); i.dispatchEvent(new Event("input", { bubbles: true }));
+    const f = i.form; const fd = new FormData(f);
+    fetch(location.href, { method: "POST", body: fd, headers: { "Next-Action": f.querySelector('input[name^="$ACTION_ID"]')?.name?.slice(11) ?? "" } }).catch(() => {});
+  }, code);
+  await page.waitForURL((u) => !u.pathname.startsWith("/login") && u.pathname !== "/home", { timeout: 15000 }).catch(() => undefined);
+  check("double tap on the code still signs in", page.url().endsWith("/coach"), page.url());
+  await page.goto(url("gamefit-loomis", "/login"));
+  check("visiting sign-in while signed in goes home", !page.url().includes("/login"), page.url());
+  await ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

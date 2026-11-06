@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { browserSupportsWebAuthn, platformAuthenticatorIsAvailable, startAuthentication, startRegistration } from "@simplewebauthn/browser";
 
 const post = async (url: string, body?: unknown) => {
@@ -96,13 +97,24 @@ export function PasskeyNudge() {
 
 /** The 6-digit code box: fills from the phone's suggestion and signs in as soon as it has 6 digits. */
 export function CodeInput({ className }: { className: string }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const { pending } = useFormStatus();
   const sent = useRef(false);
   return (
-    <input ref={ref} id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} required autoFocus
-      placeholder="123456" className={className}
+    <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} required autoFocus
+      placeholder="123456" className={className} readOnly={pending}
       onChange={(e) => {
         if (e.target.value.replace(/\D/g, "").length === 6 && !sent.current) { sent.current = true; e.target.form?.requestSubmit(); }
       }} />
+  );
+}
+
+/** A submit button that locks (and says so) while its form is sending, so a second tap can't send it twice. */
+export function SubmitButton({ children, busy, className, formAction }: { children: React.ReactNode; busy: string; className: string; formAction?: (f: FormData) => void }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" formAction={formAction} disabled={pending} aria-disabled={pending}
+      onClick={(e) => { if (pending) e.preventDefault(); }} className={`${className} disabled:opacity-60`}>
+      {pending ? busy : children}
+    </button>
   );
 }

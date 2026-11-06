@@ -190,3 +190,17 @@ describe("passwords", () => {
     expect((await signInWithPassword(q, "teen@example.com", "Rocklin-2029")).userId).toBe(uid);
   });
 });
+
+describe("double taps", () => {
+  it("the same code sent twice from the same browser signs in both times; from elsewhere it doesn't", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const { code } = await requestLink(q, "double@example.com");
+    const first = await verifyCode(q, "double@example.com", code, [], true);
+    const second = await verifyCode(q, "double@example.com", code, [], true);
+    expect(second!.userId).toBe(first!.userId);
+    await expect(verifyCode(q, "double@example.com", code, [], false)).rejects.toThrow(/expired/);
+    await expect(verifyCode(q, "double@example.com", "000000", [], true)).rejects.toThrow(/expired/);
+    await q("update auth.magic_links set used_at = now() - interval '2 minutes' where email = 'double@example.com'");
+    await expect(verifyCode(q, "double@example.com", code, [], true)).rejects.toThrow(/expired/);
+  });
+});
