@@ -48,7 +48,7 @@ export function BrandingForm({ name, color, hasLogo }: { name: string; color: st
         <div className="mb-2 text-xs text-muted">Preview</div>
         <div className="flex items-center gap-3">
           <span className="rounded-md bg-gold px-4 py-2 font-cond text-sm font-extrabold uppercase tracking-[2px] text-on-gold">Button</span>
-          <span className="font-display text-xl text-gold">+0.21 s</span>
+          <span className="font-display text-xl text-gold">−0.21s</span>
           <span className="rounded-full bg-gold px-2 py-0.5 text-[11px] font-bold text-on-gold">Coach-logged</span>
         </div>
       </div>

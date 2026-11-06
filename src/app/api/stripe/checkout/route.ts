@@ -23,6 +23,9 @@ async function start(request: NextRequest, athleteId: string | null) {
     return row;
   });
   if (!m) return NextResponse.redirect(`${base}/family`, 303);
+  // ProLyt can switch online payments off per program
+  const [f] = await asUser(uid, (q) => q<{ on: boolean }>("select coalesce((features->>'payments')::boolean, true) on from orgs where id = $1", [m.org_id]));
+  if (!f?.on) return NextResponse.redirect(`${base}/family?chosen=1`, 303);
 
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",

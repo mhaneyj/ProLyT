@@ -79,3 +79,36 @@ describe("email sign-in", () => {
     }
   });
 });
+
+describe("6-digit sign-in codes", () => {
+  it("signs in with the emailed code, once", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const { code } = await requestLink(q, "Code@Example.com");
+    expect(code).toMatch(/^\d{6}$/);
+    const r = await verifyCode(q, "code@example.com", code);
+    expect(await userForSession(q, r!.session)).toBe(r!.userId);
+    await expect(verifyCode(q, "code@example.com", code)).rejects.toThrow(/expired/);
+  });
+  it("locks the code after 5 wrong tries", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const { code } = await requestLink(q, "guess@example.com");
+    const wrong = code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 4; i++) await expect(verifyCode(q, "guess@example.com", wrong)).rejects.toThrow(/isn't right/);
+    await expect(verifyCode(q, "guess@example.com", wrong)).rejects.toThrow(/Too many/);
+    await expect(verifyCode(q, "guess@example.com", code)).rejects.toThrow(/Too many/);
+  });
+  it("a new code replaces the old one", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const first = await requestLink(q, "twice@example.com");
+    const second = await requestLink(q, "twice@example.com");
+    if (first.code !== second.code) await expect(verifyCode(q, "twice@example.com", first.code)).rejects.toThrow();
+    expect(await verifyCode(q, "twice@example.com", second.code)).toBeTruthy();
+  });
+  it("turned-off accounts can't sign in and lose their sessions", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const r = await verifyCode(q, "off@example.com", (await requestLink(q, "off@example.com")).code);
+    await q("update auth.users set disabled_at = now() where id = $1", [r!.userId]);
+    expect(await userForSession(q, r!.session)).toBeNull();
+    await expect(verifyCode(q, "off@example.com", (await requestLink(q, "off@example.com")).code)).rejects.toThrow(/turned off/);
+  });
+});

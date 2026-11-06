@@ -127,7 +127,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         </span>
         {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Picked</Pill> : <span className="text-sm font-semibold text-gold">Choose →</span>}
       </Link>
-      {a.status === "pending" ? (
+      {a.status === "pending" && me.features.payments ? (
         <form action="/api/stripe/checkout" method="post">
           <input type="hidden" name="athlete_id" value={a.id} />
           <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[18px] font-extrabold uppercase tracking-[2px] text-on-gold">Finish payment</button>

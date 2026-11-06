@@ -70,7 +70,7 @@ async function register(form: FormData): Promise<RegisterState | void> {
   }
 
   revalidatePath("/", "layout"); // new program membership changes the header and menu
-  if (stripeConfigured && d.plan) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
+  if (stripeConfigured && me.features.payments && d.plan) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
   // Show the new athlete on home, with a welcome
   (await cookies()).set(KID_COOKIE, athleteId, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
   redirect("/family?welcome=1");
@@ -101,7 +101,7 @@ export async function connectAthlete(prev: RegisterState, form: FormData): Promi
     return { error: dbMessage(e), values };
   }
   revalidatePath("/", "layout");
-  if (stripeConfigured && d.plan) redirect(`/api/stripe/checkout?athlete_id=${d.athlete}`);
+  if (stripeConfigured && me.features.payments && d.plan) redirect(`/api/stripe/checkout?athlete_id=${d.athlete}`);
   (await cookies()).set(KID_COOKIE, d.athlete, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
   redirect("/family?connected=1");
 }

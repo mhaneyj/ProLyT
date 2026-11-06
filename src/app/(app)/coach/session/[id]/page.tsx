@@ -43,8 +43,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const here = roster.filter((r) => r.status === "present").length;
   const unmarked = roster.filter((r) => !r.status).length;
   const tests = Object.keys(METRICS);
+  const canRoster = me.perms.includes("roster.manage");
+  const canLog = me.perms.includes("results.log");
+  const voiceOn = me.features.voice;
   const t = sp.t && tests.includes(sp.t) ? sp.t : "40yd";
-  const mode = sp.mode === "quick" ? "quick" : "voice";
+  const mode = sp.mode === "quick" || !voiceOn ? "quick" : "voice";
   const q = (o: { t?: string; mode?: string }) => `?t=${o.t ?? t}&mode=${o.mode ?? mode}#results`;
   const medical = (r: R) => [r.allergies, r.conditions].filter((x) => x && x.toLowerCase() !== "none").join(" · ");
 
@@ -62,6 +65,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <div className="text-[11px] uppercase tracking-[1px] text-muted">Here</div>
           <div className="tabular font-display text-[26px]">{here}/{roster.length}</div>
         </div>
+        {canLog ? <>
         <a href="#results" className="rounded-[10px] border border-line bg-panel p-3 hover:border-gold">
           <div className="text-[11px] uppercase tracking-[1px] text-muted">To test</div>
           <div className="truncate font-display text-[22px] leading-[1.3] text-gold">{metricShort(t)}</div>
@@ -70,6 +74,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <div className="text-[11px] uppercase tracking-[1px] text-muted">Notes</div>
           <div className="font-display text-[22px] leading-[1.3] text-gold">Add</div>
         </a>
+        </> : null}
       </div>
 
       <div className="flex items-center justify-between">
@@ -109,7 +114,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         );
       })}
 
-      {others.length || roster.some((r) => !r.status) ? (
+      {canRoster && (others.length || roster.some((r) => !r.status)) ? (
         <details className="rounded-[12px] border border-line">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-semibold">Edit roster <Icon name="chevron" size={18} className="text-muted" /></summary>
           <div className="flex flex-col gap-2 px-4 pb-4">
@@ -134,17 +139,17 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         </details>
       ) : null}
 
-      {roster.length ? (
+      {roster.length && canLog ? (
         <section id="results" className="flex scroll-mt-4 flex-col gap-2">
           <SectionLabel>Log results</SectionLabel>
-          <div className="grid grid-cols-2 gap-1 rounded-full border border-line p-1" role="tablist" aria-label="How to log">
+          {voiceOn ? <div className="grid grid-cols-2 gap-1 rounded-full border border-line p-1" role="tablist" aria-label="How to log">
             {(["voice", "quick"] as const).map((x) => (
               <Link key={x} role="tab" aria-selected={mode === x} href={q({ mode: x })} scroll={false}
                 className={`flex min-h-10 items-center justify-center rounded-full text-sm font-bold ${mode === x ? "bg-gold text-on-gold" : "text-soft"}`}>
                 {x === "voice" ? "Voice" : "Quick entry"}
               </Link>
             ))}
-          </div>
+          </div> : null}
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1" role="tablist" aria-label="Test">
             {tests.map((x) => (
               <Link key={x} role="tab" aria-selected={x === t} href={q({ t: x })} scroll={false}
@@ -166,7 +171,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         </section>
       ) : null}
 
-      {roster.length ? (
+      {roster.length && canLog ? (
         <Card>
           <section id="notes" className="flex scroll-mt-4 flex-col gap-3">
             <SectionLabel>Coach note</SectionLabel>

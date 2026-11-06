@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getMe, homeFor } from "@/lib/auth";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
@@ -26,7 +25,6 @@ export default async function Welcome() {
         <p className="text-soft">Your progress, highlighted. Schedules, verified results and monthly reports for every athlete, in one place for families and coaches.</p>
         <LinkButton href="/login">Sign in</LinkButton>
         {brand ? <LinkButton href="/register" kind="ghost">Register an athlete</LinkButton> : null}
-        <Link href="/login?as=coach" className="min-h-11 py-2 text-center text-sm font-semibold text-soft hover:text-cream">Coach login →</Link>
         {brand ? <div className="mt-2 text-center"><PoweredBy /></div> : null}
       </div>
     </main>

@@ -35,7 +35,7 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
         <Card>
           <div className="font-semibold">You&apos;re signed in, but not set up as a coach here yet.</div>
           <p className="mt-1 text-sm text-soft">
-            {me.isPlatformAdmin ? "You're a ProLyt admin, so you can add yourself in one tap." : "Ask your program owner to add this email in Settings → Coaches. You'll have access as soon as they do."}
+            {me.isPlatformAdmin ? "You're a ProLyt admin, so you can add yourself in one tap." : "Ask your program owner for a coach invite link. Tap it and you're in."}
           </p>
           {me.isPlatformAdmin && me.orgId ? (
             <form action={makeMeOwner} className="mt-3">
@@ -98,7 +98,7 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
           {later.map(row)}
         </>
       ) : null}
-      <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton>
+      {me.perms.includes("sessions.post") || me.perms.includes("sessions.manage_all") ? <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton> : null}
     </>
   );
 }

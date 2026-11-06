@@ -33,14 +33,14 @@ export default async function FilmRoom({ params, searchParams }: { params: Promi
         <h1 className="font-display text-[34px] uppercase leading-none">Film room</h1>
       </div>
 
-      <details className="group rounded-[14px] border border-gold/60 bg-gold/5" open={film.length === 0}>
+      {a.family || me.perms.includes("film.manage") ? <details className="group rounded-[14px] border border-gold/60 bg-gold/5" open={film.length === 0}>
         <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 font-semibold">
           <span className="grid size-8 place-items-center rounded-full bg-gold text-on-gold"><Icon name="plus" size={18} /></span>
           Add a clip
           <Icon name="chevron" size={18} className="ml-auto text-gold transition-transform group-open:rotate-90" />
         </summary>
-        <div className="px-4 pb-4"><FilmForm athlete={id} canUpload={blobConfigured} /></div>
-      </details>
+        <div className="px-4 pb-4"><FilmForm athlete={id} canUpload={blobConfigured && me.features.film_uploads} /></div>
+      </details> : null}
 
       {film.length ? (
         <div role="tablist" aria-label="Film" className="flex gap-2">

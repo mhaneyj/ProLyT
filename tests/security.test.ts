@@ -352,7 +352,7 @@ describe("posting and booking sessions", () => {
     expect((await db.query("select coach_id from sessions where title='Owner assigned'")).rows).toEqual([{ coach_id: EMPLOYEE_COACH }]);
   });
   it("families can't post sessions", async () => {
-    await expect(post(PARENT_S)).rejects.toThrow(/Coaches only/);
+    await expect(post(PARENT_S)).rejects.toThrow(/permission to post/);
   });
   it("a parent books and cancels their own athlete, within capacity", async () => {
     await post(COACH, { title: "Two spots", capacity: 2 });
@@ -464,5 +464,50 @@ describe("ProLyt admin adds staff", () => {
   it("nobody else can use it", async () => {
     await expect(as(db, OWNER, () => db.query("select invite_staff($1, 'x@example.com', 'coach')", [ORG]))).rejects.toThrow(/admins only/);
     await expect(as(db, PARENT_A, () => db.query("select invite_staff($1, 'x@example.com', 'owner')", [ORG]))).rejects.toThrow(/admins only/);
+  });
+});
+
+describe("platform permissions", () => {
+  const BOSS = "10000000-0000-0000-0000-0000000000e1";
+  const LIMITED = "10000000-0000-0000-0000-0000000000e2";
+  const hash = (c: string) => c.repeat(64);
+  beforeAll(async () => {
+    await addUser(db, BOSS, "boss2@prolyt.test");
+    await db.query("insert into platform_admins (user_id) values ($1) on conflict do nothing", [BOSS]);
+    await addUser(db, LIMITED, "limited@example.com");
+  });
+  it("invite link: admin makes it, any email joins with those permissions", async () => {
+    await as(db, BOSS, () => db.query("select create_invite_link($1,'coach',array['results.log','roster.manage'],'Ltd',7,1,$2)", [ORG, hash("1")]));
+    expect((await as(db, null, () => db.query("select org_name, role, ok from invite_preview($1)", [hash("1")]))).rows[0]).toMatchObject({ role: "coach", ok: true });
+    await as(db, LIMITED, () => db.query("select accept_invite($1)", [hash("1")]));
+    expect((await db.query<{ permissions: string[] }>("select permissions from org_members where org_id=$1 and user_id=$2", [ORG, LIMITED])).rows[0].permissions).toEqual(["results.log", "roster.manage"]);
+    await expect(as(db, PARENT_B, () => db.query("select accept_invite($1)", [hash("1")]))).rejects.toThrow(/already been used/);
+  });
+  it("a coach without permission can't post sessions or see medical notes", async () => {
+    await expect(as(db, LIMITED, () => db.query("select create_sessions($1,'group','7v7','X',now()+interval '1 day',60,null,$2,null,null,1)", [ORG, LIMITED]))).rejects.toThrow(/permission to post/);
+    expect((await as(db, LIMITED, () => db.query("select * from medical_notes where athlete_id=$1", [jordan]))).rows).toHaveLength(0);
+    expect((await as(db, COACH, () => db.query("select * from medical_notes where athlete_id=$1", [jordan]))).rows.length).toBeGreaterThan(0);
+  });
+  it("owners can't hand out powers they don't have, or invite owners", async () => {
+    await as(db, BOSS, () => db.query("select set_member_permissions($1,$2,'owner',array['staff.manage','results.log'])", [ORG, OWNER]));
+    await expect(as(db, OWNER, () => db.query("select create_invite_link($1,'coach',array['billing.manage'],null,7,1,$2)", [ORG, hash("2")]))).rejects.toThrow(/only give permissions you have/);
+    await expect(as(db, OWNER, () => db.query("select create_invite_link($1,'owner',null,null,7,1,$2)", [ORG, hash("3")]))).rejects.toThrow(/admins can invite owners/);
+    await as(db, BOSS, () => db.query("select set_member_permissions($1,$2,'owner',null)", [ORG, OWNER]));
+  });
+  it("pausing a program cuts off its staff until it's turned back on", async () => {
+    await as(db, BOSS, () => db.query("select admin_set_program($1,'paused',null)", [ORG]));
+    expect((await as(db, COACH, () => db.query<{ ok: boolean }>("select is_staff($1) ok", [ORG]))).rows[0].ok).toBe(false);
+    await as(db, BOSS, () => db.query("select admin_set_program($1,'active','{\"voice\": false}')", [ORG]));
+    expect((await as(db, COACH, () => db.query<{ ok: boolean }>("select is_staff($1) ok", [ORG]))).rows[0].ok).toBe(true);
+    expect((await db.query("select features->>'voice' v, features->>'booking' b from orgs where id=$1", [ORG])).rows[0]).toEqual({ v: "false", b: "true" });
+  });
+  it("only admins see everyone, change admins or turn accounts off", async () => {
+    expect((await as(db, BOSS, () => db.query("select * from admin_people('limited', 10)"))).rows).toHaveLength(1);
+    await expect(as(db, OWNER, () => db.query("select * from admin_people(null, 10)"))).rejects.toThrow(/admins only/);
+    await expect(as(db, OWNER, () => db.query("select admin_disable_user($1, true)", [LIMITED]))).rejects.toThrow(/admins only/);
+    await expect(as(db, BOSS, () => db.query("select admin_set_platform_admin($1, false)", [BOSS]))).rejects.toThrow(/your own/);
+    await as(db, BOSS, () => db.query("select admin_disable_user($1, true)", [LIMITED]));
+    expect((await db.query<{ off: boolean }>("select disabled_at is not null off from auth.users where id=$1", [LIMITED])).rows[0].off).toBe(true);
+    expect((await as(db, BOSS, () => db.query<{ n: number }>("select count(*)::int n from admin_activity(50)"))).rows[0].n).toBeGreaterThan(3);
   });
 });

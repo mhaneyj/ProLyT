@@ -1,31 +1,17 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireMe, DEMO_COOKIE, SECURE_SESSION_COOKIE, DEV_SESSION_COOKIE } from "@/lib/auth";
-import { asService, isDemo } from "@/lib/db";
-import { endSession } from "@/lib/session";
+import { homeFor, requireMe } from "@/lib/auth";
+import { signOut } from "@/app/sign-out";
+import { isDemo } from "@/lib/db";
 import { brandById } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
 import { NavLinks, type NavItem } from "@/components/nav";
 import { familyKids } from "@/lib/kid";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
-async function signOut() {
-  "use server";
-  const jar = await cookies();
-  if (isDemo) jar.delete(DEMO_COOKIE);
-  else {
-    for (const name of [SECURE_SESSION_COOKIE, DEV_SESSION_COOKIE]) {
-      const token = jar.get(name)?.value;
-      if (token) await asService((q) => endSession(q, token));
-      jar.delete(name);
-    }
-  }
-  redirect("/");
-}
-
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireMe();
+  if (me.orgPaused && !me.isPlatformAdmin) redirect(homeFor(me));
   const brand = await brandById(me.orgId);
   const items: NavItem[] = [];
   const staff = me.roles.includes("coach") || me.roles.includes("owner");

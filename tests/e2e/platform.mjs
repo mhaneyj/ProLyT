@@ -79,9 +79,13 @@ async function signIn(sub, userName) {
   await page.reload();
   const accent = await page.evaluate(() => getComputedStyle(document.querySelector("header").parentElement.parentElement).getPropertyValue("--color-gold").trim().toUpperCase());
   check("app re-themes to new color", accent === "#E03A3E", accent);
+  await page.getByLabel(/Who it.s for/).fill("New coach");
+  await page.getByRole("button", { name: "Create invite link" }).click();
+  check("owner makes a coach invite link", /\/join\//.test(await page.getByLabel("Invite link").inputValue()));
+  await page.getByText(/Or invite by email/).click();
   await page.getByLabel("Coach's email").fill("newcoach@example.com");
   await page.getByRole("button", { name: "Invite coach" }).click();
-  check("coach invite saved", await seen(page.getByText(/joins as a coach/)));
+  check("coach invite by email still works", await seen(page.getByText(/joins as a coach/)));
   await shot(page, "p03-owner-settings");
   // put it back to gold for the rest of the demo
   await page.getByLabel("Brand color", { exact: true }).fill("#F8C40A");
@@ -128,6 +132,10 @@ async function signIn(sub, userName) {
   await page.getByRole("button", { name: "Create program" }).click();
   check("duplicate web address refused", await seen(page.getByText(/taken|Enter the owner/)));
   await shot(page, "p06-admin");
+  await page.getByRole("link", { name: /Game-Fit Loomis/ }).first().click();
+  await page.waitForURL(/\/admin\/programs\//);
+  check("admin sees program controls", await seen(page.getByText("Features")) && await seen(page.getByRole("button", { name: "Pause program" })));
+  await shot(page, "p07-admin-program");
   await page.getByRole("button", { name: "Add me as owner of Game-Fit Loomis" }).click();
   check("admin adds themself as owner", await seen(page.getByText(/You're now an owner here/)));
   {

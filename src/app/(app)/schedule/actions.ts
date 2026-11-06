@@ -6,6 +6,7 @@ import { asUser, dbMessage } from "@/lib/db";
 
 async function run(form: FormData, fn: "book_session" | "cancel_booking") {
   const me = await requireRole("guardian");
+  if (!me.features.booking) redirect(`/schedule?error=${encodeURIComponent("Booking is handled by your coach.")}`);
   const session = String(form.get("session") ?? "");
   const athlete = String(form.get("athlete") ?? "");
   try {

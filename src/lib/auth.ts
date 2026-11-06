@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { asService, asUser, isDemo } from "./db";
 import { userForSession } from "./session";
 import { brandBySlug, currentOrgSlug } from "./org";
+import type { Features, Perm } from "./perms";
+export { PERMS, FEATURES, type Perm, type Features } from "./perms";
 
 export const DEMO_COOKIE = "gf_demo_uid";
 // On HTTPS the "__Host-" prefix makes browsers lock the cookie to the exact address
@@ -22,7 +24,12 @@ export type Me = {
   roles: Role[];                 // roles in that program
   isPlatformAdmin: boolean;      // ProLyt staff
   programs: { id: string; name: string; slug: string }[];
+  perms: Perm[];                 // what this person may do in that program
+  orgPaused: boolean;
+  features: Features;
 };
+
+const ALL_ON: Features = { booking: true, film_uploads: true, voice: true, recruiting: true, payments: true };
 
 export const currentUserId = cache(async (): Promise<string | null> => {
   const jar = await cookies();
@@ -46,18 +53,29 @@ export const getMe = cache(async (): Promise<Me | null> => {
     const [p] = await q<{ full_name: string; email: string | null }>("select full_name, email from profiles where id = $1", [uid]);
     const [adm] = await q<{ ok: boolean }>("select is_platform_admin() ok");
 
+    const orgInfo = async (orgId: string | null) => {
+      if (!orgId) return { perms: [] as Perm[], paused: false, features: ALL_ON };
+      const [o] = await q<{ status: string; features: Partial<Features>; perms: Perm[] }>(
+        "select status, features, my_perms($1) perms from orgs where id = $1", [orgId]);
+      return { perms: o?.perms ?? [], paused: o?.status === "paused", features: { ...ALL_ON, ...(o?.features ?? {}) } };
+    };
     const programs = [...new Map(rows.map((r) => [r.org_id, { id: r.org_id, name: r.name, slug: r.slug }])).values()];
     // On a program's own web address, that program is the context, even before joining it
     // (no roles yet → sent to its registration page). On the bare ProLyt domain, use their first program.
     const org = hostBrand
       ? { id: hostBrand.id, name: hostBrand.name, slug: hostBrand.slug }
       : programs[0] ?? null;
+    const info = await orgInfo(org?.id ?? null);
     return {
+      perms: info.perms,
+      orgPaused: info.paused,
+      features: info.features,
       id: uid,
       name: p?.full_name || p?.email || "Member",
       email: p?.email ?? null,
       orgId: org?.id ?? null,
-      roles: [...new Set(rows.filter((r) => r.org_id === org?.id).map((r) => r.role))],
+      // A paused program gives no access until ProLyt turns it back on.
+      roles: info.paused ? [] : [...new Set(rows.filter((r) => r.org_id === org?.id).map((r) => r.role))],
       isPlatformAdmin: Boolean(adm?.ok),
       programs,
     };
@@ -82,7 +100,16 @@ export async function requirePlatformAdmin(): Promise<Me> {
   return me;
 }
 
+export const can = (me: Me, p: Perm) => me.perms.includes(p);
+
+export async function requirePerm(p: Perm): Promise<Me & { orgId: string }> {
+  const me = await requireMe();
+  if (!me.orgId || !can(me, p)) redirect(homeFor(me));
+  return me as Me & { orgId: string };
+}
+
 export function homeFor(me: Me) {
+  if (me.orgPaused && !me.isPlatformAdmin) return "/paused";
   if (me.roles.includes("owner")) return "/owner";
   if (me.roles.includes("coach")) return "/coach";
   if (me.roles.includes("guardian")) return "/family";

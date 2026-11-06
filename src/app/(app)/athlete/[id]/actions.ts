@@ -100,6 +100,7 @@ export async function addNote(form: FormData) {
 
 export async function shareProfile(form: FormData) {
   const me = await requireMe();
+  if (!me.features.recruiting) return;
   const athlete = String(form.get("athlete") ?? "");
   const { newShareToken, shareHash } = await import("@/lib/share");
   const token = newShareToken();

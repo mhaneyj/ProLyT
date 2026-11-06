@@ -60,7 +60,7 @@ export default async function Register() {
         <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">{existing.length ? "Or add a new athlete" : "New athlete"}</h2>
         <p className="mt-1 text-sm text-muted">About 3 minutes. Their ProLyt profile belongs to your family and goes with them to any program.</p>
       </div>
-      <RegisterForm plans={plans} stripe={stripeConfigured} />
+      <RegisterForm plans={plans} stripe={stripeConfigured && (me?.features.payments ?? true)} />
       <div className="text-center"><PoweredBy /></div>
     </main>
   );

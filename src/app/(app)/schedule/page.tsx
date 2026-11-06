@@ -40,7 +40,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <Title sub={isFamily ? "Tap Book to save a spot. Next 3 weeks." : "All sessions, next 3 weeks."}>Schedule</Title>
+      <Title sub={isFamily ? (me.features.booking ? "Tap Book to save a spot. Next 3 weeks." : "Next 3 weeks. Your coach books sessions for you.") : "All sessions, next 3 weeks."}>Schedule</Title>
       {error ? <Notice tone="bad">{error}</Notice> : null}
       {sessions.length === 0 ? <Empty title="Nothing scheduled">New sessions show up here as soon as coaches post them.</Empty> : null}
       {[...byDay].map(([day, list]) => (
@@ -66,7 +66,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                     </div>
                   </div>
                 </div>
-                {myKids.length && !started ? (
+                {myKids.length && !started && me.features.booking ? (
                   <div className="flex flex-col gap-2">
                     {myKids.map((k) => {
                       const booked = s.booked.includes(k.id);

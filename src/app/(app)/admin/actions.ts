@@ -1,4 +1,8 @@
 "use server";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { FEATURES, readPerms } from "@/lib/perms";
+import { inviteHash, newInviteToken, programOrigin } from "@/lib/invite";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth";
@@ -63,4 +67,90 @@ export async function inviteOwner(_: AdminState, form: FormData): Promise<AdminS
   return { ok: form.get("me") === "1"
     ? `${who} now an owner here. Open the program's app address to see the Dashboard and Today screens.`
     : `Invited as ${role}. ${email.data} gets access the moment they sign in with that email.` };
+}
+
+// ───────────── Platform control ─────────────
+
+const back = (path: string, msg: { ok?: string; error?: string }) =>
+  redirect(`${path}${path.includes("?") ? "&" : "?"}${msg.error ? `error=${encodeURIComponent(msg.error)}` : `ok=${encodeURIComponent(msg.ok ?? "Saved")}`}`);
+
+async function adminRun(path: string, ok: string, sql: string, params: unknown[]) {
+  const me = await requirePlatformAdmin();
+  let error: string | null = null;
+  try {
+    await asUser(me.id, (q) => q(sql, params));
+  } catch (e) {
+    error = dbMessage(e);
+  }
+  revalidatePath("/", "layout");
+  back(path, error ? { error } : { ok });
+}
+
+export async function setProgramStatus(form: FormData) {
+  const org = String(form.get("org")), status = form.get("status") === "paused" ? "paused" : "active";
+  await adminRun(`/admin/programs/${org}`, status === "paused" ? "Program paused. Its staff and families can't use the app until you turn it back on." : "Program is live again.",
+    "select admin_set_program($1, $2, null)", [org, status]);
+}
+
+export async function setProgramFeatures(form: FormData) {
+  const org = String(form.get("org"));
+  const features = Object.fromEntries(FEATURES.map(([k]) => [k, form.get(k) === "on"]));
+  await adminRun(`/admin/programs/${org}`, "Features saved.", "select admin_set_program($1, null, $2::jsonb)", [org, JSON.stringify(features)]);
+}
+
+export async function saveStaffPerms(form: FormData) {
+  const org = String(form.get("org")), user = String(form.get("user")), role = String(form.get("role"));
+  const to = String(form.get("back") ?? `/admin/programs/${org}`);
+  await adminRun(to, "Permissions saved.", "select set_member_permissions($1, $2, $3::member_role, $4::text[])", [org, user, role, readPerms(form)]);
+}
+
+export async function setMember(form: FormData) {
+  const org = String(form.get("org")), user = String(form.get("user")), role = String(form.get("role"));
+  const on = form.get("on") === "1";
+  const to = String(form.get("back") ?? `/admin/people/${user}`);
+  await adminRun(to, on ? `Added as ${role}.` : `Removed as ${role}.`, "select admin_set_member($1, $2, $3::member_role, $4, null)", [org, user, role, on]);
+}
+
+export async function setPlatformAdmin(form: FormData) {
+  const user = String(form.get("user")), on = form.get("on") === "1";
+  await adminRun(`/admin/people/${user}`, on ? "Now a ProLyt admin." : "ProLyt admin access removed.", "select admin_set_platform_admin($1, $2)", [user, on]);
+}
+
+export async function setDisabled(form: FormData) {
+  const user = String(form.get("user")), off = form.get("off") === "1";
+  await adminRun(`/admin/people/${user}`, off ? "Account turned off and signed out everywhere." : "Account turned back on.", "select admin_disable_user($1, $2)", [user, off]);
+}
+
+export async function createInvite(form: FormData) {
+  const me = await requirePlatformAdmin();
+  const org = String(form.get("org"));
+  const role = form.get("role") === "owner" ? "owner" : "coach";
+  const days = Math.min(Math.max(Number(form.get("days") ?? 7) || 7, 1), 90);
+  const uses = form.get("uses") === "many" ? null : 1;
+  const token = newInviteToken();
+  let error: string | null = null;
+  let slug = "", custom: string | null = null;
+  try {
+    await asUser(me.id, async (q) => {
+      await q("select create_invite_link($1, $2::member_role, $3::text[], $4, $5, $6, $7)",
+        [org, role, readPerms(form), String(form.get("label") ?? ""), days, uses, inviteHash(token)]);
+      const [o] = await q<{ slug: string; custom_domain: string | null }>("select slug, custom_domain from orgs where id = $1", [org]);
+      slug = o.slug; custom = o.custom_domain;
+    });
+  } catch (e) {
+    error = dbMessage(e);
+  }
+  if (error) back(`/admin/programs/${org}`, { error });
+  const h = await headers();
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
+  const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
+  const link = `${programOrigin({ slug, custom_domain: custom }, { proto, host })}/join/${token}`;
+  revalidatePath(`/admin/programs/${org}`);
+  // Shown once; only a hash is stored.
+  redirect(`/admin/programs/${org}?link=${encodeURIComponent(link)}#invites`);
+}
+
+export async function revokeInvite(form: FormData) {
+  const org = String(form.get("org"));
+  await adminRun(`/admin/programs/${org}`, "Invite link turned off.", "select revoke_invite_link($1)", [String(form.get("id"))]);
 }

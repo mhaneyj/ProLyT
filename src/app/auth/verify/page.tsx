@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { asService } from "@/lib/db";
-import { consumeLink, SESSION_DAYS } from "@/lib/session";
+import { BadCode, consumeLink, SESSION_DAYS } from "@/lib/session";
 import { sessionCookieName } from "@/lib/auth";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
@@ -17,7 +17,12 @@ async function finish(form: FormData) {
   "use server";
   const token = String(form.get("token") ?? "");
   const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
-  const result = await asService((q) => consumeLink(q, token, admins));
+  let result: { session: string } | null = null;
+  try {
+    result = await asService((q) => consumeLink(q, token, admins));
+  } catch (e) {
+    redirect("/login?error=" + encodeURIComponent(e instanceof BadCode ? e.message : "Something went wrong. Try again."));
+  }
   if (!result) redirect("/login?error=" + encodeURIComponent("That link expired or was already used. Send a new one."));
   const proto = ((await headers()).get("x-forwarded-proto") ?? "https").split(",")[0].trim();
   (await cookies()).set(sessionCookieName(proto === "https"), result.session, {
@@ -29,7 +34,7 @@ async function finish(form: FormData) {
   });
   // Only same-site paths, never another site
   const next = String(form.get("next") ?? "");
-  redirect(/^\/[a-z/]*$/.test(next) && !next.startsWith("//") ? next : "/home");
+  redirect(/^\/[a-z0-9/_-]*$/i.test(next) && !next.startsWith("//") ? next : "/home");
 }
 
 export default async function Verify({ searchParams }: { searchParams: Promise<{ token?: string; next?: string }> }) {

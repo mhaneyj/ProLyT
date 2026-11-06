@@ -18,14 +18,15 @@ const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ?
 const seen = (loc) => loc.first().waitFor({ state: "visible", timeout: 8000 }).then(() => true, () => false);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function linkFor(email) {
+async function logged(kind, email, after = 0) {
   for (let i = 0; i < 40; i++) {
-    const lines = readFileSync(LOG, "utf8").split("\n").filter((l) => l.includes(`[sign-in link] ${email} → `));
+    const lines = readFileSync(LOG, "utf8").split("\n").slice(after).filter((l) => l.includes(`[sign-in ${kind}] ${email} → `));
     if (lines.length) return lines.at(-1).split(" → ")[1].trim();
     await sleep(250);
   }
-  throw new Error("No sign-in link logged for " + email);
+  throw new Error(`No sign-in ${kind} logged for ` + email);
 }
+const logLines = () => readFileSync(LOG, "utf8").split("\n").length;
 
 async function signIn(sub, email, path = "/login") {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
@@ -33,14 +34,15 @@ async function signIn(sub, email, path = "/login") {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(url(sub, path));
+  const before = logLines();
   await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: /Email me a sign-in link/ }).click();
+  await page.getByRole("button", { name: /Email me a code/ }).click();
   await seen(page.getByText("Check your email"));
-  const link = await linkFor(email);
-  await page.goto(link);
-  await page.getByRole("button", { name: "Finish signing in" }).click();
+  const code = await logged("code", email, before - 1);
+  await page.getByLabel("Code").fill(code);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForLoadState("networkidle");
-  return { ctx, page, errors, link };
+  return { ctx, page, errors, code };
 }
 
 // ── 1. No demo: sign-in page asks for email, not sample people
@@ -55,36 +57,65 @@ async function signIn(sub, email, path = "/login") {
   await ctx.close();
 }
 
-// ── 2. Marcus (listed admin) signs in on the ProLyt domain and invites Josh
+// ── 2. Marcus (listed admin) signs in with a code and makes an owner invite link for Josh
+let ownerLink = "";
 {
-  const { ctx, page, errors, link } = await signIn("", "marcus@prolyt.test");
+  const { ctx, page, errors, code } = await signIn("", "marcus@prolyt.test");
   check("admin email lands on ProLyt admin", page.url().endsWith("/admin"), page.url());
-  await page.getByLabel("Add staff to Game-Fit Loomis").fill("josh@gamefit.test");
+  await page.getByRole("link", { name: /Game-Fit Loomis/ }).click();
+  await page.waitForURL(/\/admin\/programs\//);
   await page.getByLabel("Role").first().selectOption("owner");
-  await page.getByRole("button", { name: "Add", exact: true }).first().click();
-  check("owner invited", await seen(page.getByText(/Invited as owner/)));
-  await page.screenshot({ path: `${OUT}/l01-admin.png`, fullPage: true });
-  // the one-time link can't be reused
+  await page.getByLabel(/Who it.s for/).first().fill("Josh");
+  await page.getByRole("button", { name: "Create invite link" }).click();
+  await page.waitForURL(/link=/);
+  ownerLink = await page.getByLabel("Invite link").inputValue();
+  check("admin gets an owner invite link", /\/join\/[\w-]{20,}$/.test(ownerLink), ownerLink);
+  await page.screenshot({ path: `${OUT}/l01-admin-program.png`, fullPage: true });
+  // A used code can't sign in again
   const other = await browser.newContext();
   const p2 = await other.newPage();
-  await p2.goto(link);
-  await p2.getByRole("button", { name: "Finish signing in" }).click();
-  await p2.waitForURL(/\/login/);
-  check("used link can't sign in again", await seen(p2.getByText(/expired or was already used/)));
+  await p2.goto(url("", "/login"));
+  await p2.getByLabel("Email").fill("marcus@prolyt.test");
+  await p2.getByRole("button", { name: /Email me a code/ }).click();
+  await p2.getByLabel("Code").fill(code);
+  await p2.getByRole("button", { name: "Sign in" }).click();
+  check("an old code can't sign in again", await seen(p2.getByText(/isn't right|expired/)));
   await other.close();
   check("no client errors (admin)", errors.length === 0, errors.join("; "));
   await ctx.close();
 }
 
-// ── 3. Josh signs in at Game-Fit's address → owner; invites Coach Lem
+// Opens an invite link signed out, signs in from it, joins.
+async function joinVia(link, email) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(link);
+  await page.getByRole("link", { name: "Sign in to join" }).click();
+  const before = logLines();
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: /Email me a code/ }).click();
+  await page.getByLabel("Code").fill(await logged("code", email, before - 1));
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL(/\/join\//);
+  await page.getByRole("button", { name: /^Join / }).click();
+  await page.waitForLoadState("networkidle");
+  return { ctx, page, errors };
+}
+
+// ── 3. Josh taps the owner link, signs in with any email → owner; makes a coach invite link
+let coachLink = "";
 {
-  const { ctx, page, errors } = await signIn("gamefit-loomis", "josh@gamefit.test");
-  check("invited owner lands on dashboard", page.url().endsWith("/owner"), page.url());
+  const { ctx, page, errors } = await joinVia(ownerLink, "josh.personal@gmail.test");
+  check("invite link makes Josh owner (any email)", page.url().endsWith("/owner"), page.url());
   check("program branding shown", await seen(page.getByRole("img", { name: "Game-Fit Loomis" }).or(page.getByText("Game-Fit Loomis"))));
   await page.goto(url("gamefit-loomis", "/owner/settings"));
-  await page.getByLabel("Coach's email").fill("lem@gamefit.test");
-  await page.getByRole("button", { name: "Invite coach" }).click();
-  check("coach invited", await seen(page.getByText(/joins as a coach/)));
+  await page.getByLabel(/Who it.s for/).fill("Coach Lem");
+  await page.getByRole("button", { name: "Create invite link" }).click();
+  await page.waitForURL(/link=/);
+  coachLink = await page.getByLabel("Invite link").inputValue();
+  check("owner gets a coach invite link", /\/join\//.test(coachLink));
   await page.screenshot({ path: `${OUT}/l02-owner.png`, fullPage: true });
   await page.getByRole("button", { name: /Sign out/ }).click();
   await page.waitForURL(url("gamefit-loomis", "/"));
@@ -92,6 +123,11 @@ async function signIn(sub, email, path = "/login") {
   check("sign-out really ends the session", page.url().includes("/login"));
   check("no client errors (owner)", errors.length === 0, errors.join("; "));
   await ctx.close();
+  // single-use: a second person can't reuse Josh's owner link
+  const c2 = await browser.newContext(); const p2 = await c2.newPage();
+  await p2.goto(ownerLink);
+  check("used owner link can't be reused", await seen(p2.getByText(/already been used/)));
+  await c2.close();
 }
 
 // ── 4. A brand-new parent registers an athlete
@@ -120,11 +156,11 @@ async function signIn(sub, email, path = "/login") {
   await ctx.close();
 }
 
-// ── 5. Coach Lem signs in → coach, sees the new athlete exists only via sessions; earnings setup shown
+// ── 5. Coach Lem taps the coach link → coach
 {
-  const { ctx, page, errors } = await signIn("gamefit-loomis", "lem@gamefit.test", "/login?as=coach");
-  check("coach login page says Coach login", true);
+  const { ctx, page, errors } = await joinVia(coachLink, "lem@gamefit.test");
   check("invited coach lands on coach screen", page.url().endsWith("/coach"), page.url());
+  check("coach can post sessions by default", await seen(page.getByRole("link", { name: "+ New session" })));
   await page.goto(url("gamefit-loomis", "/coach/earnings"));
   check("contractor coach asked to set up payouts", await seen(page.getByRole("button", { name: /Set up payouts/ })));
   await page.goto(url("gamefit-loomis", "/owner"));
@@ -133,20 +169,39 @@ async function signIn(sub, email, path = "/login") {
   await ctx.close();
 }
 
-// ── ProLyt admin opens Coach login on the program's address and adds themself in one tap
+// ── 6. Admin controls: limit Lem's permissions, pause and unpause the program
 {
-  const { ctx, page } = await signIn("gamefit-loomis", "marcus@prolyt.test", "/login?as=coach");
-  check("admin sees one-tap self add", await seen(page.getByRole("button", { name: /Add me as owner/ })));
-  await page.getByRole("button", { name: /Add me as owner/ }).click();
-  check("admin is now on coach Today", await seen(page.getByRole("link", { name: "+ New session" })));
-  check("admin also has coach Earnings", await seen(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Earnings" })));
+  const { ctx, page } = await signIn("", "marcus@prolyt.test");
+  await page.getByRole("link", { name: "People" }).click();
+  await page.getByRole("searchbox").fill("lem");
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("link", { name: /lem@gamefit.test/ }).click();
+  await page.waitForURL(/\/admin\/people\//);
+  await page.getByLabel("Post their own sessions").uncheck();
+  await page.getByRole("button", { name: "Save permissions" }).click();
+  check("admin saves Lem's custom permissions", await seen(page.getByText("Permissions saved.")));
+  await page.screenshot({ path: `${OUT}/l05-admin-person.png`, fullPage: true });
+  await page.getByRole("link", { name: "Game-Fit Loomis" }).click();
+  await page.getByRole("button", { name: "Pause program" }).click();
+  check("admin pauses the program", await seen(page.getByText(/Program paused/)));
+  const lem = await signIn("gamefit-loomis", "lem@gamefit.test");
+  check("paused program shows a paused screen", await seen(lem.page.getByText(/is paused/)));
+  await page.getByRole("button", { name: "Turn program back on" }).click();
+  check("admin turns it back on", await seen(page.getByText(/live again/)));
+  await lem.page.goto(url("gamefit-loomis", "/coach"));
+  check("Lem is back, without permission to post sessions", await seen(lem.page.getByRole("heading", { name: "Today" })) && (await lem.page.getByRole("link", { name: "+ New session" }).count()) === 0);
+  await page.getByRole("link", { name: "Activity" }).click();
+  check("activity log shows the changes", await seen(page.getByText(/changed permissions in/)) && await seen(page.getByText(/joined/)));
+  await page.screenshot({ path: `${OUT}/l06-activity.png`, fullPage: true });
+  await lem.ctx.close();
   await ctx.close();
 }
 
-// ── Someone not invited tries Coach login
+// ── Someone not on staff opens the coach screen
 {
-  const { ctx, page } = await signIn("gamefit-loomis", "stranger@nowhere.test", "/login?as=coach");
-  check("uninvited coach sees how to get access", await seen(page.getByText(/not set up as a coach here yet/)));
+  const { ctx, page } = await signIn("gamefit-loomis", "stranger@nowhere.test");
+  await page.goto(url("gamefit-loomis", "/coach"));
+  check("non-staff sees how to get access", await seen(page.getByText(/not set up as a coach here yet/)));
   await ctx.close();
 }
 

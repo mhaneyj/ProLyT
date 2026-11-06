@@ -22,7 +22,7 @@ async function choose(form: FormData) {
     redirect(`/family/choose/${athlete}?error=${encodeURIComponent(dbMessage(e))}`);
   }
   revalidatePath("/family");
-  if (stripeConfigured) redirect(`/api/stripe/checkout?athlete_id=${athlete}`);
+  if (stripeConfigured && me.features.payments) redirect(`/api/stripe/checkout?athlete_id=${athlete}`);
   redirect("/family?chosen=1");
 }
 
@@ -64,7 +64,7 @@ export default async function ChoosePackage({ params, searchParams }: { params: 
             <div className="text-right">
               <div className="tabular font-display text-2xl">{money(p.price_cents)}<span className="font-sans text-xs text-muted">/mo</span></div>
               <button className="mt-1 min-h-11 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold">
-                {stripeConfigured ? "Choose & pay" : "Choose"}
+                {stripeConfigured && me.features.payments ? "Choose & pay" : "Choose"}
               </button>
             </div>
           </Card>

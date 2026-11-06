@@ -1,7 +1,11 @@
 "use server";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { requirePerm } from "@/lib/auth";
+import { readPerms } from "@/lib/perms";
+import { inviteHash, newInviteToken, programOrigin } from "@/lib/invite";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
 import { checkBrandColor } from "@/lib/domain/brand";
 
@@ -18,7 +22,7 @@ function sniff(buf: Buffer): "image/png" | "image/jpeg" | "image/webp" | null {
 }
 
 export async function saveBranding(_: FormState, form: FormData): Promise<FormState> {
-  const me = await requireRole("owner");
+  const me = await requirePerm("brand.manage");
   const name = String(form.get("name") ?? "").trim();
   const color = String(form.get("brand_color") ?? "").trim().toUpperCase();
   if (name.length < 2 || name.length > 80) return { error: "Program name should be 2 to 80 characters." };
@@ -54,7 +58,7 @@ const paySchema = z.object({
 });
 
 export async function saveCoachPay(_: FormState, form: FormData): Promise<FormState> {
-  const me = await requireRole("owner");
+  const me = await requirePerm("billing.manage");
   const p = paySchema.safeParse(Object.fromEntries(form));
   if (!p.success) return { error: "Enter a 1-on-1 share from 0 to 100% and a group rate from $0 to $1,000." };
   try {
@@ -74,7 +78,7 @@ const inviteSchema = z.object({
 });
 
 export async function inviteCoach(_: FormState, form: FormData): Promise<FormState> {
-  const me = await requireRole("owner");
+  const me = await requirePerm("staff.manage");
   const p = inviteSchema.safeParse(Object.fromEntries(form));
   if (!p.success) return { error: p.error.issues[0].message };
   try {
@@ -87,4 +91,54 @@ export async function inviteCoach(_: FormState, form: FormData): Promise<FormSta
   }
   revalidatePath("/owner/settings");
   return { ok: `Invite saved. ${p.data.email} joins as a coach the first time they sign in with that email.` };
+}
+
+// ───────────── Staff: invite links and permissions (needs "Invite and manage coaches") ─────────────
+
+const back = (msg: { ok?: string; error?: string }, extra = "") =>
+  redirect(`/owner/settings?${msg.error ? `error=${encodeURIComponent(msg.error)}` : `ok=${encodeURIComponent(msg.ok ?? "Saved")}`}${extra}#staff`);
+
+export async function coachInviteLink(form: FormData) {
+  const me = await requirePerm("staff.manage");
+  const token = newInviteToken();
+  let error: string | null = null, slug = "", custom: string | null = null;
+  try {
+    await asUser(me.id, async (q) => {
+      await q("select create_invite_link($1, 'coach', $2::text[], $3, $4, $5, $6)",
+        [me.orgId, readPerms(form), String(form.get("label") ?? ""), Number(form.get("days") ?? 7) || 7, form.get("uses") === "many" ? null : 1, inviteHash(token)]);
+      const [o] = await q<{ slug: string; custom_domain: string | null }>("select slug, custom_domain from orgs where id = $1", [me.orgId]);
+      slug = o.slug; custom = o.custom_domain;
+    });
+  } catch (e) {
+    error = dbMessage(e);
+  }
+  if (error) back({ error });
+  const h = await headers();
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
+  const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
+  redirect(`/owner/settings?link=${encodeURIComponent(`${programOrigin({ slug, custom_domain: custom }, { proto, host })}/join/${token}`)}#staff`);
+}
+
+export async function coachPerms(form: FormData) {
+  const me = await requirePerm("staff.manage");
+  try {
+    await asUser(me.id, (q) => q("select set_member_permissions($1, $2, 'coach', $3::text[])", [me.orgId, String(form.get("user")), readPerms(form)]));
+  } catch (e) {
+    back({ error: dbMessage(e) });
+  }
+  revalidatePath("/", "layout");
+  back({ ok: "Permissions saved." });
+}
+
+export async function removeCoach(form: FormData) {
+  const me = await requirePerm("staff.manage");
+  await asUser(me.id, (q) => q("delete from org_members where org_id = $1 and user_id = $2 and role = 'coach'", [me.orgId, String(form.get("user"))]));
+  revalidatePath("/", "layout");
+  back({ ok: "Coach removed." });
+}
+
+export async function turnOffInvite(form: FormData) {
+  const me = await requirePerm("staff.manage");
+  await asUser(me.id, (q) => q("select revoke_invite_link($1)", [String(form.get("id"))]));
+  back({ ok: "Invite link turned off." });
 }

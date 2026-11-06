@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { TZ } from "@/lib/domain/format";
@@ -10,7 +11,8 @@ export const metadata = { title: "New session" };
 
 export default async function NewSession() {
   const me = await requireRole("coach", "owner");
-  const isOwner = me.roles.includes("owner");
+  if (!me.perms.includes("sessions.post") && !me.perms.includes("sessions.manage_all")) redirect("/coach");
+  const isOwner = me.perms.includes("sessions.manage_all");
   const coaches = await asUser(me.id, (q) =>
     q<{ id: string; name: string }>(`
       select distinct on (m.user_id) m.user_id id, coalesce(p.full_name, p.email) name

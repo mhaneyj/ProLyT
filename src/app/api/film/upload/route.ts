@@ -18,6 +18,7 @@ export async function POST(request: Request) {
       onBeforeGenerateToken: async (pathname) => {
         const me = await getMe();
         if (!me) throw new Error("Sign in first");
+        if (!me.features.film_uploads) throw new Error("Uploads are turned off for this program. Paste a link instead.");
         const [kind, athlete = ""] = pathname.split("/");
         const photo = kind === "photos";
         if (!/^[0-9a-f-]{36}$/.test(athlete) || (!photo && !pathname.startsWith(uploadPrefix(athlete))) || (photo && !pathname.startsWith(`photos/${athlete}/`)))

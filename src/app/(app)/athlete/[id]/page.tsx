@@ -63,7 +63,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
           </div>
         )}
         <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,7,0)_25%,rgba(7,7,7,0.94)_88%)]" />
-        {a.family && blobConfigured ? <div className="absolute right-3 top-3"><PhotoButton athlete={a.id} has={a.has_photo} /></div> : null}
+        {a.family && blobConfigured && me.features.film_uploads ? <div className="absolute right-3 top-3"><PhotoButton athlete={a.id} has={a.has_photo} /></div> : null}
         <div className="relative flex items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{a.programs ?? "Athlete"}</div>
@@ -123,7 +123,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         </section>
       ) : null}
 
-      {a.family ? await (async () => {
+      {a.family && me.features.recruiting ? await (async () => {
         const h = await headers();
         const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
         const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
