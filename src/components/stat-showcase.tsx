@@ -16,8 +16,21 @@ function Badge({ s }: { s: { official: boolean; row: StatRow } }) {
   );
 }
 
+export type Rank = { metric: string; top_pct: number; cohort: string; n: number };
+
+function RankChip({ r, onColor = false }: { r?: Rank; onColor?: boolean }) {
+  if (!r || r.top_pct > 50) return null;
+  return (
+    <span title={`Compared with ${r.n} athletes on ProLyt (coach-recorded and verified numbers only)`}
+      className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-[11px] font-bold leading-snug ${onColor ? "bg-white text-ink" : "mt-1 bg-gold/15 text-gold"}`}>
+      Top {r.top_pct}% · {r.cohort}
+    </span>
+  );
+}
+
 /** The athlete's numbers, recruiter-first: measurables, a hero speed stat, featured tiles, then everything else. */
-export function StatShowcase({ rows, picks, empty }: { rows: StatRow[]; picks?: string[] | null; empty?: React.ReactNode }) {
+export function StatShowcase({ rows, picks, empty, ranks = [] }: { rows: StatRow[]; picks?: string[] | null; empty?: React.ReactNode; ranks?: Rank[] }) {
+  const rank = (s: { metric: string; official: boolean }) => (s.official ? ranks.find((r) => r.metric === s.metric) : undefined);
   const { featured, rest } = showcase(rows, picks);
   const body = (k: string) => latestBody(rows.filter((r) => r.metric === k));
   const measurables = (["height_in", "weight_lb", "wingspan_in"] as const).map((k) => ({ k, r: body(k) })).filter((x) => x.r);
@@ -41,6 +54,7 @@ export function StatShowcase({ rows, picks, empty }: { rows: StatRow[]; picks?: 
           style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--color-gold) 85%, #000) 0%, color-mix(in srgb, var(--color-gold) 35%, #0b0b0b) 70%, #0b0b0b 100%)" }}>
           <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-white/85">{metricLabel(top.metric)}</div>
           <div className="tabular font-display text-[64px] leading-none text-white">{formatValue(top.metric, top.value)}</div>
+          <div className="mb-2 mt-1"><RankChip r={rank(top)} onColor /></div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 rounded-full bg-black/35 px-2.5 py-1 text-[11px] w-fit">
             <Badge s={top} /><span className="text-white/60">{shortDate(top.row.recorded_at)}{top.row.org ? ` · ${top.row.org}` : ""}</span>
           </div>
@@ -53,6 +67,7 @@ export function StatShowcase({ rows, picks, empty }: { rows: StatRow[]; picks?: 
               <div className="text-[10px] uppercase tracking-[1.5px] text-muted">{METRICS[s.metric]?.short ?? s.metric}</div>
               <div className="tabular font-display text-[30px] leading-none">{formatValue(s.metric, s.value)}</div>
               <Badge s={s} />
+              <RankChip r={rank(s)} />
             </div>
           ))}
         </div>
@@ -61,7 +76,7 @@ export function StatShowcase({ rows, picks, empty }: { rows: StatRow[]; picks?: 
         <ul className="divide-y divide-line rounded-[12px] border border-line bg-panel">
           {rest.map((s) => (
             <li key={s.metric} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <span className="text-sm">{metricLabel(s.metric)}</span>
+              <span className="flex flex-col gap-0.5 text-sm">{metricLabel(s.metric)}<RankChip r={rank(s)} /></span>
               <span className="flex items-baseline gap-2"><span className="tabular font-display text-[20px]">{formatValue(s.metric, s.value)}</span><Badge s={s} /></span>
             </li>
           ))}

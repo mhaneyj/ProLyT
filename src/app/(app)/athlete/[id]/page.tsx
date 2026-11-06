@@ -4,8 +4,8 @@ import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { ageOn, dayTime } from "@/lib/domain/format";
 import { METRICS, SHOWCASE_ORDER, type Source } from "@/lib/domain/metrics";
-import { StatShowcase } from "@/components/stat-showcase";
-import { NoteCard } from "@/components/athlete";
+import { StatShowcase, type Rank } from "@/components/stat-showcase";
+import { NoteCard, ProfileCircle } from "@/components/athlete";
 import { Icon } from "@/components/icons";
 import { Player } from "@/components/player";
 import { Notice, Pill, SectionLabel } from "@/components/ui";
@@ -33,6 +33,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
   const d = await asUser(me.id, async (q) => ({
     results: await q<R>(`select r.metric, r.value::float value, r.source, r.method, r.recorded_at, o.name org, r.proof_url
       from results r left join orgs o on o.id = r.org_id where r.athlete_id = $1 and r.voided_at is null`, [id]),
+    ranks: await q<Rank>("select * from stat_ranks($1)", [id]),
     stints: await q<Stint>(`
       select s.id, s.org_id, coalesce(o.name, s.org_name) org, coalesce(t.name, s.team_name) team, s.team_id, coalesce(s.level, t.level) level,
         s.position, s.jersey, s.started_on::text, s.ended_on::text, s.source, (s.org_id is not null and has_perm(s.org_id, 'roster.manage')) mine
@@ -91,16 +92,10 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         </div>
       ) : null}
 
-      <div className="relative flex min-h-[260px] flex-col justify-end overflow-hidden rounded-[14px] border border-line p-[18px]" style={{ background: heroBackground(a.theme_color, false) }}>
-        {a.has_photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/photo/${a.id}`} alt={`${a.first_name} ${a.last_name}`} className="absolute inset-0 size-full object-cover" />
-        ) : (
-          <span aria-hidden="true" className="absolute right-4 top-2 font-display text-[110px] leading-none text-white/[0.12]">{a.first_name[0]}{a.last_name[0]}</span>
-        )}
-        {a.has_photo ? <div aria-hidden="true" className="absolute inset-0" style={{ background: heroBackground(a.theme_color, true) }} /> : null}
-        {a.has_photo ? <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,7,0)_35%,rgba(7,7,7,0.92)_92%)]" /> : null}
-        {a.family ? <div className="absolute right-3 top-3"><PhotoButton athlete={a.id} has={a.has_photo} /></div> : null}
+      <div className="relative flex flex-col gap-4 overflow-hidden rounded-[14px] border border-line p-[18px]" style={{ background: heroBackground(a.theme_color, false) }}>
+        <ProfileCircle src={a.has_photo ? `/api/photo/${a.id}` : null} first={a.first_name} last={a.last_name} size={104}>
+          {a.family ? <PhotoButton athlete={a.id} has={a.has_photo} compact /> : null}
+        </ProfileCircle>
         <div className="relative flex flex-col gap-1">
           <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-cream/80">{[sportName(a.sport), a.programs].filter(Boolean).join(" · ")}</div>
           <h1 className="font-display text-[38px] uppercase leading-none">{a.first_name} {a.last_name}</h1>
@@ -129,7 +124,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         <SectionLabel right={a.family ? <Link href={`/athlete/${a.id}/edit#featured`} className="text-sm font-semibold">Pick featured</Link> : null}>Stats</SectionLabel>
         {sp.stat === "added" ? <Notice tone="good">Stat added. It shows as self-reported until a coach records it.</Notice> : null}
         {sp.stat_error ? <Notice tone="bad">{sp.stat_error}</Notice> : null}
-        <StatShowcase rows={d.results} picks={a.featured_metrics}
+        <StatShowcase rows={d.results} picks={a.featured_metrics} ranks={d.ranks}
           empty={<p className="text-sm text-muted">{a.family ? `No numbers yet. Coaches' testing shows up here automatically, or add ${a.self ? "your" : a.first_name + "'s"} 40, 100m, vertical and more below.` : "No numbers yet."}</p>} />
         {a.family ? (
           <details className="rounded-[12px] border border-line" open={!d.results.length}>

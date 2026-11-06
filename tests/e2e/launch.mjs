@@ -518,6 +518,53 @@ let coachLink = "";
   await p.ctx.close();
 }
 
+// ── 16. Posts with photos; Story graphic for sharing; circle profile photo
+{
+  // Password sign-in (set in section 12): email codes are limited to 8 an hour per address.
+  const p = await (async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(url("gamefit-loomis", "/login"));
+    await page.getByLabel("Email").fill("parent@family.test");
+    await page.getByLabel("Password").fill("Loomis-Mom-77");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.waitForURL((u) => u.pathname === "/family", { timeout: 15000 });
+    return { ctx, page, errors };
+  })();
+  await p.page.goto(url("gamefit-loomis", "/feed"));
+  await p.page.locator('input[type=file][accept="image/*"]').setInputFiles(["public/icon-512.png", "public/apple-icon.png"]);
+  check("photo previews show before posting", await seen(p.page.getByRole("img", { name: "Photo 2" })));
+  await p.page.getByLabel("Post").fill("Camp day two");
+  await p.page.getByRole("button", { name: "Post", exact: true }).click();
+  const post = p.page.getByRole("article").filter({ hasText: "Camp day two" });
+  check("post with 2 photos appears in the feed", await seen(post) && (await post.getByRole("img", { name: /Photo/ }).count()) === 2);
+  check("photos load", await post.getByRole("img", { name: "Photo 1" }).evaluate((i) => new Promise((r) => i.complete ? r(i.naturalWidth > 0) : i.addEventListener("load", () => r(i.naturalWidth > 0)))));
+  check("family sees a Share button on their own post", await seen(post.getByRole("button", { name: "Share" })));
+  const pr = p.page.getByRole("article").filter({ hasText: "New personal record" }).first();
+  const prId = await p.page.evaluate(async () => {
+    const a = [...document.querySelectorAll("article")].find((x) => /New personal record/i.test(x.textContent));
+    return a?.querySelector('a[href^="/post/"]')?.getAttribute("href")?.split("/").pop() ?? null;
+  });
+  if (prId) {
+    const card = await p.page.evaluate(async (u) => { const r = await fetch(u); return `${r.status} ${r.headers.get("content-type")}`; }, `/api/post/${prId}/card`);
+    check("PR Story graphic renders as an image", card.startsWith("200 image/png"), card);
+  } else {
+    const any = await post.evaluate((a) => a.querySelector('a[href^="/post/"]')?.getAttribute("href")?.split("/").pop());
+    const card = await p.page.evaluate(async (u) => { const r = await fetch(u); return `${r.status} ${r.headers.get("content-type")}`; }, `/api/post/${any}/card`);
+    check("Story graphic renders as an image", card.startsWith("200 image/png"), card);
+  }
+  void pr;
+  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await p.page.waitForURL(/\/athlete\//);
+  const circle = await p.page.getByRole("img", { name: "Avery Real" }).evaluate((i) => { const r = i.getBoundingClientRect(); return Math.round(r.width) + "x" + Math.round(r.height) + " " + getComputedStyle(i.parentElement).borderRadius; });
+  const [w, h] = circle.split(" ")[0].split("x").map(Number);
+  check("profile photo is a small circle", w === h && w < 130 && parseFloat(circle.split(" ")[1]) >= w / 2, circle);
+  check("no client errors (posts with photos)", p.errors.length === 0, p.errors.join("; "));
+  await p.ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

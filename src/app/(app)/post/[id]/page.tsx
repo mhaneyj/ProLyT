@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { ago } from "@/lib/domain/format";
-import type { FeedPost } from "@/lib/social";
+import { withMedia, type FeedPost } from "@/lib/social";
 import { PostCard } from "@/components/post-card";
 import { Notice } from "@/components/ui";
 import { addComment, deleteComment, reportPost } from "../../feed/actions";
@@ -18,10 +18,11 @@ export default async function Post({ params, searchParams }: { params: Promise<{
   const me = await requireMe();
   const data = await asUser(me.id, async (q) => {
     // The feed read model, positioned at this post (row-level security hides posts this person can't see).
-    const [single] = await q<FeedPost>(`select f.* from posts x, lateral feed('all', x.created_at + interval '1 microsecond', x.athlete_id, x.org_id, 5) f
+    const [single] = await q<Omit<FeedPost, "media">>(`select f.* from posts x, lateral feed('all', x.created_at + interval '1 microsecond', x.athlete_id, x.org_id, 5) f
       where x.id = $1 and f.id = x.id`, [id]);
     if (!single) return null;
-    return { p: single, comments: await q<C>("select * from post_comments($1)", [id]) };
+    const [withM] = await withMedia(q, [single]);
+    return { p: withM, comments: await q<C>("select * from post_comments($1)", [id]) };
   });
   if (!data) notFound();
   const { p, comments } = data;

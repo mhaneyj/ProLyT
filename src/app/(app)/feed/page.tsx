@@ -30,7 +30,7 @@ export default async function Feed({ searchParams }: { searchParams: Promise<{ t
         ))}
       </nav>
       {sp.reported ? <Notice tone="good">Thanks. ProLyt&apos;s safety team will review it.</Notice> : null}
-      {as.length && !before ? <Composer options={as} canPhoto={blobConfigured && me.features.film_uploads} /> : null}
+      {as.length && !before ? <Composer options={as} canVideo={blobConfigured && me.features.film_uploads} /> : null}
       {posts.length === 0 ? (
         scope === "following"
           ? <Empty title="Your feed is quiet">Follow athletes and programs to see their PRs, highlights and news here.<div className="mt-3"><LinkButton href="/discover">Find athletes</LinkButton></div></Empty>

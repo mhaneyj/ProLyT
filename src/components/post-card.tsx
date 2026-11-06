@@ -4,6 +4,7 @@ import { ago } from "@/lib/domain/format";
 import { formatValue, metricLabel } from "@/lib/domain/metrics";
 import { Player } from "./player";
 import { Icon } from "./icons";
+import { ShareButton } from "./share-button";
 import { deletePost, reportPost, toggleProps } from "@/app/(app)/feed/actions";
 
 function Who({ p }: { p: FeedPost }) {
@@ -32,6 +33,25 @@ function Who({ p }: { p: FeedPost }) {
         <span className="block truncate text-[12px] text-muted">Program · {ago(p.created_at)}</span>
       </span>
     </span>
+  );
+}
+
+function Media({ p }: { p: FeedPost }) {
+  const photos = (p.media ?? []).filter((m) => m.kind === "photo");
+  const video = (p.media ?? []).find((m) => m.kind === "video");
+  return (
+    <>
+      {video ? <video controls playsInline preload="metadata" src={`/api/media/${video.id}`} className="aspect-video w-full rounded-lg border border-line bg-black" aria-label="Video" /> : null}
+      {photos.length ? (
+        <div className={`grid gap-1 overflow-hidden rounded-lg ${photos.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {photos.map((m, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={m.id} src={`/api/media/${m.id}`} alt={`Photo ${i + 1}`} loading="lazy"
+              className={`w-full object-cover ${photos.length === 1 ? "max-h-[520px]" : photos.length === 3 && i === 0 ? "col-span-2 aspect-[2/1]" : "aspect-square"}`} />
+          ))}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -78,6 +98,7 @@ export function PostCard({ p, back, full = false }: { p: FeedPost; back: string;
       {p.film_id && p.storage_path ? <Player id={p.film_id} storagePath={p.storage_path} title={p.body ?? "Clip"} start={p.start_s ?? undefined} end={p.end_s ?? undefined} /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {p.photo_path ? <img src={`/api/post-photo/${p.id}`} alt="" loading="lazy" className="w-full rounded-lg border border-line object-cover" /> : null}
+      <Media p={p} />
 
       <div className="flex items-center gap-1 border-t border-line pt-2">
         <form action={toggleProps}>
@@ -91,6 +112,8 @@ export function PostCard({ p, back, full = false }: { p: FeedPost; back: string;
             <Icon name="chat" size={18} /> {p.comments ? <span className="tabular">{p.comments}</span> : p.can_comment ? "Comment" : null}
           </Link>
         ) : null}
+        {p.mine ? <ShareButton postId={p.id} media={p.media ?? []}
+          text={[p.body, p.kind === "pr" && p.metric && p.value != null ? `New PR: ${metricLabel(p.metric)} ${formatValue(p.metric, Number(p.value))}` : null, "#ProLyt"].filter(Boolean).join("\n")} /> : null}
       </div>
     </article>
   );

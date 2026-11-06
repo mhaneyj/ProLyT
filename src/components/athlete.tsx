@@ -110,3 +110,17 @@ export function Checklist({ items }: { items: { done: boolean; label: string; hr
     </div>
   );
 }
+
+/** The athlete's profile picture as a circle (initials when there's no photo). */
+export function ProfileCircle({ src, first, last, size = 96, children }: { src: string | null; first: string; last: string; size?: number; children?: ReactNode }) {
+  return (
+    <div className="relative flex-none" style={{ width: size, height: size }}>
+      <div className="grid size-full place-items-center overflow-hidden rounded-full border-[3px] border-white/85 bg-black/35 shadow-[0_6px_24px_rgba(0,0,0,0.45)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {src ? <img src={src} alt={`${first} ${last}`} className="size-full object-cover" />
+          : <span aria-hidden="true" className="font-display leading-none text-white/90" style={{ fontSize: size * 0.38 }}>{first[0]}{last[0]}</span>}
+      </div>
+      {children ? <div className="absolute -bottom-1 -right-1">{children}</div> : null}
+    </div>
+  );
+}

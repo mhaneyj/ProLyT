@@ -749,3 +749,30 @@ describe("ProLyt network: feed, follows, props, comments", () => {
     expect(n).toEqual({ followers: 1, following: true });
   });
 });
+
+describe("stat comparisons", () => {
+  it("ranks only against 20+ listed athletes, official numbers only, narrowest group first", async () => {
+    // 24 listed class-of-2030 WRs with coach-logged 40s from 4.50 to 5.65
+    const kids: string[] = [];
+    for (let i = 0; i < 24; i++) {
+      const id = (await db.query<{ id: string }>(
+        "insert into athletes (first_name, last_name, birth_date, position, grad_year, parent_approved_at, created_by) values ($1,'Rank',$2,'WR',2030,now(),$3) returning id",
+        [`R${i}`, yearsAgo(15), PARENT_A])).rows[0].id;
+      kids.push(id);
+      await db.query("insert into results (athlete_id, org_id, metric, value, unit, source) values ($1,$2,'40yd',$3,'s','coach_logged')", [id, ORG, (4.5 + i * 0.05).toFixed(2)]);
+    }
+    const ranks = async (id: string) => (await as(db, PARENT_A, () => db.query<{ metric: string; top_pct: number; cohort: string; n: number }>("select * from stat_ranks($1)", [id]))).rows;
+    const fastest = (await ranks(kids[0])).find((r) => r.metric === "40yd")!;
+    expect(fastest).toMatchObject({ top_pct: 5, cohort: "Class of 2030 WR", n: 24 });
+    expect((await ranks(kids[11])).find((r) => r.metric === "40yd")!.top_pct).toBe(50);
+    // A self-reported 4.30 doesn't count
+    await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'40yd',4.30,'s','self_reported')", [kids[23]]);
+    expect((await ranks(kids[23])).find((r) => r.metric === "40yd")!.top_pct).toBe(100);
+    // Too few to compare (vertical: nobody else) → nothing
+    await db.query("insert into results (athlete_id, org_id, metric, value, unit, source) values ($1,$2,'vertical',33,'in','coach_logged')", [kids[0], ORG]);
+    expect((await ranks(kids[0])).find((r) => r.metric === "vertical")).toBeUndefined();
+    // Taking an athlete off the network removes them from everyone's comparisons
+    await db.query("update athletes set in_network = false where id = any($1::uuid[])", [kids.slice(0, 6)]);
+    expect((await ranks(kids[6])).find((r) => r.metric === "40yd")).toBeUndefined(); // 18 left + self < 20
+  });
+});
