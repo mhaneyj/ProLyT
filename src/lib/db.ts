@@ -40,7 +40,9 @@ const gs = globalThis as unknown as { __gfSchema?: Promise<void> };
 async function pool(): Promise<Pool> {
   if (!g.__gfPool) {
     const { Pool } = await import("pg");
-    g.__gfPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 10_000 });
+    // Neon URLs say sslmode=require; pg treats that as verify-full and logs a warning on every start. Say it explicitly.
+    const url = (process.env.DATABASE_URL ?? "").replace(/sslmode=(require|prefer|verify-ca)\b/, "sslmode=verify-full");
+    g.__gfPool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 10_000 });
   }
   gs.__gfSchema ??= ensureSchema(g.__gfPool).catch((e) => {
     gs.__gfSchema = undefined; // try again on the next request

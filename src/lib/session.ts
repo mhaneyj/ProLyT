@@ -7,7 +7,7 @@ export type Run = <T = Record<string, unknown>>(sql: string, params?: unknown[])
 export const LINK_MINUTES = 15;
 export const SESSION_DAYS = 90;
 export const MAX_CODE_TRIES = 5;
-export const MAX_LINKS_PER_HOUR = 5;
+export const MAX_LINKS_PER_HOUR = 8;
 
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const newToken = () => randomBytes(32).toString("base64url");
@@ -28,8 +28,6 @@ export async function requestLink(q: Run, rawEmail: string): Promise<{ email: st
   if (n >= MAX_LINKS_PER_HOUR) throw new RateLimited("Too many sign-in links. Try again in an hour.");
   const token = newToken();
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  // An older unused code for this email stops working once a new one is sent.
-  await q("update auth.magic_links set used_at = now() where email = $1 and used_at is null", [email]);
   await q("insert into auth.magic_links (token_hash, code_hash, email, expires_at) values ($1, $2, $3, now() + make_interval(mins => $4))",
     [hash(token), hash(`${email}:${code}`), email, LINK_MINUTES]);
   return { email, token, code };
@@ -37,22 +35,32 @@ export async function requestLink(q: Run, rawEmail: string): Promise<{ email: st
 
 export class BadCode extends Error {}
 
-/** Signs in with the 6-digit code from the email. Five wrong tries and the code is dead. */
+/**
+ * Signs in with a 6-digit code from the email. Any code sent in the last 15 minutes works
+ * (people often tap "send" twice and type the first one). Five wrong tries across all of
+ * them and they all stop working.
+ */
 export async function verifyCode(q: Run, rawEmail: string, rawCode: string, adminEmails: string[] = []) {
   const email = normalizeEmail(rawEmail);
   const code = rawCode.replace(/\D/g, "");
-  if (!email || code.length !== 6) throw new BadCode("Enter the 6-digit code from the email.");
-  const [link] = await q<{ token_hash: string; code_hash: string; attempts: number }>(
-    "select token_hash, code_hash, attempts from auth.magic_links where email = $1 and used_at is null and expires_at > now() and code_hash is not null order by created_at desc limit 1",
+  if (!email) throw new BadCode("Enter the email you used.");
+  if (code.length !== 6) throw new BadCode("Enter the 6-digit code from the email.");
+  const links = await q<{ token_hash: string; code_hash: string; attempts: number }>(
+    "select token_hash, code_hash, attempts from auth.magic_links where email = $1 and used_at is null and expires_at > now() and code_hash is not null order by created_at desc limit 10",
     [email]);
-  if (!link) throw new BadCode("That code expired. Send a new one.");
-  if (link.attempts >= MAX_CODE_TRIES) throw new BadCode("Too many tries. Send a new code.");
-  if (link.code_hash !== hash(`${email}:${code}`)) {
-    await q("update auth.magic_links set attempts = attempts + 1 where token_hash = $1", [link.token_hash]);
-    const left = MAX_CODE_TRIES - link.attempts - 1;
+  if (!links.length) throw new BadCode("That code expired. Send a new one.");
+  const tries = Math.max(...links.map((l) => l.attempts));
+  if (tries >= MAX_CODE_TRIES) throw new BadCode("Too many tries. Send a new code.");
+  const hit = links.find((l) => l.code_hash === hash(`${email}:${code}`));
+  if (!hit) {
+    await q("update auth.magic_links set attempts = attempts + 1 where email = $1 and used_at is null and expires_at > now()", [email]);
+    const left = MAX_CODE_TRIES - tries - 1;
     throw new BadCode(left > 0 ? `That code isn't right. ${left} ${left === 1 ? "try" : "tries"} left.` : "Too many tries. Send a new code.");
   }
-  return finishSignIn(q, link.token_hash, adminEmails);
+  const r = await finishSignIn(q, hit.token_hash, adminEmails);
+  // One sign-in uses up every code sent to this email
+  await q("update auth.magic_links set used_at = now() where email = $1 and used_at is null", [email]);
+  return r;
 }
 
 /**

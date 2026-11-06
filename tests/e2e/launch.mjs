@@ -37,10 +37,11 @@ async function signIn(sub, email, path = "/login") {
   const before = logLines();
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: /Email me a code/ }).click();
-  await seen(page.getByText("Check your email"));
+  await seen(page.getByText("Enter your code"));
   const code = await logged("code", email, before - 1);
   await page.getByLabel("Code").fill(code);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 15000 }).catch(() => undefined);
   await page.waitForLoadState("networkidle");
   return { ctx, page, errors, code };
 }
@@ -98,7 +99,7 @@ async function joinVia(link, email) {
   await page.getByRole("button", { name: /Email me a code/ }).click();
   await page.getByLabel("Code").fill(await logged("code", email, before - 1));
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/join\//);
+  await page.waitForURL(/\/join\//, { timeout: 15000 });
   await page.getByRole("button", { name: /^Join / }).click();
   await page.waitForLoadState("networkidle");
   return { ctx, page, errors };

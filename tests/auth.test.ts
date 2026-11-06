@@ -97,12 +97,17 @@ describe("6-digit sign-in codes", () => {
     await expect(verifyCode(q, "guess@example.com", wrong)).rejects.toThrow(/Too many/);
     await expect(verifyCode(q, "guess@example.com", code)).rejects.toThrow(/Too many/);
   });
-  it("a new code replaces the old one", async () => {
+  it("sent twice? either code works, and signing in uses up both", async () => {
     const { verifyCode } = await import("../src/lib/session");
     const first = await requestLink(q, "twice@example.com");
     const second = await requestLink(q, "twice@example.com");
-    if (first.code !== second.code) await expect(verifyCode(q, "twice@example.com", first.code)).rejects.toThrow();
-    expect(await verifyCode(q, "twice@example.com", second.code)).toBeTruthy();
+    expect(await verifyCode(q, "twice@example.com", first.code)).toBeTruthy();
+    await expect(verifyCode(q, "twice@example.com", second.code)).rejects.toThrow(/expired/);
+  });
+  it("accepts a code typed with spaces or pasted with dashes", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const { code } = await requestLink(q, "spaces@example.com");
+    expect(await verifyCode(q, " Spaces@Example.com ", `${code.slice(0, 3)} - ${code.slice(3)}`)).toBeTruthy();
   });
   it("turned-off accounts can't sign in and lose their sessions", async () => {
     const { verifyCode } = await import("../src/lib/session");

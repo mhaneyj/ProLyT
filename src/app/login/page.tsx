@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { asService, isDemo } from "@/lib/db";
@@ -6,7 +5,7 @@ import { BadCode, requestLink, verifyCode, RateLimited, SESSION_DAYS } from "@/l
 import { sendSignInEmail } from "@/lib/email";
 import { DEMO_COOKIE, sessionCookieName } from "@/lib/auth";
 import { DEMO_USERS } from "@/lib/demo-seed";
-import { Button, Card, Kicker, Notice } from "@/components/ui";
+import { Button, Kicker, Notice } from "@/components/ui";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
@@ -53,7 +52,8 @@ async function checkCode(form: FormData) {
   "use server";
   const next = safeNext(form.get("next"));
   const jar = await cookies();
-  const email = jar.get(EMAIL_COOKIE)?.value ?? "";
+  // The email comes from the form (prefilled), so switching tabs or apps can't lose it
+  const email = String(form.get("email") ?? jar.get(EMAIL_COOKIE)?.value ?? "");
   const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
   let result: { session: string } | null = null;
   try {
@@ -75,21 +75,22 @@ async function startOver() {
   "use server";
   (await cookies()).delete(EMAIL_COOKIE);
   redirect("/login");
+  // (codes already sent still work for 15 minutes)
 }
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string; next?: string }> }) {
   const sp = await searchParams;
   const next = safeNext(sp.next);
   const brand = await brandBySlug(await currentOrgSlug());
-  const sentTo = sp.sent ? (await cookies()).get(EMAIL_COOKIE)?.value : undefined;
+  const sentTo = sp.sent ? ((await cookies()).get(EMAIL_COOKIE)?.value ?? "") : undefined;
   const input = "min-h-12 rounded-md border border-[#333] bg-[#111] px-3 text-cream";
   return (
     <main style={brand ? (themeVars(brand.brand_color) as React.CSSProperties) : undefined} className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
       {brand ? <ProgramLogo brand={brand} size={80} /> : <ProLytMark className="text-4xl" />}
       <div>
         <Kicker>{brand ? brand.name : "ProLyt"}</Kicker>
-        <h1 className="mt-1 font-display text-[40px] uppercase leading-none">{sentTo ? "Check your email" : "Sign in"}</h1>
-        {!sentTo && !isDemo ? <p className="mt-2 text-sm text-soft">Families, coaches and staff all sign in here. New? Same thing: we&apos;ll set you up.</p> : null}
+        <h1 className="mt-1 font-display text-[40px] uppercase leading-none">{sentTo !== undefined ? "Enter your code" : "Sign in"}</h1>
+        {sentTo === undefined && !isDemo ? <p className="mt-2 text-sm text-soft">Families, coaches and staff all sign in here. New? Same thing: we&apos;ll set you up.</p> : null}
       </div>
 
       {isDemo ? (
@@ -109,19 +110,25 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             ))}
           </form>
         </>
-      ) : sentTo ? (
+      ) : sentTo !== undefined ? (
         <>
-          <p className="text-sm text-soft">We sent a 6-digit code to <span className="font-semibold text-cream">{sentTo}</span>.</p>
+          <p className="text-sm text-soft">{sentTo ? <>We emailed a 6-digit code to <span className="font-semibold text-cream">{sentTo}</span>. It can take a minute; check spam too.</> : "Enter your email and the 6-digit code we sent you."}</p>
           <form action={checkCode} className="flex flex-col gap-3">
             {next ? <input type="hidden" name="next" value={next} /> : null}
             {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
+            {sentTo ? <input type="hidden" name="email" value={sentTo} /> : (
+              <>
+                <label htmlFor="code-email" className="text-sm text-soft">Email</label>
+                <input id="code-email" name="email" type="email" autoComplete="email" required className={input} />
+              </>
+            )}
             <label htmlFor="code" className="text-sm text-soft">Code</label>
             <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} required autoFocus
               placeholder="123456" className={`${input} tabular text-center font-display text-3xl tracking-[10px]`} />
             <Button type="submit">Sign in</Button>
           </form>
           <form action={startOver} className="text-center">
-            <button className="min-h-11 text-sm text-muted hover:text-cream">Wrong email or no code? Start over</button>
+            <button className="min-h-11 text-sm text-muted hover:text-cream">Wrong email or no code? Send a new one</button>
           </form>
         </>
       ) : (
@@ -134,9 +141,6 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
           <p className="text-xs text-muted">No passwords. You stay signed in on this device for 90 days.</p>
         </form>
       )}
-      {sp.sent && !sentTo && !isDemo ? (
-        <Card><div className="text-sm text-soft">This sign-in screen expired. <Link href="/login" className="font-semibold">Start again</Link></div></Card>
-      ) : null}
       {brand ? <div className="mt-auto text-center"><PoweredBy /></div> : null}
     </main>
   );
