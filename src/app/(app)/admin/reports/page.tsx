@@ -8,6 +8,17 @@ export const metadata = { title: "Safety · ProLyt admin" };
 
 type R = { id: string; reason: string; created_at: string; resolved_at: string | null; body: string; sender: string; reporter: string; program: string; thread_kind: string; message_hidden: boolean };
 
+type PR = { id: string; reason: string; created_at: string; resolved_at: string | null; body: string; reporter: string; what: string; hidden: boolean };
+
+async function resolvePost(form: FormData) {
+  "use server";
+  const me = await requirePlatformAdmin();
+  const id = String(form.get("id"));
+  if (!/^[0-9a-f-]{36}$/.test(id)) return;
+  await asUser(me.id, (q) => q("select admin_resolve_post_report($1, $2)", [id, form.get("hide") === "1"]));
+  revalidatePath("/admin/reports");
+}
+
 async function resolve(form: FormData) {
   "use server";
   const me = await requirePlatformAdmin();
@@ -20,7 +31,8 @@ async function resolve(form: FormData) {
 export default async function Reports({ searchParams }: { searchParams: Promise<{ done?: string }> }) {
   const { done } = await searchParams;
   const me = await requirePlatformAdmin();
-  const rows = await asUser(me.id, (q) => q<R>("select * from admin_reports($1)", [!done]));
+  const [rows, posts] = await asUser(me.id, (q) => Promise.all([
+    q<R>("select * from admin_reports($1)", [!done]), q<PR>("select * from admin_post_reports($1)", [!done])]));
   const when = (d: string) => new Date(d).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return (
     <>
@@ -30,7 +42,23 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
         <a href="/admin/reports" className={!done ? "font-bold text-gold" : "text-muted"}>Open</a>
         <a href="/admin/reports?done=1" className={done ? "font-bold text-gold" : "text-muted"}>Resolved</a>
       </div>
-      {rows.length === 0 ? <Empty title={done ? "Nothing resolved yet" : "No open reports"}>Reported messages land here for review.</Empty> : null}
+      {posts.map((r) => (
+        <Card key={r.id}>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted"><span>Feed {r.what}</span><span>{when(r.created_at)}</span></div>
+          <blockquote className="mt-2 whitespace-pre-wrap rounded-lg border-l-2 border-bad bg-black/30 px-3 py-2 text-[15px]">{r.body}</blockquote>
+          <div className="mt-2 text-[13px]"><span className="text-muted">Reported by</span> {r.reporter}: “{r.reason}”</div>
+          {r.hidden ? <div className="mt-2"><Pill>Hidden</Pill></div> : null}
+          {!r.resolved_at ? (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <form action={resolvePost}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="hide" value="1" />
+                <button className="min-h-11 w-full rounded-md bg-bad font-semibold text-ink">Hide it</button></form>
+              <form action={resolvePost}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="hide" value="0" />
+                <button className="min-h-11 w-full rounded-md border border-line font-semibold">No action</button></form>
+            </div>
+          ) : <div className="mt-2 text-xs text-muted">Resolved {when(r.resolved_at)}</div>}
+        </Card>
+      ))}
+      {rows.length === 0 && posts.length === 0 ? <Empty title={done ? "Nothing resolved yet" : "No open reports"}>Reported messages land here for review.</Empty> : null}
       {rows.map((r) => (
         <Card key={r.id}>
           <div className="flex items-center justify-between gap-2 text-xs text-muted">

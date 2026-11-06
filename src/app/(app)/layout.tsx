@@ -19,17 +19,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items: NavItem[] = [];
   const staff = me.roles.includes("coach") || me.roles.includes("owner");
   const chat = me.features.messaging;
+  const feed: NavItem = { href: "/feed", label: "Feed", icon: "feed", match: "/feed" };
   const msgs: NavItem | null = chat ? { href: "/messages", label: "Messages", icon: "chat", badge: await unreadCount(me.id) } : null;
   if (staff) {
     if (me.roles.includes("owner")) items.push({ href: "/owner", label: "Dashboard", icon: "dashboard" });
     items.push({ href: "/coach", label: "Today", icon: "today" });
+    items.push(feed);
     if (msgs) items.push(msgs);
     if (me.orgId) items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
-    if (me.roles.includes("coach")) items.push({ href: "/coach/earnings", label: "Earnings", icon: "money" });
+    if (me.roles.includes("coach") && !me.roles.includes("owner")) items.push({ href: "/coach/earnings", label: "Earnings", icon: "money" });
     if (me.roles.includes("guardian") || me.isParent) items.push({ href: "/family", label: "Family", icon: "home" });
   } else if (me.roles.includes("guardian") || me.isParent) {
     const { current } = await familyKids(me.id);
     items.push({ href: "/family", label: "Home", icon: "home" });
+    items.push(feed);
     if (msgs) items.push(msgs);
     if (current) {
       items.push({ href: `/athlete/${current.id}/progress`, label: "Progress", icon: "progress" });
@@ -38,11 +41,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (!msgs) items.push({ href: "/schedule", label: "Schedule", icon: "schedule" }); // reachable from Home
     if (current) items.push({ href: `/athlete/${current.id}`, label: "Profile", icon: "profile" });
   } else if (me.athleteId) {
+    items.push(feed);
     items.push({ href: `/athlete/${me.athleteId}`, label: "Me", icon: "profile" });
     if (msgs) items.push(msgs);
     items.push({ href: `/athlete/${me.athleteId}/progress`, label: "Progress", icon: "progress" });
     items.push({ href: `/athlete/${me.athleteId}/film`, label: "Film", icon: "film" });
     items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
+  }
+  if (!items.length) {
+    // Members without a program role yet (a scout, a new adult athlete): the network.
+    items.push(feed, { href: "/discover", label: "Find", icon: "profile" });
+    if (msgs) items.push(msgs);
   }
   if (me.isPlatformAdmin) items.push({ href: "/admin", label: "ProLyt", icon: "admin" });
 

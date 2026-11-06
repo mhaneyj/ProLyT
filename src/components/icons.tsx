@@ -13,6 +13,7 @@ const P: Record<string, React.ReactNode> = {
   check: <path d="M5 12l5 5 9-11" />,
   camera: <><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
   chevron: <path d="M9 6l6 6-6 6" />,
+  feed: <><rect x="4" y="4" width="16" height="7" rx="1.5" /><rect x="4" y="14" width="16" height="6" rx="1.5" /></>,
   chat: <path d="M4 5h16v11H9l-5 4z" />,
   send: <path d="M4 12l16-8-6 16-2-7z" />,
   scissors: <><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M8.5 8.5L20 20M8.5 15.5L20 4" /></>,

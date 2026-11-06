@@ -361,6 +361,45 @@ let coachLink = "";
   await ctx.close();
 }
 
+// ── 11. ProLyt network: a parent posts, a coach comments, an outside member can follow and give Props but not comment
+{
+  const p = await signIn("gamefit-loomis", "parent@family.test");
+  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Feed" }).click();
+  await p.page.waitForURL(/\/feed/);
+  check("family sees Avery's automatic 'joined' post", await seen(p.page.getByText(/Avery joined/)));
+  await p.page.getByLabel("Post").click();
+  await p.page.getByLabel("Post").fill("First week of In The Trenches. Footwork is coming along.");
+  await p.page.getByRole("button", { name: "Post", exact: true }).click();
+  check("parent posts for Avery", await seen(p.page.getByText("First week of In The Trenches")));
+  check("no client errors (feed)", p.errors.length === 0, p.errors.join("; "));
+  await p.ctx.close();
+
+  const c = await signIn("gamefit-loomis", "lem@gamefit.test");
+  await c.page.goto(url("gamefit-loomis", "/feed"));
+  await c.page.getByRole("article").filter({ hasText: "First week of In The Trenches" }).getByRole("link", { name: /Comment/ }).click();
+  await c.page.waitForURL(/\/post\//);
+  await c.page.getByLabel("Comment").fill("Huge week. Keep stacking reps.");
+  await c.page.getByRole("button", { name: "Post", exact: true }).click();
+  check("verified coach comments on a minor's post", await seen(c.page.getByText("Huge week. Keep stacking reps.")));
+  await c.ctx.close();
+
+  const s = await signIn("gamefit-loomis", "scout@college.test");
+  await s.page.goto(url("gamefit-loomis", "/discover?q=Avery"));
+  check("outside member finds Avery in Discover", await seen(s.page.getByRole("link", { name: /Avery Real/ })));
+  await s.page.getByRole("button", { name: "Follow" }).first().click();
+  check("follows Avery", await seen(s.page.getByRole("button", { name: "Following" })));
+  await s.page.goto(url("gamefit-loomis", "/feed"));
+  const post = s.page.getByRole("article").filter({ hasText: "First week of In The Trenches" });
+  check("followed athlete's post shows in Following", await seen(post));
+  await post.getByRole("button", { name: /Props/ }).click();
+  check("outside member gives Props", await seen(s.page.getByRole("article").filter({ hasText: "First week of In The Trenches" }).getByRole("button", { name: /Props\s*1/ })));
+  await s.page.getByRole("article").filter({ hasText: "First week of In The Trenches" }).getByRole("link", { name: /1/ }).click();
+  await s.page.waitForURL(/\/post\//);
+  check("outside adult can't comment on a minor's post", (await seen(s.page.getByText(/only family and coaches can comment/))) && (await s.page.getByLabel("Comment").count()) === 0);
+  check("no client errors (outside member)", s.errors.length === 0, s.errors.join("; "));
+  await s.ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

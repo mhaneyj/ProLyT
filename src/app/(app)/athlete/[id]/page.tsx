@@ -133,6 +133,12 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         {action("/schedule", "schedule", a.guardian ? "Book" : "Schedule")}
         {a.family ? action(`/athlete/${a.id}/edit`, "profile", "Edit") : null}
       </div>
+      {age >= 13 ? (
+        <Link href={`/a/${a.id}`} className="flex min-h-12 items-center justify-between rounded-xl border border-line px-4 text-sm hover:border-gold">
+          <span><span className="font-semibold">Network profile</span> <span className="text-muted">· posts, followers, what members see</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
 
       <section className="flex flex-col gap-2">
         <SectionLabel>Verified numbers</SectionLabel>

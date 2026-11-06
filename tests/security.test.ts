@@ -687,3 +687,65 @@ describe("phase 2: inbox read models", () => {
     await expect(as(db, COACH, () => db.query("select * from admin_reports()"))).rejects.toThrow(/ProLyt staff/);
   });
 });
+
+describe("ProLyt network: feed, follows, props, comments", () => {
+  const SCOUT = "10000000-0000-0000-0000-0000000009a1";
+  beforeAll(async () => { await addUser(db, SCOUT, "scout@example.com"); });
+  const feedFor = async (u: string, scope = "all") =>
+    (await as(db, u, () => db.query<{ id: string; kind: string; athlete_id: string | null; body: string | null }>("select id, kind, athlete_id, body from feed($1)", [scope]))).rows;
+
+  it("a parent posts for their teen; members see it, signed-out visitors don't", async () => {
+    await as(db, PARENT_A, () => db.query("select create_post($1, null, 'First day at camp', null, null)", [jordan]));
+    expect((await feedFor(SCOUT)).some((p) => p.body === "First day at camp")).toBe(true);
+    expect((await as(db, null, () => db.query("select * from posts where body = 'First day at camp'"))).rows).toHaveLength(0);
+  });
+  it("only the athlete's family posts as them; only staff post as a program", async () => {
+    await expect(as(db, SCOUT, () => db.query("select create_post($1, null, 'hi', null, null)", [jordan]))).rejects.toThrow(/athlete or their parent/);
+    await expect(as(db, PARENT_A, () => db.query("select create_post(null, $1, 'hi', null, null)", [ORG]))).rejects.toThrow(/Only coaches/);
+    await as(db, COACH, () => db.query("select create_post(null, $1, 'Camp registration is open', null, null)", [ORG]));
+  });
+  it("under-13s never reach the network, even through automatic posts", async () => {
+    await as(db, PARENT_B, () => db.query("select create_post($1, null, 'Riley first catch', null, null)", [riley]));
+    expect((await feedFor(SCOUT)).some((p) => p.athlete_id === riley)).toBe(false);
+    expect((await as(db, SCOUT, () => db.query("select * from discover_athletes()"))).rows.some((r) => (r as { id: string }).id === riley)).toBe(false);
+    await expect(as(db, SCOUT, () => db.query("select set_follow($1, null, true)", [riley]))).rejects.toThrow(/Unknown athlete/);
+    expect((await feedFor(PARENT_B)).some((p) => p.athlete_id === riley)).toBe(true); // family still sees it
+  });
+  it("a parent can take their teen off the network", async () => {
+    await expect(as(db, SCOUT, () => db.query("select set_in_network($1, false)", [jordan]))).rejects.toThrow(/Only a parent/);
+    await as(db, PARENT_A, () => db.query("select set_in_network($1, false)", [jordan]));
+    expect((await feedFor(SCOUT)).some((p) => p.athlete_id === jordan)).toBe(false);
+    await as(db, PARENT_A, () => db.query("select set_in_network($1, true)", [jordan]));
+  });
+  it("anyone can give Props; on a minor's post only family and verified coaches comment", async () => {
+    const [post] = (await feedFor(SCOUT)).filter((p) => p.body === "First day at camp");
+    expect((await as(db, SCOUT, () => db.query<{ is_on: boolean }>("select toggle_props($1) is_on", [post.id]))).rows[0].is_on).toBe(true);
+    await expect(as(db, SCOUT, () => db.query("select add_comment($1, 'DM me')", [post.id]))).rejects.toThrow(/Only family and coaches/);
+    await as(db, COACH, () => db.query("select add_comment($1, 'Great work today')", [post.id]));
+    await as(db, PARENT_A, () => db.query("select add_comment($1, 'Proud of you')", [post.id]));
+    const cs = (await as(db, SCOUT, () => db.query<{ body: string; author_kind: string }>("select body, author_kind from post_comments($1)", [post.id]))).rows;
+    expect(cs.map((c) => c.body)).toEqual(["Great work today", "Proud of you"]);
+    await expect(as(db, SCOUT, () => db.query("insert into comments (post_id, author_id, body) values ($1,$2,'sneaky')", [post.id, SCOUT]))).rejects.toThrow();
+  });
+  it("the athlete's family can remove any comment on their posts; reports reach ProLyt", async () => {
+    const [post] = (await feedFor(PARENT_A)).filter((p) => p.body === "First day at camp");
+    const [c] = (await as(db, PARENT_A, () => db.query<{ id: string; body: string }>("select id, body from post_comments($1) where body = 'Great work today'", [post.id]))).rows;
+    await as(db, SCOUT, () => db.query("select report_post(null, $1, 'Spam')", [c.id]));
+    await as(db, PARENT_A, () => db.query("select delete_comment($1)", [c.id]));
+    expect((await as(db, SCOUT, () => db.query("select * from post_comments($1)", [post.id]))).rows).toHaveLength(1);
+    await expect(as(db, SCOUT, () => db.query("select delete_post($1)", [post.id]))).rejects.toThrow(/can't remove/);
+  });
+  it("new official PRs post themselves; self-reported numbers don't", async () => {
+    await as(db, COACH, () => db.query(`insert into results (athlete_id, org_id, metric, value, unit, source, logged_by) values ($1,$2,'vertical',40,'in','coach_logged',$3)`, [jordan, ORG, COACH]));
+    expect((await feedFor(SCOUT)).some((p) => p.kind === "pr" && p.athlete_id === jordan)).toBe(true);
+    await as(db, PARENT_A, () => db.query(`insert into results (athlete_id, metric, value, unit, source) values ($1,'broad',149,'in','self_reported')`, [jordan]));
+    expect((await db.query("select * from posts where athlete_id = $1 and metric = 'broad'", [jordan])).rows).toHaveLength(0);
+  });
+  it("following builds your feed", async () => {
+    expect((await feedFor(SCOUT, "following")).some((p) => p.athlete_id === jordan)).toBe(false);
+    await as(db, SCOUT, () => db.query("select set_follow($1, null, true)", [jordan]));
+    expect((await feedFor(SCOUT, "following")).some((p) => p.athlete_id === jordan)).toBe(true);
+    const [n] = (await as(db, SCOUT, () => db.query<{ followers: number; following: boolean }>("select followers, following from athlete_network($1)", [jordan]))).rows;
+    expect(n).toEqual({ followers: 1, following: true });
+  });
+});

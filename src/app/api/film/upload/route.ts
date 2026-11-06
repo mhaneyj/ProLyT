@@ -27,6 +27,13 @@ export async function POST(request: Request) {
           if (!ok?.ok) throw new Error("You can't add team film here");
           return { allowedContentTypes: ["video/*"], maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
         }
+        if (kind === "posts") {
+          // A photo for a post: the athlete or their parent.
+          if (!/^[0-9a-f-]{36}$/.test(athlete) || !pathname.startsWith(`posts/${athlete}/`)) throw new Error("Bad upload path");
+          const [ok] = await asUser(me.id, (q) => q<{ ok: boolean }>("select is_guardian($1) or (is_self($1) and athlete_can_message($1)) ok", [athlete]));
+          if (!ok?.ok) throw new Error("You can't post for this athlete");
+          return { allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic"], maximumSizeInBytes: 15 * 1024 ** 2, addRandomSuffix: true };
+        }
         const photo = kind === "photos";
         if (!/^[0-9a-f-]{36}$/.test(athlete) || (!photo && !pathname.startsWith(uploadPrefix(athlete))) || (photo && !pathname.startsWith(`photos/${athlete}/`)))
           throw new Error("Bad upload path");
