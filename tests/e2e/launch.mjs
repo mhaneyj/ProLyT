@@ -297,6 +297,53 @@ let coachLink = "";
   await ac.close();
 }
 
+// ── 9. Team hub: a coach messages a 15-year-old; the parent is always in it
+{
+  const c = await signIn("gamefit-loomis", "lem@gamefit.test");
+  await c.page.goto(url("gamefit-loomis", "/messages/new"));
+  await c.page.getByRole("button", { name: /Avery/ }).click();
+  await c.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
+  check("coach sees the parents-included notice", await seen(c.page.getByText(/parents are in this conversation/)));
+  await c.page.getByLabel("Message").fill("Great reps today, Avery. Keep your hips low.");
+  await c.page.getByRole("button", { name: "Send" }).click();
+  check("coach message posts", await seen(c.page.getByText("Great reps today, Avery")));
+  await c.page.goto(url("gamefit-loomis", "/messages/new"));
+  await c.page.getByRole("button", { name: /Announcement to everyone/ }).click();
+  await c.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
+  await c.page.getByLabel("Message").fill("No practice Friday. Field is closed.");
+  await c.page.getByRole("button", { name: "Send" }).click();
+  check("coach posts an announcement", await seen(c.page.getByText("No practice Friday")));
+  check("no client errors (coach messaging)", c.errors.length === 0, c.errors.join("; "));
+  await c.ctx.close();
+
+  const p = await signIn("gamefit-loomis", "parent@family.test");
+  const nav = p.page.getByRole("navigation", { name: "Main" });
+  check("parent sees an unread badge", await seen(nav.getByLabel(/unread/)));
+  await nav.getByRole("link", { name: /Messages/ }).click();
+  await p.page.getByRole("link", { name: /Avery .* coaches/ }).click();
+  await p.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
+  check("parent reads the coach's message to their teen", await seen(p.page.getByText("Great reps today, Avery")));
+  check("parent told why they're included", await seen(p.page.getByText(/because Avery is under 18/)));
+  await p.page.getByLabel("Message").fill("Thanks coach!");
+  await p.page.getByRole("button", { name: "Send" }).click();
+  check("parent replies", await seen(p.page.getByText("Thanks coach!")));
+  await p.page.goto(url("gamefit-loomis", "/messages"));
+  await p.page.getByRole("link", { name: /Announcements/ }).click();
+  await p.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
+  check("families read announcements but can't post", (await seen(p.page.getByText("No practice Friday"))) && (await seen(p.page.getByText("Only coaches post announcements"))) && (await p.page.getByLabel("Message").count()) === 0);
+  await p.page.goto(url("gamefit-loomis", "/messages"));
+  check("reading clears the unread badge", (await seen(p.page.getByRole("heading", { name: "Messages" }))) && (await nav.getByLabel(/unread/).count()) === 0);
+  check("no client errors (parent messaging)", p.errors.length === 0, p.errors.join("; "));
+  await p.ctx.close();
+
+  const a = await signIn("gamefit-loomis", "avery.real@example.test");
+  await a.page.goto(url("gamefit-loomis", "/messages"));
+  await a.page.getByRole("link", { name: /Avery .* coaches/ }).click();
+  await a.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
+  check("teen sees the whole conversation, parent included", (await seen(a.page.getByText("Thanks coach!"))) && (await seen(a.page.getByText(/Your parents can read/))));
+  await a.ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

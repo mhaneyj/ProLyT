@@ -31,7 +31,7 @@ export type Me = {
   features: Features;
 };
 
-const ALL_ON: Features = { booking: true, film_uploads: true, voice: true, recruiting: true, payments: true };
+const ALL_ON: Features = { booking: true, film_uploads: true, voice: true, recruiting: true, payments: true, messaging: true };
 
 export const currentUserId = cache(async (): Promise<string | null> => {
   const jar = await cookies();

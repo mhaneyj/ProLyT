@@ -4,7 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "ProLyt", template: "%s · ProLyt" },
   description: "Train it. Track it. ProLyt. The athlete development platform for programs, families and coaches.",
-  icons: { icon: "/logo.png" },
+  icons: { icon: "/logo.png", apple: "/apple-icon.png" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "ProLyt" },
 };
 
 export const viewport: Viewport = { themeColor: "#070707", width: "device-width", initialScale: 1 };

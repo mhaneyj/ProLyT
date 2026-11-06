@@ -99,6 +99,10 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
         </>
       ) : null}
       {me.perms.includes("sessions.post") || me.perms.includes("sessions.manage_all") ? <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton> : null}
+      <div className="grid grid-cols-2 gap-2">
+        {me.features.messaging ? <LinkButton href="/messages/new" kind="ghost">Message</LinkButton> : null}
+        {me.perms.includes("film.manage") ? <LinkButton href="/coach/film" kind="ghost">Team film</LinkButton> : null}
+      </div>
     </>
   );
 }

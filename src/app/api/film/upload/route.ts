@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
-import { blobConfigured, uploadPrefix } from "@/lib/film";
+import { blobConfigured, teamUploadPrefix, uploadPrefix } from "@/lib/film";
 
 const MAX_BYTES = 2 * 1024 ** 3; // 2 GB
 
@@ -20,6 +20,13 @@ export async function POST(request: Request) {
         if (!me) throw new Error("Sign in first");
         if (!me.features.film_uploads) throw new Error("Uploads are turned off for this program. Paste a link instead.");
         const [kind, athlete = ""] = pathname.split("/");
+        if (kind === "team") {
+          // Team game film: anyone with film permission in that program.
+          if (!/^[0-9a-f-]{36}$/.test(athlete) || !pathname.startsWith(teamUploadPrefix(athlete))) throw new Error("Bad upload path");
+          const [ok] = await asUser(me.id, (q) => q<{ ok: boolean }>("select has_perm($1, 'film.manage') ok", [athlete]));
+          if (!ok?.ok) throw new Error("You can't add team film here");
+          return { allowedContentTypes: ["video/*"], maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
+        }
         const photo = kind === "photos";
         if (!/^[0-9a-f-]{36}$/.test(athlete) || (!photo && !pathname.startsWith(uploadPrefix(athlete))) || (photo && !pathname.startsWith(`photos/${athlete}/`)))
           throw new Error("Bad upload path");

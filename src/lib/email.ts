@@ -68,3 +68,27 @@ export async function sendAthleteLinkEmail(to: string, link: string, kind: "pare
   });
   if (!res.ok) throw new Error(`We couldn't send the email (status ${res.status}).`);
 }
+
+/** "New message" alert. Never includes the message body (it may be about a minor); the reader signs in to see it. */
+export async function sendMessageAlert(to: string, link: string, where: string, from: string, programName: string) {
+  const key = process.env.RESEND_API_KEY;
+  const sender = process.env.EMAIL_FROM ?? `ProLyt <signin@${ROOT_DOMAIN}>`;
+  const subject = `New message in ${where} · ${programName}`;
+  if (!key) {
+    console.log(`[message alert] ${to} → ${where} from ${from}: ${link}`);
+    return;
+  }
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#111">
+      <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(from)} sent a message</h1>
+      <p style="font-size:15px;line-height:1.5">In <b>${escapeHtml(where)}</b> on ${escapeHtml(programName)}.</p>
+      <p style="margin:24px 0"><a href="${link}" style="background:#F8C40A;color:#070707;padding:14px 22px;border-radius:6px;text-decoration:none;font-weight:bold">Open the conversation</a></p>
+      <p style="font-size:12px;color:#888">You get at most one email per conversation each hour. Mute a conversation from its screen. Powered by ProLyt</p>
+    </div>`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: sender, to, subject, html }),
+  });
+  if (!res.ok) console.error("[email] message alert refused:", res.status);
+}

@@ -5,7 +5,8 @@ import { addFilm, type FilmState } from "../actions";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 
-export function FilmForm({ athlete, canUpload }: { athlete: string; canUpload: boolean }) {
+/** Adds film for one athlete, or (team = program id) team game film coaches can cut clips from. */
+export function FilmForm({ athlete, team, canUpload }: { athlete?: string; team?: string; canUpload: boolean }) {
   const [mode, setMode] = useState<"upload" | "link">(canUpload ? "upload" : "link");
   const [state, action, pending] = useActionState<FilmState, FormData>(addFilm, {});
   const [progress, setProgress] = useState<number | null>(null);
@@ -20,7 +21,7 @@ export function FilmForm({ athlete, canUpload }: { athlete: string; canUpload: b
       try {
         setProgress(0);
         const safe = file.name.replace(/[^\w.-]+/g, "-").slice(-60) || "clip.mp4";
-        const blob = await upload(`film/${athlete}/${safe}`, file, {
+        const blob = await upload(team ? `team/${team}/${safe}` : `film/${athlete}/${safe}`, file, {
           access: "private",
           handleUploadUrl: "/api/film/upload",
           multipart: file.size > 50 * 1024 * 1024,
@@ -46,7 +47,7 @@ export function FilmForm({ athlete, canUpload }: { athlete: string; canUpload: b
 
   return (
     <form ref={formRef} action={submit} className="flex flex-col gap-3">
-      <input type="hidden" name="athlete" value={athlete} />
+      {athlete ? <input type="hidden" name="athlete" value={athlete} /> : <input type="hidden" name="team" value="1" />}
       {canUpload ? <div className="flex gap-2">{tab("upload", "Upload video")}{tab("link", "Paste a link")}</div> : null}
       {mode === "upload" ? (
         <div>
@@ -65,7 +66,7 @@ export function FilmForm({ athlete, canUpload }: { athlete: string; canUpload: b
       </div>
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-soft">
-          <select name="kind" aria-label="Type" className="min-h-11 rounded-md border border-[#333] bg-[#111] px-2 text-cream">
+          <select name="kind" aria-label="Type" defaultValue={team ? "game" : "training"} className="min-h-11 rounded-md border border-[#333] bg-[#111] px-2 text-cream">
             <option value="training">Training</option>
             <option value="game">Game</option>
           </select>
@@ -79,7 +80,7 @@ export function FilmForm({ athlete, canUpload }: { athlete: string; canUpload: b
       <button disabled={pending || progress !== null} className="min-h-12 w-full rounded-md bg-gold font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-on-gold disabled:opacity-60">
         {progress !== null ? `Uploading… ${progress}%` : pending ? "Saving…" : "Add film"}
       </button>
-      <p className="text-xs text-muted">Only this athlete&apos;s family and their program&apos;s coaches can see film. Nothing is public.</p>
+      <p className="text-xs text-muted">{team ? "Team film is for coaches. Families see only the clips you tag their athlete in." : "Only this athlete's family and their program's coaches can see film. Nothing is public."}</p>
     </form>
   );
 }

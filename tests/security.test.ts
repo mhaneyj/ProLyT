@@ -596,3 +596,94 @@ describe("phase 1: athlete-owned record", () => {
     expect((await as(db, null, () => db.query<{ p: unknown }>("select public_profile($1) p", [h("b")]))).rows[0].p).toBeNull();
   });
 });
+
+describe("phase 2: safe messaging and clips", () => {
+  const TEENM = "10000000-0000-0000-0000-0000000008a1";
+  const MOMM = "10000000-0000-0000-0000-0000000008a2";
+  const STRANGER = "10000000-0000-0000-0000-0000000008a3";
+  const h = (c: string) => ("8" + c).repeat(32);
+  let kid: string, team: string, athleteThread: string, teamThread: string, ann: string;
+  beforeAll(async () => {
+    for (const [id, email] of [[TEENM, "teenm@example.com"], [MOMM, "momm@example.com"], [STRANGER, "stranger@example.com"]]) await addUser(db, id, email);
+    // Mom registers a 15-year-old in the program, then gives them a login
+    kid = (await as(db, MOMM, () => db.query<{ id: string }>(
+      `select register_athlete($1,'Mia','Msg',$2,2029,'QB',null,null,'Mom Msg',false,false,'Mom Msg','555-0130') id`, [ORG, yearsAgo(15)]))).rows[0].id;
+    await as(db, MOMM, () => db.query("select create_athlete_link($1,'athlete','teenm@example.com',$2)", [kid, h("1")]));
+    await as(db, TEENM, () => db.query("select accept_athlete_link($1, null)", [h("1")]));
+    team = (await as(db, COACH, () => db.query<{ id: string }>("insert into teams (org_id, name) values ($1,'Msg Team') returning id", [ORG]))).rows[0].id;
+    await as(db, COACH, () => db.query("update stints set team_id=$2 where athlete_id=$1 and org_id=$3", [kid, team, ORG]));
+  });
+  it("only staff open conversations", async () => {
+    await expect(as(db, TEENM, () => db.query("select open_thread($1,'athlete',null,$2)", [ORG, kid]))).rejects.toThrow(/Only coaches/);
+    athleteThread = (await as(db, COACH, () => db.query<{ id: string }>("select open_thread($1,'athlete',null,$2) id", [ORG, kid]))).rows[0].id;
+    teamThread = (await as(db, COACH, () => db.query<{ id: string }>("select open_thread($1,'team',$2,null) id", [ORG, team]))).rows[0].id;
+    ann = (await as(db, COACH, () => db.query<{ id: string }>("select open_thread($1,'announcements',null,null) id", [ORG]))).rows[0].id;
+  });
+  it("a coach messaging a minor: the parent is always in the conversation", async () => {
+    await as(db, COACH, () => db.query("select send_message($1,'Great reps today, Mia')", [athleteThread]));
+    await as(db, TEENM, () => db.query("select send_message($1,'Thanks coach')", [athleteThread]));
+    expect((await as(db, MOMM, () => db.query("select body from messages where thread_id=$1 order by created_at", [athleteThread]))).rows.map((r) => (r as { body: string }).body)).toEqual(["Great reps today, Mia", "Thanks coach"]);
+    expect((await as(db, MOMM, () => db.query<{ r: string }>("select thread_role($1) r", [athleteThread]))).rows[0].r).toBe("parent");
+    const audience = (await db.query<{ email: string }>("select email from thread_audience($1)", [athleteThread])).rows.map((r) => r.email);
+    expect(audience).toEqual(expect.arrayContaining(["teenm@example.com", "momm@example.com"]));
+  });
+  it("outsiders, other families and other kids' parents can't read it", async () => {
+    for (const u of [STRANGER, PARENT_B]) {
+      expect((await as(db, u, () => db.query("select id from messages where thread_id=$1", [athleteThread]))).rows).toHaveLength(0);
+      await expect(as(db, u, () => db.query("select send_message($1,'hi')", [athleteThread]))).rejects.toThrow(/not in this conversation/);
+    }
+    await expect(as(db, TEENM, () => db.query("insert into messages (thread_id, sender_id, body) values ($1,$2,'sneaky')", [athleteThread, TEENM]))).rejects.toThrow();
+  });
+  it("team chat: the team's athletes and their parents; announcements: staff post, families read", async () => {
+    await as(db, COACH, () => db.query("select send_message($1,'Practice moved to 6')", [teamThread]));
+    expect((await as(db, TEENM, () => db.query<{ r: string }>("select thread_role($1) r", [teamThread]))).rows[0].r).toBe("member");
+    expect((await as(db, MOMM, () => db.query<{ r: string }>("select thread_role($1) r", [teamThread]))).rows[0].r).toBe("parent");
+    expect((await as(db, PARENT_B, () => db.query<{ r: string | null }>("select thread_role($1) r", [teamThread]))).rows[0].r).toBeNull();
+    await as(db, COACH, () => db.query("select send_message($1,'No practice Friday')", [ann]));
+    expect((await as(db, PARENT_B, () => db.query("select body from messages where thread_id=$1", [ann]))).rows).toHaveLength(1);
+    await expect(as(db, MOMM, () => db.query("select send_message($1,'Can we reschedule?')", [ann]))).rejects.toThrow(/Only coaches post/);
+  });
+  it("a teen without parent approval can't message; parents can block an adult", async () => {
+    await db.query("update athletes set parent_approved_at = null where id=$1", [kid]);
+    expect((await as(db, TEENM, () => db.query<{ r: string | null }>("select thread_role($1) r", [athleteThread]))).rows[0].r).toBeNull();
+    await db.query("update athletes set parent_approved_at = now() where id=$1", [kid]);
+    await expect(as(db, TEENM, () => db.query("select set_block($1,$2,true)", [kid, COACH]))).rejects.toThrow(/Only a parent/);
+    await as(db, MOMM, () => db.query("select set_block($1,$2,true)", [kid, COACH]));
+    await expect(as(db, COACH, () => db.query("select send_message($1,'hello?')", [athleteThread]))).rejects.toThrow(/asked you not to message/);
+    await as(db, MOMM, () => db.query("select set_block($1,$2,false)", [kid, COACH]));
+  });
+  it("hiding and reporting keep the record for review", async () => {
+    const m = (await as(db, TEENM, () => db.query<{ id: string }>("select send_message($1,'oops wrong chat') id", [athleteThread]))).rows[0].id;
+    await expect(as(db, MOMM, () => db.query("select delete_message($1)", [m]))).rejects.toThrow(/your own/);
+    await as(db, MOMM, () => db.query("select report_message($1,'Wrong chat')", [m]));
+    await as(db, TEENM, () => db.query("select delete_message($1)", [m]));
+    expect((await as(db, COACH, () => db.query("select id from messages where id=$1", [m]))).rows).toHaveLength(0);
+    expect((await db.query("select deleted_at is not null gone from messages where id=$1", [m])).rows).toEqual([{ gone: true }]);
+  });
+  it("clips: staff tag athletes in team film; the tagged family sees the clip, others don't", async () => {
+    const film = (await as(db, COACH, () => db.query<{ id: string }>(
+      "insert into film (org_id, storage_path, title, kind, uploaded_by) values ($1,'https://youtu.be/team123','Week 3 vs Rocklin','game',$2) returning id", [ORG, COACH]))).rows[0].id;
+    await as(db, COACH, () => db.query("insert into clips (film_id, athlete_id, start_s, end_s, title, created_by) values ($1,$2,62,75,'TD catch',$3)", [film, kid, COACH]));
+    expect((await as(db, TEENM, () => db.query("select title from clips where athlete_id=$1", [kid]))).rows).toEqual([{ title: "TD catch" }]);
+    expect((await as(db, MOMM, () => db.query("select id from film where id=$1", [film]))).rows).toHaveLength(1);
+    expect((await as(db, PARENT_B, () => db.query("select id from film where id=$1", [film]))).rows).toHaveLength(0);
+    await expect(as(db, PARENT_B, () => db.query("insert into clips (film_id, athlete_id, start_s, end_s, title, created_by) values ($1,$2,1,5,'x',$3)", [film, riley, PARENT_B]))).rejects.toThrow();
+  });
+});
+
+describe("phase 2: inbox read models", () => {
+  it("the inbox lists only conversations you're in, with unread state", async () => {
+    const rows = await as(db, PARENT_B, () => db.query<{ kind: string; unread: boolean }>("select kind, unread from my_threads()"));
+    expect(rows.rows.map((r) => r.kind)).toEqual(["announcements"]);
+    expect(rows.rows[0].unread).toBe(true);
+    const [t] = (await as(db, PARENT_B, () => db.query<{ id: string }>("select id from my_threads()"))).rows;
+    await as(db, PARENT_B, () => db.query("select mark_thread_read($1)", [t.id]));
+    expect((await as(db, PARENT_B, () => db.query<{ unread: boolean }>("select unread from my_threads()"))).rows[0].unread).toBe(false);
+    const feed = await as(db, PARENT_B, () => db.query<{ sender_kind: string }>("select sender_kind from thread_feed($1)", [t.id]));
+    expect(feed.rows.every((r) => r.sender_kind === "Coach")).toBe(true);
+    expect((await as(db, "10000000-0000-0000-0000-0000000008a3", () => db.query("select * from my_threads()"))).rows).toHaveLength(0);
+  });
+  it("only ProLyt staff see the safety queue", async () => {
+    await expect(as(db, COACH, () => db.query("select * from admin_reports()"))).rejects.toThrow(/ProLyt staff/);
+  });
+});

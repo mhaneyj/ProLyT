@@ -17,6 +17,7 @@ export const FEATURES = [
   ["voice", "Voice logging"],
   ["recruiting", "Recruiting profile links"],
   ["payments", "Online payments"],
+  ["messaging", "Team messaging"],
 ] as const;
 export type Features = Record<(typeof FEATURES)[number][0], boolean>;
 

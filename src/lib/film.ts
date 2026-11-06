@@ -34,3 +34,22 @@ export function cleanLink(raw: string): string | null {
 
 /** Uploads live under film/<athleteId>/ so a finished upload can be tied back to who it's for. */
 export const uploadPrefix = (athleteId: string) => `film/${athleteId}/`;
+
+/** Team game film (not tied to one athlete) uploads under team/<orgId>/. */
+export const teamUploadPrefix = (orgId: string) => `team/${orgId}/`;
+
+/** "1:02" or "62" → 62 seconds. Null if it doesn't read as a time. */
+export function parseClock(raw: string): number | null {
+  const t = raw.trim();
+  const m = t.match(/^(?:(\d{1,2}):)?(\d{1,3}):(\d{2})$/) ?? t.match(/^()()(\d{1,5})$/);
+  if (!m) return null;
+  const [h, mm, ss] = [Number(m[1] || 0), Number(m[2] || 0), Number(m[3])];
+  if (m[2] !== "" && ss >= 60) return null;
+  return h * 3600 + mm * 60 + ss;
+}
+
+/** 62 → "1:02". */
+export const clock = (s: number) => {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`;
+};

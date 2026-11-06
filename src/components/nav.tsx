@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./icons";
 
-export type NavItem = { href: string; label: string; icon: IconName; match?: string };
+export type NavItem = { href: string; label: string; icon: IconName; match?: string; badge?: number };
 
 export function NavLinks({ items }: { items: NavItem[] }) {
   const path = usePathname();
@@ -24,7 +24,10 @@ export function NavLinks({ items }: { items: NavItem[] }) {
             <li key={i.href} className="flex-1">
               <Link href={i.href} aria-current={on ? "page" : undefined}
                 className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-semibold ${on ? "text-gold" : "text-[#8c877c] hover:text-cream"}`}>
-                <Icon name={i.icon} />
+                <span className="relative">
+                  <Icon name={i.icon} />
+                  {i.badge ? <span className="absolute -right-2.5 -top-1.5 min-w-[18px] rounded-full bg-gold px-1 text-center text-[10px] leading-[18px] text-on-gold" aria-label={`${i.badge} unread`}>{i.badge > 9 ? "9+" : i.badge}</span> : null}
+                </span>
                 {i.label}
               </Link>
             </li>

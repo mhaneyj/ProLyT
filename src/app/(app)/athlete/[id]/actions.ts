@@ -5,12 +5,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
-import { cleanLink, uploadPrefix } from "@/lib/film";
+import { cleanLink, parseClock, teamUploadPrefix, uploadPrefix } from "@/lib/film";
 
 export type FilmState = { ok?: string; error?: string };
 
 const schema = z.object({
-  athlete: z.guid(),
+  athlete: z.guid().optional(),
+  team: z.literal("1").optional(),
   title: z.string().trim().min(2, "Give the clip a title").max(80),
   kind: z.enum(["training", "game"]),
   link: z.string().optional(),
@@ -23,9 +24,12 @@ export async function addFilm(_: FilmState, form: FormData): Promise<FilmState> 
   const p = schema.safeParse(Object.fromEntries(form));
   if (!p.success) return { error: p.error.issues[0].message };
   const d = p.data;
+  if (d.team) return addTeamFilm(me, d);
+  if (!d.athlete) return { error: "Pick an athlete" };
+  const athlete = d.athlete;
   let storage: string | null = null;
   if (d.pathname) {
-    if (!d.pathname.startsWith(uploadPrefix(d.athlete)) || d.pathname.includes("..")) return { error: "Upload didn't match this athlete. Try again." };
+    if (!d.pathname.startsWith(uploadPrefix(athlete)) || d.pathname.includes("..")) return { error: "Upload didn't match this athlete. Try again." };
     storage = `blob:${d.pathname}`;
   } else {
     storage = cleanLink(d.link ?? "");
@@ -36,19 +40,79 @@ export async function addFilm(_: FilmState, form: FormData): Promise<FilmState> 
       // File it under the program viewing it if the athlete is connected there, else their first program.
       const [org] = await q<{ org_id: string }>(`
         select pa.org_id from program_athletes pa where pa.athlete_id = $1 and pa.status = 'active'
-        order by (pa.org_id = $2) desc nulls last, pa.joined_at limit 1`, [d.athlete, me.orgId]);
+        order by (pa.org_id = $2) desc nulls last, pa.joined_at limit 1`, [athlete, me.orgId]);
       if (!org) throw new Error("Connect this athlete to a program first");
       await q(
         `insert into film (org_id, athlete_id, storage_path, title, kind, is_highlight, uploaded_by)
          values ($1, $2, $3, $4, $5::film_kind, $6, $7)`,
-        [org.org_id, d.athlete, storage, d.title, d.kind, d.highlight === "on", me.id]);
+        [org.org_id, athlete, storage, d.title, d.kind, d.highlight === "on", me.id]);
     });
   } catch (e) {
     return { error: dbMessage(e) };
   }
-  revalidatePath(`/athlete/${d.athlete}`);
-  revalidatePath(`/athlete/${d.athlete}/film`);
+  revalidatePath(`/athlete/${athlete}`);
+  revalidatePath(`/athlete/${athlete}/film`);
   return { ok: "Film added." };
+}
+
+async function addTeamFilm(me: Awaited<ReturnType<typeof requireMe>>, d: z.infer<typeof schema>): Promise<FilmState> {
+  if (!me.orgId) return { error: "Open your program first" };
+  let storage: string | null;
+  if (d.pathname) {
+    if (!d.pathname.startsWith(teamUploadPrefix(me.orgId)) || d.pathname.includes("..")) return { error: "Upload didn't match this program. Try again." };
+    storage = `blob:${d.pathname}`;
+  } else {
+    storage = cleanLink(d.link ?? "");
+    if (!storage) return { error: "Paste a full https:// link (YouTube, Hudl, Vimeo…)" };
+  }
+  try {
+    await asUser(me.id, (q) => q(`insert into film (org_id, athlete_id, storage_path, title, kind, uploaded_by) values ($1, null, $2, $3, $4::film_kind, $5)`,
+      [me.orgId, storage, d.title, d.kind, me.id]));
+  } catch (e) {
+    return { error: /row-level security/.test(dbMessage(e)) ? "You need film permission to add team film." : dbMessage(e) };
+  }
+  revalidatePath("/coach/film");
+  return { ok: "Team film added. Now mark clips for your athletes." };
+}
+
+const clipSchema = z.object({
+  film: z.guid(), athlete: z.guid(), back: z.string().startsWith("/").max(200),
+  start: z.string(), end: z.string(), title: z.string().trim().min(2, "Give the clip a title").max(80),
+  highlight: z.string().optional(),
+});
+
+/** Marks a moment in film and tags the athlete in it. */
+export async function addClip(form: FormData) {
+  const me = await requireMe();
+  const p = clipSchema.safeParse(Object.fromEntries(form));
+  const back = typeof form.get("back") === "string" && String(form.get("back")).startsWith("/") ? String(form.get("back")) : "/";
+  const fail = (m: string) => redirect(`${back}${back.includes("?") ? "&" : "?"}clip_error=${encodeURIComponent(m)}`);
+  if (!p.success) return fail(p.error.issues[0].message);
+  const start = parseClock(p.data.start), end = parseClock(p.data.end);
+  if (start == null || end == null) return fail("Times look like 1:05");
+  if (end <= start) return fail("The end has to be after the start");
+  if (end - start > 300) return fail("Keep clips under 5 minutes");
+  try {
+    await asUser(me.id, (q) => q(`insert into clips (film_id, athlete_id, start_s, end_s, title, is_highlight, created_by) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [p.data.film, p.data.athlete, start, end, p.data.title, p.data.highlight === "on", me.id]));
+  } catch (e) {
+    return fail(/row-level security/.test(dbMessage(e)) ? "You can't tag that athlete in this film." : dbMessage(e));
+  }
+  revalidatePath(`/athlete/${p.data.athlete}/film`);
+  revalidatePath(`/athlete/${p.data.athlete}`);
+  redirect(back);
+}
+
+export async function clipAction(form: FormData) {
+  const me = await requireMe();
+  const id = String(form.get("clip")), athlete = String(form.get("athlete"));
+  if (!/^[0-9a-f-]{36}$/.test(id)) return;
+  await asUser(me.id, (q) => form.get("do") === "delete"
+    ? q("delete from clips where id = $1", [id])
+    : q("update clips set is_highlight = not is_highlight where id = $1", [id]));
+  revalidatePath(`/athlete/${athlete}/film`);
+  revalidatePath(`/athlete/${athlete}`);
+  revalidatePath("/coach/film");
 }
 
 export async function toggleHighlight(form: FormData) {
