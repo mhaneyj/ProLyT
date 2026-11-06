@@ -43,3 +43,11 @@ export function themeVars(hex: string): Record<string, string> {
     "--color-on-gold": on,
   };
 }
+
+/** The athlete card background in their chosen color: bold at the top, fading to dark so text stays readable. */
+export function heroBackground(hex: string | null | undefined, photo: boolean): string {
+  const c = isHex(hex ?? "") ? hex! : "#F8C40A";
+  return photo
+    ? `linear-gradient(180deg, color-mix(in srgb, ${c} 45%, transparent) 0%, transparent 40%)`
+    : `linear-gradient(165deg, ${c} 0%, color-mix(in srgb, ${c} 72%, #0b0b0b) 35%, color-mix(in srgb, ${c} 30%, #0b0b0b) 72%, #0b0b0b 100%)`;
+}

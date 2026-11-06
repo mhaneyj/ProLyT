@@ -464,6 +464,33 @@ let coachLink = "";
   await ctx.close();
 }
 
+// ── 14. Profile picture and profile color
+{
+  const p = await signIn("gamefit-loomis", "parent@family.test");
+  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await p.page.waitForURL(/\/athlete\/[0-9a-f-]{36}$/);
+  const id = p.page.url().split("/").at(-1);
+  await p.page.locator("#photo input[type=file]").setInputFiles("public/icon-512.png");
+  await p.page.waitForLoadState("load");
+  const img = p.page.getByRole("img", { name: "Avery Real" });
+  check("parent adds Avery's profile picture", await seen(img) && await img.evaluate((i) => i.complete && i.naturalWidth > 0));
+  await p.page.goto(url("gamefit-loomis", `/athlete/${id}/edit`));
+  await p.page.getByText("Blue", { exact: true }).click();
+  await p.page.getByRole("button", { name: "Save profile" }).click();
+  await p.page.waitForURL(/saved=1/);
+  const bg = async () => p.page.locator("div.rounded-\\[14px\\]").filter({ has: p.page.getByRole("img", { name: "Avery Real" }) }).first().evaluate((d) => getComputedStyle(d).backgroundImage);
+  check("profile card uses the chosen color", /47, 128, 237|2f80ed/i.test(await bg()), await bg());
+  await p.page.goto(url("gamefit-loomis", `/a/${id}`));
+  check("network profile shows the photo and color", (await seen(p.page.getByRole("img", { name: "Avery Real" }))) && /47, 128, 237|2f80ed/i.test(await bg()));
+  const res = await p.page.evaluate(async (u) => (await fetch(u, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: "not a photo" })).status, `/api/photo/${id}`);
+  check("non-photo uploads are refused", res === 415, String(res));
+  await p.ctx.close();
+  const s2 = await signIn("gamefit-loomis", "scout@college.test");
+  const put = await s2.page.evaluate(async (u) => (await fetch(u, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: new Uint8Array([0xff, 0xd8, 0xff]) })).status, `/api/photo/${id}`);
+  check("only family can change the photo", put === 403, String(put));
+  await s2.ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

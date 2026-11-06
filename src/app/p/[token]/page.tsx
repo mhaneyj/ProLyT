@@ -5,7 +5,7 @@ import { shareHash } from "@/lib/share";
 import { ProfileBody, type ProfileData } from "@/components/profile-body";
 import { ProLytMark } from "@/components/brand";
 
-type P = ProfileData;
+type P = ProfileData & { has_photo?: boolean; photo_id?: string };
 
 // Public, parent-approved page. Not indexed by search engines.
 export const metadata: Metadata = { title: "Recruiting profile", robots: { index: false, follow: false } };
@@ -23,7 +23,7 @@ export default async function PublicProfile({ params }: { params: Promise<{ toke
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
-      <ProfileBody p={p} />
+      <ProfileBody p={p} photo={p.has_photo && p.photo_id ? `/api/photo/${p.photo_id}?share=${encodeURIComponent(token)}` : null} />
 
       <p className="text-xs text-muted">Shared by the athlete&apos;s parent. To get in touch, reply to whoever sent you this link.</p>
       <div className="mt-auto flex items-center justify-center gap-2 text-xs text-muted">Powered by <ProLytMark className="text-sm" /></div>

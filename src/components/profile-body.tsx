@@ -1,6 +1,7 @@
 import { METHOD_LABEL, PERFORMANCE, SOURCE_LABEL, bestOfficial, formatValue, latestBody, metricShort, type Source } from "@/lib/domain/metrics";
 import { shortDate } from "@/lib/domain/format";
 import { Player } from "./player";
+import { heroBackground } from "@/lib/domain/brand";
 
 export type ProfileData = {
   first_name: string; last_name: string; position: string | null; grad_year: number | null; attended: number;
@@ -9,6 +10,7 @@ export type ProfileData = {
   programs: { name: string }[];
   results: { metric: string; value: number; source: Source; method: string | null; recorded_at: string; org: string | null }[];
   highlights: { title: string; url: string; kind: string }[];
+  theme_color?: string | null;
 };
 
 /** The athlete card: shared by the recruiting link (/p) and the network profile (/a). */
@@ -20,12 +22,14 @@ export function ProfileBody({ p, photo, children }: { p: ProfileData; photo?: st
   const sport = (p.sport ?? "").replace(/\b\w/g, (c) => c.toUpperCase());
   return (
     <>
-      <div className="relative overflow-hidden rounded-[14px] border border-line p-5"
-        style={{ background: "radial-gradient(120% 90% at 100% 0%, rgba(248,196,10,0.35), transparent 60%), linear-gradient(160deg, #1b1b1b, #0b0b0b)" }}>
+      <div className="relative flex min-h-[240px] flex-col justify-end overflow-hidden rounded-[14px] border border-line p-5"
+        style={{ background: heroBackground(p.theme_color, false), ...(p.theme_color ? { ["--color-gold" as string]: p.theme_color } : {}) }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {photo ? <img src={photo} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover opacity-40" /> : null}
+        {photo ? <img src={photo} alt={`${p.first_name} ${p.last_name}`} className="absolute inset-0 size-full object-cover" /> : null}
+        {photo ? <div aria-hidden="true" className="absolute inset-0" style={{ background: heroBackground(p.theme_color, true) }} /> : null}
+        {photo ? <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,7,0)_30%,rgba(7,7,7,0.92)_92%)]" /> : null}
         <div className="relative">
-          <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{p.programs.map((x) => x.name).join(" · ") || "Athlete"}</div>
+          <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-cream/80">{p.programs.map((x) => x.name).join(" · ") || "Athlete"}</div>
           <h1 className="mt-1 font-display text-[44px] uppercase leading-none">{p.first_name} {p.last_name}</h1>
           <div className="mt-2 text-soft">{[sport, p.position, p.grad_year ? `Class of ${p.grad_year}` : null, p.hometown].filter(Boolean).join(" · ")}</div>
           {ht || wt ? <div className="mt-1 text-sm">{[ht ? `${formatValue("height_in", ht.value)}` : null, wt ? formatValue("weight_lb", wt.value) : null].filter(Boolean).join(" · ")} <span className="text-xs text-good">measured</span></div> : null}

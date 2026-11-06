@@ -4,13 +4,13 @@ import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { ageOn, dayTime } from "@/lib/domain/format";
 import { METHOD_LABEL, PERFORMANCE, SOURCE_LABEL, bestOfficial, formatValue, latestBody, metricShort, type Source } from "@/lib/domain/metrics";
-import { blobConfigured } from "@/lib/film";
 import { NoteCard } from "@/components/athlete";
 import { Icon } from "@/components/icons";
 import { Player } from "@/components/player";
 import { Notice, Pill, SectionLabel } from "@/components/ui";
 import { loadAthlete, sportName } from "./header";
 import { PhotoButton } from "./photo-button";
+import { heroBackground } from "@/lib/domain/brand";
 import { CopyLink } from "./share-card";
 import { addStint, giveLogin, setTeenPassword, inviteParent, removeStint, shareProfile, stopSharing, updateOrgStint } from "./actions";
 
@@ -104,19 +104,18 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         </div>
       ) : null}
 
-      <div className="relative flex min-h-[250px] flex-col justify-end overflow-hidden rounded-[14px] border border-line p-[18px]">
+      <div className="relative flex min-h-[260px] flex-col justify-end overflow-hidden rounded-[14px] border border-line p-[18px]" style={{ background: heroBackground(a.theme_color, false) }}>
         {a.has_photo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/photo/${a.id}`} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover opacity-70" />
+          <img src={`/api/photo/${a.id}`} alt={`${a.first_name} ${a.last_name}`} className="absolute inset-0 size-full object-cover" />
         ) : (
-          <div aria-hidden="true" className="absolute inset-0 grid place-items-center" style={{ background: "radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--color-gold) 38%, transparent), transparent 60%), linear-gradient(160deg, #1b1b1b, #0b0b0b)" }}>
-            <span className="font-display text-[110px] leading-none text-white/[0.06]">{a.first_name[0]}{a.last_name[0]}</span>
-          </div>
+          <span aria-hidden="true" className="absolute right-4 top-2 font-display text-[110px] leading-none text-white/[0.12]">{a.first_name[0]}{a.last_name[0]}</span>
         )}
-        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,7,0)_25%,rgba(7,7,7,0.94)_88%)]" />
-        {a.family && blobConfigured && me.features.film_uploads ? <div className="absolute right-3 top-3"><PhotoButton athlete={a.id} has={a.has_photo} /></div> : null}
+        {a.has_photo ? <div aria-hidden="true" className="absolute inset-0" style={{ background: heroBackground(a.theme_color, true) }} /> : null}
+        {a.has_photo ? <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,7,0)_35%,rgba(7,7,7,0.92)_92%)]" /> : null}
+        {a.family ? <div className="absolute right-3 top-3"><PhotoButton athlete={a.id} has={a.has_photo} /></div> : null}
         <div className="relative flex flex-col gap-1">
-          <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{[sportName(a.sport), a.programs].filter(Boolean).join(" · ")}</div>
+          <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-cream/80">{[sportName(a.sport), a.programs].filter(Boolean).join(" · ")}</div>
           <h1 className="font-display text-[38px] uppercase leading-none">{a.first_name} {a.last_name}</h1>
           <div className="text-sm text-soft">{[a.position, a.grad_year ? `Class of ${a.grad_year}` : null, a.hometown, a.family || isStaff ? `Age ${age}` : null].filter(Boolean).join(" · ")}</div>
           {height || weight ? <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{body("Ht", height, "height_in")}{body("Wt", weight, "weight_lb")}</div> : null}
