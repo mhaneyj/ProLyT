@@ -8,6 +8,8 @@ import { themeVars } from "@/lib/domain/brand";
 import { NavLinks, type NavItem } from "@/components/nav";
 import { familyKids } from "@/lib/kid";
 import { unreadCount } from "@/lib/messages";
+import { hasPasskeyHere } from "@/lib/passkeys";
+import { PasskeyNudge } from "@/components/passkey";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -64,6 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         {isDemo ? <div className="mx-5 mt-2 rounded bg-gold/10 px-3 py-1 text-center text-[11px] text-gold">Demo mode · sample data</div> : null}
         <main className="flex flex-1 flex-col gap-4 px-5 pb-36 pt-4">
+          {!isDemo && !(await hasPasskeyHere(me.id)) ? <PasskeyNudge /> : null}
           {children}
           {brand ? <div className="mt-6 text-center"><PoweredBy /></div> : null}
         </main>

@@ -117,3 +117,38 @@ describe("6-digit sign-in codes", () => {
     await expect(verifyCode(q, "off@example.com", (await requestLink(q, "off@example.com")).code)).rejects.toThrow(/turned off/);
   });
 });
+
+describe("faster sign-in", () => {
+  it("Google: a verified email maps to the existing account and links the Google id", async () => {
+    const { verifyCode, userForVerifiedEmail } = await import("../src/lib/session");
+    const r = await verifyCode(q, "goog@example.com", (await requestLink(q, "goog@example.com")).code);
+    expect(await userForVerifiedEmail(q, "Goog@Example.com", "g-123")).toBe(r!.userId);
+    // Same Google account, even if its email changes later
+    expect(await userForVerifiedEmail(q, "renamed@example.com", "g-123")).toBe(r!.userId);
+    const fresh = await userForVerifiedEmail(q, "newgoog@example.com", "g-456");
+    expect(fresh).not.toBe(r!.userId);
+  });
+  it("hand-offs work once, within 2 minutes, and never for turned-off accounts", async () => {
+    const { createHandoff, redeemHandoff, sessionForUser, userForVerifiedEmail } = await import("../src/lib/session");
+    const uid = await userForVerifiedEmail(q, "hand@example.com", "g-789");
+    const t = await createHandoff(q, uid);
+    expect(await redeemHandoff(q, t)).toBe(uid);
+    expect(await redeemHandoff(q, t)).toBeNull();
+    const old = await createHandoff(q, uid);
+    await q("update auth.handoffs set expires_at = now() - interval '1 second'");
+    expect(await redeemHandoff(q, old)).toBeNull();
+    expect(await sessionForUser(q, uid)).toBeTruthy();
+    await q("update auth.users set disabled_at = now() where id = $1", [uid]);
+    expect(await sessionForUser(q, uid)).toBeNull();
+  });
+  it("sessions last a year and renew while in use", async () => {
+    const { verifyCode } = await import("../src/lib/session");
+    const r = await verifyCode(q, "year@example.com", (await requestLink(q, "year@example.com")).code);
+    const [{ days }] = await q<{ days: number }>("select extract(day from expires_at - now())::int days from auth.sessions where user_id = $1", [r!.userId]);
+    expect(days).toBeGreaterThanOrEqual(364);
+    await q("update auth.sessions set expires_at = now() + interval '10 days' where user_id = $1", [r!.userId]);
+    expect(await userForSession(q, r!.session)).toBe(r!.userId);
+    const [{ d2 }] = await q<{ d2: number }>("select extract(day from expires_at - now())::int d2 from auth.sessions where user_id = $1", [r!.userId]);
+    expect(d2).toBeGreaterThanOrEqual(364);
+  });
+});

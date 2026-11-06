@@ -39,8 +39,7 @@ async function signIn(sub, email, path = "/login") {
   await page.getByRole("button", { name: /Email me a code/ }).click();
   await seen(page.getByText("Enter your code"));
   const code = await logged("code", email, before - 1);
-  await page.getByLabel("Code").fill(code);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Code").fill(code); // signs in by itself at 6 digits
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 15000 }).catch(() => undefined);
   await page.waitForLoadState("networkidle");
   return { ctx, page, errors, code };
@@ -51,6 +50,7 @@ async function signIn(sub, email, path = "/login") {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.goto(url("gamefit-loomis", "/login"));
+  check("Face ID sign-in offered", await seen(page.getByRole("button", { name: /Sign in with/ })));
   check("real mode shows email sign-in (no demo people)", (await seen(page.getByLabel("Email"))) && (await page.getByText("Pat Morgan").count()) === 0);
   await page.getByLabel("Email").fill("x@y"); // browser accepts, server rejects (no domain)
   await page.getByRole("button", { name: /Email me/ }).click();
@@ -78,8 +78,7 @@ let ownerLink = "";
   await p2.goto(url("", "/login"));
   await p2.getByLabel("Email").fill("marcus@prolyt.test");
   await p2.getByRole("button", { name: /Email me a code/ }).click();
-  await p2.getByLabel("Code").fill(code);
-  await p2.getByRole("button", { name: "Sign in" }).click();
+  await p2.getByLabel("Code").fill(code); // signs in by itself at 6 digits
   check("an old code can't sign in again", await seen(p2.getByText(/isn't right|expired/)));
   await other.close();
   check("no client errors (admin)", errors.length === 0, errors.join("; "));
@@ -97,8 +96,7 @@ async function joinVia(link, email) {
   const before = logLines();
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: /Email me a code/ }).click();
-  await page.getByLabel("Code").fill(await logged("code", email, before - 1));
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Code").fill(await logged("code", email, before - 1)); // signs in by itself at 6 digits
   await page.waitForURL(/\/join\//, { timeout: 15000 });
   await page.getByRole("button", { name: /^Join / }).click();
   await page.waitForLoadState("networkidle");
@@ -249,8 +247,7 @@ let coachLink = "";
   const n2 = logLines();
   await pp.getByLabel("Email").fill("taylor.mom@example.test");
   await pp.getByRole("button", { name: /Email me a code/ }).click();
-  await pp.getByLabel("Code").fill(await logged("code", "taylor.mom@example.test", n2 - 1));
-  await pp.getByRole("button", { name: "Sign in" }).click();
+  await pp.getByLabel("Code").fill(await logged("code", "taylor.mom@example.test", n2 - 1)); // signs in by itself at 6 digits
   await pp.waitForURL(/\/link\//, { timeout: 15000 });
   await pp.getByLabel("Type your full name to approve").fill("Casey Teen");
   await pp.getByRole("button", { name: "Approve" }).click();
@@ -287,8 +284,7 @@ let coachLink = "";
   const n2 = logLines();
   await ap.getByLabel("Email").fill("avery.real@example.test");
   await ap.getByRole("button", { name: /Email me a code/ }).click();
-  await ap.getByLabel("Code").fill(await logged("code", "avery.real@example.test", n2 - 1));
-  await ap.getByRole("button", { name: "Sign in" }).click();
+  await ap.getByLabel("Code").fill(await logged("code", "avery.real@example.test", n2 - 1)); // signs in by itself at 6 digits
   await ap.waitForURL(/\/link\//, { timeout: 15000 });
   await ap.getByRole("button", { name: /This is me/ }).click();
   await ap.waitForURL(/linked=1/, { timeout: 15000 });
@@ -342,6 +338,27 @@ let coachLink = "";
   await a.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
   check("teen sees the whole conversation, parent included", (await seen(a.page.getByText("Thanks coach!"))) && (await seen(a.page.getByText(/Your parents can read/))));
   await a.ctx.close();
+}
+
+// ── 10. Face ID: turn it on once, then sign in with one tap (Chromium's virtual authenticator stands in for Face ID)
+{
+  const { ctx, page, errors } = await signIn("gamefit-loomis", "parent@family.test");
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true } });
+  await page.reload();
+  await page.getByRole("button", { name: "Turn on" }).click();
+  check("parent turns on Face ID in one tap", await seen(page.getByText(/Next time, tap/)));
+  await page.reload();
+  check("Face ID prompt goes away once set up", (await page.getByRole("button", { name: "Turn on" }).count()) === 0);
+  await page.getByRole("button", { name: /Sign out/ }).click();
+  await page.waitForURL((u) => u.pathname === "/" || u.pathname.startsWith("/login"));
+  await page.goto(url("gamefit-loomis", "/login"));
+  await page.getByRole("button", { name: /Sign in with/ }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 15000 }).catch(() => undefined);
+  check("signs back in with Face ID, no email or code", page.url().endsWith("/family"), page.url());
+  check("no client errors (Face ID)", errors.length === 0, errors.join("; "));
+  await ctx.close();
 }
 
 await browser.close();
