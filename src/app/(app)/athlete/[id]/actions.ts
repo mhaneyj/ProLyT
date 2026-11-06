@@ -301,6 +301,34 @@ export async function inviteParent(form: FormData) {
   redirect(`/athlete/${athlete}?${msg}`);
 }
 
+/** A parent makes their teen's login with an email and password (or resets the teen's password). */
+export async function setTeenPassword(form: FormData) {
+  const me = await requireMe();
+  const athlete = String(form.get("athlete") ?? ""), email = String(form.get("email") ?? ""), pw = String(form.get("password") ?? "");
+  let msg = "login=pw";
+  try {
+    const [a] = await asUser(me.id, (q) => q<{ ok: boolean; teen: boolean; user_id: string | null; first_name: string }>(
+      "select is_guardian(id) ok, age_on(birth_date) between 13 and 17 teen, user_id, first_name from athletes where id = $1", [athlete]));
+    if (!a?.ok) throw new Error("Only a parent can do this");
+    if (!a.teen) throw new Error("Parents set passwords for athletes 13 to 17");
+    const { asService } = await import("@/lib/db");
+    const { createLoginWithPassword, setPassword } = await import("@/lib/session");
+    await asService(async (q) => {
+      if (a.user_id) return setPassword(q, a.user_id, pw);
+      if (me.email && email.trim().toLowerCase() === me.email.toLowerCase()) throw new Error(`Use ${a.first_name}'s own email, not yours`);
+      const uid = await createLoginWithPassword(q, email, pw);
+      await q("update athletes set user_id = $2, parent_approved_at = coalesce(parent_approved_at, now()) where id = $1 and user_id is null", [athlete, uid]);
+      await q(`insert into consents (athlete_id, org_id, guardian_user_id, kind, version, signer_name)
+               select $1, null, $2, 'parental_verification', 'parent-made-login-2026-11', coalesce(nullif(full_name, ''), email) from profiles where id = $2`, [athlete, me.id]);
+      await q("insert into audit_log (actor, action, target) values ($1, 'parent_made_login', $2)", [me.id, athlete]);
+    });
+    if (a.user_id) msg = "login=reset";
+  } catch (e) {
+    msg = `login_error=${encodeURIComponent(dbMessage(e))}`;
+  }
+  redirect(`/athlete/${athlete}?${msg}#family`);
+}
+
 export async function giveLogin(form: FormData) {
   const me = await requireMe();
   const athlete = String(form.get("athlete") ?? ""), email = String(form.get("email") ?? "");

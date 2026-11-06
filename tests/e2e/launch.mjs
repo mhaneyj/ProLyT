@@ -272,7 +272,7 @@ let coachLink = "";
   await page.waitForURL(/\/athlete\//);
   const n = logLines();
   await page.getByPlaceholder("Avery's email").fill("avery.real@example.test");
-  await page.getByRole("button", { name: "Send" }).last().click();
+  await page.getByRole("button", { name: /Email Avery a link instead/ }).click();
   check("parent sends Avery a login link", await seen(page.getByText(/emailed Avery a link/)));
   check("parent's profile view shows a confirmed program stint", await seen(page.getByText("Confirmed")));
   await ctx.close();
@@ -398,6 +398,45 @@ let coachLink = "";
   check("outside adult can't comment on a minor's post", (await seen(s.page.getByText(/only family and coaches can comment/))) && (await s.page.getByLabel("Comment").count()) === 0);
   check("no client errors (outside member)", s.errors.length === 0, s.errors.join("; "));
   await s.ctx.close();
+}
+
+// ── 12. Passwords: a parent sets their teen's password; an adult sets their own
+{
+  const p = await signIn("gamefit-loomis", "parent@family.test");
+  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await p.page.waitForURL(/\/athlete\//);
+  await p.page.getByLabel("New password for Avery").fill("football");
+  await p.page.getByRole("button", { name: "Set", exact: true }).click();
+  check("weak teen password refused", await seen(p.page.getByText(/too easy to guess/)));
+  await p.page.getByLabel("New password for Avery").fill("Trenches-2029!");
+  await p.page.getByRole("button", { name: "Set", exact: true }).click();
+  check("parent sets Avery's password", await seen(p.page.getByText(/new password is set/)));
+  await p.page.goto(url("gamefit-loomis", "/account"));
+  await p.page.getByPlaceholder("New password (8+ characters)").fill("Loomis-Mom-77");
+  await p.page.getByPlaceholder("Type it again").fill("Loomis-Mom-77");
+  await p.page.getByRole("button", { name: "Set password" }).click();
+  check("parent sets their own password", await seen(p.page.getByText(/Password saved/)));
+  await p.ctx.close();
+
+  const pwIn = async (email, pw) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    await page.goto(url("gamefit-loomis", "/login"));
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(pw);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.waitForURL((u) => (!u.pathname.startsWith("/login") && u.pathname !== "/home") || u.search.includes("error"), { timeout: 15000 }).catch(() => undefined);
+    return { ctx, page };
+  };
+  const bad = await pwIn("avery.real@example.test", "wrong-password");
+  check("wrong password gets a clear message", await seen(bad.page.getByText(/don't match/)));
+  await bad.ctx.close();
+  const a = await pwIn("avery.real@example.test", "Trenches-2029!");
+  check("teen signs in with the password a parent set", /\/(athlete|feed)/.test(a.page.url()), a.page.url());
+  await a.ctx.close();
+  const m = await pwIn("parent@family.test", "Loomis-Mom-77");
+  check("parent signs in with email + password", m.page.url().endsWith("/family"), m.page.url());
+  await m.ctx.close();
 }
 
 await browser.close();

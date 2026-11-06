@@ -69,9 +69,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <ProLytMark className="text-2xl" />
             )}
           </Link>
-          <form action={signOut} className="flex-none">
-            <button className="min-h-11 px-1 text-xs text-muted hover:text-cream">{me.name} · Sign out</button>
-          </form>
+          <span className="flex flex-none items-center text-xs text-muted">
+            <Link href="/account" className="min-h-11 px-1 py-3.5 hover:text-cream">{me.name}</Link>
+            <span aria-hidden="true">·</span>
+            <form action={signOut}><button className="min-h-11 px-1 hover:text-cream">Sign out</button></form>
+          </span>
         </header>
         {isDemo ? <div className="mx-5 mt-2 rounded bg-gold/10 px-3 py-1 text-center text-[11px] text-gold">Demo mode · sample data</div> : null}
         <main className="flex flex-1 flex-col gap-4 px-5 pb-36 pt-4">

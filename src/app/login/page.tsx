@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { asService, isDemo } from "@/lib/db";
-import { BadCode, requestLink, verifyCode, RateLimited, SESSION_DAYS } from "@/lib/session";
+import { BadCode, requestLink, verifyCode, RateLimited, SESSION_DAYS, signInWithPassword } from "@/lib/session";
 import { sendSignInEmail } from "@/lib/email";
 import { DEMO_COOKIE, sessionCookieName } from "@/lib/auth";
 import { DEMO_USERS } from "@/lib/demo-seed";
@@ -70,6 +70,27 @@ async function checkCode(form: FormData) {
     httpOnly: true, secure: proto === "https", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
   jar.delete(EMAIL_COOKIE);
+  redirect(next || "/home");
+}
+
+async function passwordSignIn(form: FormData) {
+  "use server";
+  if (isDemo) return;
+  const next = safeNext(form.get("next"));
+  const email = String(form.get("email") ?? "");
+  const pw = String(form.get("password") ?? "");
+  if (!pw) return sendCode(form); // no password typed: send a code instead
+  const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
+  let session: string;
+  try {
+    session = (await asService((q) => signInWithPassword(q, email, pw, admins))).session;
+  } catch (e) {
+    redirect(withNext(`/login?error=${encodeURIComponent(e instanceof BadCode ? e.message : "Something went wrong. Try again.")}`, next));
+  }
+  const proto = ((await headers()).get("x-forwarded-proto") ?? "https").split(",")[0].trim();
+  (await cookies()).set(sessionCookieName(proto === "https"), session, {
+    httpOnly: true, secure: proto === "https", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 24 * 60 * 60,
+  });
   redirect(next || "/home");
 }
 
@@ -144,13 +165,16 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             </a>
           ) : null}
           <div className="flex items-center gap-3 text-[12px] uppercase tracking-[2px] text-muted"><span className="h-px flex-1 bg-line" />or email<span className="h-px flex-1 bg-line" /></div>
-          <form action={sendCode} className="flex flex-col gap-3">
+          <form action={passwordSignIn} className="flex flex-col gap-3">
             {next ? <input type="hidden" name="next" value={next} /> : null}
             <label htmlFor="email" className="sr-only">Email</label>
-            <input id="email" name="email" type="email" autoComplete="email" required placeholder="you@email.com" aria-label="Email" className={input} />
-            <Button type="submit" kind="ghost">Email me a code</Button>
+            <input id="email" name="email" type="email" autoComplete="username email" required placeholder="you@email.com" aria-label="Email" className={input} />
+            <label htmlFor="password" className="sr-only">Password</label>
+            <input id="password" name="password" type="password" autoComplete="current-password" placeholder="Password (if you set one)" aria-label="Password" className={input} />
+            <Button type="submit">Sign in</Button>
+            <button formAction={sendCode} className="min-h-12 rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-cream hover:border-gold">Email me a code</button>
           </form>
-          <p className="text-center text-xs text-muted">No passwords. You stay signed in on this device for a year.</p>
+          <p className="text-center text-xs text-muted">No password or forgot it? Use a code. You stay signed in for a year.</p>
         </div>
       )}
       {brand ? <div className="mt-auto text-center"><PoweredBy /></div> : null}

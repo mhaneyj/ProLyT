@@ -152,3 +152,41 @@ describe("faster sign-in", () => {
     expect(d2).toBeGreaterThanOrEqual(364);
   });
 });
+
+describe("passwords", () => {
+  it("rejects weak passwords", async () => {
+    const { passwordProblem } = await import("../src/lib/session");
+    expect(passwordProblem("short")).toMatch(/8 characters/);
+    expect(passwordProblem("football")).toMatch(/easy/);
+    expect(passwordProblem("aaaaaaaaaa")).toMatch(/easy/);
+    expect(passwordProblem("me@x.com1", "me@x.com1")).toMatch(/email/);
+    expect(passwordProblem("Trenches-2029")).toBeNull();
+  });
+  it("set after signing in, then email + password works; the hash isn't the password", async () => {
+    const { verifyCode, setPassword, signInWithPassword } = await import("../src/lib/session");
+    const r = await verifyCode(q, "pw@example.com", (await requestLink(q, "pw@example.com")).code);
+    await setPassword(q, r!.userId, "Trenches-2029");
+    const [{ password_hash }] = await q<{ password_hash: string }>("select password_hash from auth.users where id = $1", [r!.userId]);
+    expect(password_hash).toMatch(/^scrypt\$/);
+    expect(password_hash).not.toContain("Trenches");
+    const s = await signInWithPassword(q, " PW@example.com ", "Trenches-2029");
+    expect(await userForSession(q, s.session)).toBe(r!.userId);
+  });
+  it("wrong passwords and unknown emails get the same answer, and lock after 8 tries", async () => {
+    const { signInWithPassword, MAX_PASSWORD_TRIES } = await import("../src/lib/session");
+    await expect(signInWithPassword(q, "nobody@example.com", "whatever123")).rejects.toThrow(/don't match/);
+    for (let i = 0; i < MAX_PASSWORD_TRIES; i++) await expect(signInWithPassword(q, "pw@example.com", "wrong-pass")).rejects.toThrow(/don't match/);
+    await expect(signInWithPassword(q, "pw@example.com", "Trenches-2029")).rejects.toThrow(/Too many tries/);
+  });
+  it("accounts without a password can't be signed into with one", async () => {
+    const { signInWithPassword } = await import("../src/lib/session");
+    await consumeLink(q, (await requestLink(q, "nopw@example.com")).token);
+    await expect(signInWithPassword(q, "nopw@example.com", "")).rejects.toThrow(/don't match/);
+  });
+  it("a parent-made teen login refuses an email that already has an account", async () => {
+    const { createLoginWithPassword, signInWithPassword } = await import("../src/lib/session");
+    await expect(createLoginWithPassword(q, "pw@example.com", "Another-pass1")).rejects.toThrow(/already has/);
+    const uid = await createLoginWithPassword(q, "teen@example.com", "Rocklin-2029");
+    expect((await signInWithPassword(q, "teen@example.com", "Rocklin-2029")).userId).toBe(uid);
+  });
+});

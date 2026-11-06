@@ -12,7 +12,7 @@ import { Notice, Pill, SectionLabel } from "@/components/ui";
 import { loadAthlete, sportName } from "./header";
 import { PhotoButton } from "./photo-button";
 import { CopyLink } from "./share-card";
-import { addStint, giveLogin, inviteParent, removeStint, shareProfile, stopSharing, updateOrgStint } from "./actions";
+import { addStint, giveLogin, setTeenPassword, inviteParent, removeStint, shareProfile, stopSharing, updateOrgStint } from "./actions";
 
 export const metadata = { title: "Profile" };
 
@@ -308,18 +308,33 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         <section id="family" className="flex scroll-mt-4 flex-col gap-2 rounded-[14px] border border-line p-4">
           <div className="font-cond text-[15px] font-extrabold uppercase tracking-[2px]">Family</div>
           {sp.login === "sent" ? <Notice tone="good">We emailed {a.first_name} a link to connect their own login.</Notice> : null}
+          {sp.login === "pw" ? <Notice tone="good">{a.first_name}&apos;s login is ready. They sign in with their email and the password you set.</Notice> : null}
+          {sp.login === "reset" ? <Notice tone="good">{a.first_name}&apos;s new password is set.</Notice> : null}
           {sp.login_error ? <Notice tone="bad">{sp.login_error}</Notice> : null}
           {age >= 13 && !a.has_login ? (
-            <form action={giveLogin} className="flex flex-col gap-2">
+            <form action={setTeenPassword} className="flex flex-col gap-2">
               <input type="hidden" name="athlete" value={a.id} />
               <p className="text-sm text-soft">Give {a.first_name} their own login. They can update their profile and film; you keep oversight until 18.</p>
-              <div className="flex gap-2">
-                <label htmlFor="kid-email" className="sr-only">{a.first_name}&apos;s email</label>
-                <input id="kid-email" name="email" type="email" required placeholder={`${a.first_name}'s email`} className={`${input} min-w-0 flex-1`} />
-                <button className="min-h-11 rounded-md border-2 border-[#3a3a3a] px-4 text-sm font-bold hover:border-gold">Send</button>
-              </div>
+              <label htmlFor="kid-email" className="sr-only">{a.first_name}&apos;s email</label>
+              <input id="kid-email" name="email" type="email" required autoComplete="off" placeholder={`${a.first_name}'s email`} className={input} />
+              <label htmlFor="kid-pw" className="sr-only">Password for {a.first_name}</label>
+              <input id="kid-pw" name="password" type="text" autoComplete="off" placeholder="Pick a password for them (8+ characters)" className={input} />
+              <button className="min-h-11 rounded-md bg-gold text-sm font-bold text-on-gold">Create {a.first_name}&apos;s login</button>
+              <button formAction={giveLogin} className="min-h-11 text-sm font-semibold text-soft hover:text-cream">No password? Email {a.first_name} a link instead</button>
             </form>
-          ) : a.has_login ? <p className="text-sm text-soft">{a.first_name} has their own login.</p> : <p className="text-sm text-muted">{a.first_name} can get their own login at 13.</p>}
+          ) : a.has_login ? (
+            <form action={setTeenPassword} className="flex flex-col gap-2">
+              <input type="hidden" name="athlete" value={a.id} />
+              <p className="text-sm text-soft">{a.first_name} has their own login.{age < 18 ? " Forgot their password? Set a new one:" : ""}</p>
+              {age < 18 ? (
+                <div className="flex gap-2">
+                  <label htmlFor="kid-reset" className="sr-only">New password for {a.first_name}</label>
+                  <input id="kid-reset" name="password" type="text" autoComplete="off" required minLength={8} placeholder="New password" className={`${input} min-w-0 flex-1`} />
+                  <button className="min-h-11 rounded-md border-2 border-[#3a3a3a] px-4 text-sm font-bold hover:border-gold">Set</button>
+                </div>
+              ) : null}
+            </form>
+          ) : <p className="text-sm text-muted">{a.first_name} can get their own login at 13.</p>}
           <a href={`/api/athlete/${a.id}/export`} className="min-h-11 pt-2 text-sm font-semibold text-gold">Download {a.first_name}&apos;s full record (JSON)</a>
         </section>
       ) : a.self ? (
