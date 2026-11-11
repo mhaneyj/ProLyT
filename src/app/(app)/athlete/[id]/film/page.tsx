@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { shortDate } from "@/lib/domain/format";
@@ -21,14 +22,16 @@ export default async function FilmRoom({ params, searchParams }: { params: Promi
   const { show, clip_error } = await searchParams;
   const me = await requireMe();
   const { a, switcher } = await loadAthlete(me, id, "/film");
-  const [film, clips] = await asUser(me.id, (q) => Promise.all([
+  const [film, clips, plus] = await asUser(me.id, (q) => Promise.all([
     q<F>(`
     select f.id, f.title, f.kind, f.storage_path, f.is_highlight, f.created_at, p.full_name by
     from film f left join profiles p on p.id = f.uploaded_by
     where f.athlete_id = $1 order by f.created_at desc`, [id]),
     q<C>(`select c.id, c.film_id, f.storage_path, c.start_s, c.end_s, c.title, c.is_highlight, f.title source, c.created_at
       from clips c join film f on f.id = c.film_id where c.athlete_id = $1 order by c.created_at desc`, [id]),
+    q<{ ok: boolean }>("select athlete_plus($1) ok", [id]).then((r) => Boolean(r[0]?.ok)),
   ]));
+  const uploads = me.features.film_uploads || plus;
   const tab = show === "highlights" ? "highlights" : "all";
   const list = tab === "highlights" ? film.filter((f) => f.is_highlight) : film;
   const clipList = tab === "highlights" ? clips.filter((c) => c.is_highlight) : clips;
@@ -49,7 +52,8 @@ export default async function FilmRoom({ params, searchParams }: { params: Promi
           Add a clip
           <Icon name="chevron" size={18} className="ml-auto text-gold transition-transform group-open:rotate-90" />
         </summary>
-        <div className="px-4 pb-4"><FilmForm athlete={id} canUpload={blobConfigured && me.features.film_uploads} /></div>
+        <div className="px-4 pb-4"><FilmForm athlete={id} canUpload={blobConfigured && uploads} />
+          {!uploads && a.family ? <p className="mt-2 text-[12px] text-muted">Hudl and YouTube links always work. To upload video from your phone, get <Link href="/plus" className="font-semibold text-gold">ProLyt+</Link>.</p> : null}</div>
       </details> : null}
 
       {clip_error ? <Notice tone="bad">{clip_error}</Notice> : null}

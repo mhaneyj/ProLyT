@@ -1221,3 +1221,40 @@ describe("program plans", () => {
     await db.query("delete from events where id=$1", [ev]);
   });
 });
+
+describe("ProLyt+ for families", () => {
+  const h = (c: string) => c.repeat(64);
+  it("Plus covers the family's athletes; insights and view alerts are Plus-only and never leak", async () => {
+    await as(db, PARENT_A, () => db.query("select create_profile_share($1,$2)", [jordan, h("9")]));
+    const open = () => as(db, null, () => db.query("select public_profile($1)", [h("9")]));
+    await open();
+    // Free: total only, no trend; no alert.
+    const free = (await as(db, PARENT_A, () => db.query<{ i: { plus: boolean; total: number; days: unknown } }>("select profile_insights($1) i", [jordan]))).rows[0].i;
+    expect(free.plus).toBe(false);
+    expect(free.total).toBeGreaterThan(0);
+    expect(free.days).toBeNull();
+    expect((await db.query("select * from profile_view_alert($1)", [h("9")])).rows).toHaveLength(0);
+    // Outsiders see nothing; nobody can call the alert function or grant themselves Plus.
+    expect((await as(db, PARENT_B, () => db.query<{ i: unknown }>("select profile_insights($1) i", [jordan]))).rows[0].i).toBeNull();
+    await expect(as(db, PARENT_A, () => db.query("select * from profile_view_alert($1)", [h("9")]))).rejects.toThrow(/permission denied/);
+    await expect(as(db, PARENT_A, () => db.query("insert into family_plans (user_id, status) values ($1,'active')", [PARENT_A]))).rejects.toThrow(/permission denied/);
+    await expect(as(db, PARENT_A, () => db.query("select admin_comp_plus($1, current_date + 30)", [PARENT_A]))).rejects.toThrow(/admins only/);
+    await expect(as(db, PARENT_A, () => db.query("select * from profile_views"))).rejects.toThrow(/permission denied/);
+    // Subscribed: the trend, and one alert an hour to the Plus parent.
+    await db.query("insert into family_plans (user_id, status, subscription_id) values ($1,'trialing','sub_plus_test')", [PARENT_A]);
+    expect((await as(db, PARENT_A, () => db.query<{ p: { plus: boolean } }>("select my_plus() p"))).rows[0].p.plus).toBe(true);
+    expect((await as(db, PARENT_B, () => db.query<{ p: { plus: boolean } }>("select my_plus() p"))).rows[0].p.plus).toBe(false);
+    await open();
+    const plus = (await as(db, PARENT_A, () => db.query<{ i: { plus: boolean; last_30: number; days: unknown[] } }>("select profile_insights($1) i", [jordan]))).rows[0].i;
+    expect(plus.plus).toBe(true);
+    expect(plus.last_30).toBeGreaterThanOrEqual(2);
+    expect(plus.days).toHaveLength(30);
+    const alert = (await db.query<{ user_id: string; athlete_id: string }>("select * from profile_view_alert($1)", [h("9")])).rows;
+    expect(alert).toEqual([expect.objectContaining({ user_id: PARENT_A, athlete_id: jordan })]);
+    expect((await db.query("select * from profile_view_alert($1)", [h("9")])).rows).toHaveLength(0);
+    // Canceled: back to free.
+    await db.query("update family_plans set status='canceled' where user_id=$1", [PARENT_A]);
+    expect((await as(db, PARENT_A, () => db.query<{ ok: boolean }>("select athlete_plus($1) ok", [jordan]))).rows[0].ok).toBe(false);
+    await db.query("delete from family_plans where user_id=$1", [PARENT_A]);
+  });
+});

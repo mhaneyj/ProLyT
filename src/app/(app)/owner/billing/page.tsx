@@ -23,7 +23,7 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
   return (
     <>
       <Link href="/owner/settings" className="min-h-11 py-3 text-sm text-muted hover:text-cream">← Settings</Link>
-      <Title sub={`Your ProLyt plan. Families never pay ProLyt for the app; payments to you carry the ${feePercent()} platform fee.`}>Plan and billing</Title>
+      <Title sub={`Your ProLyt plan. The app is free for your families; payments to you carry the ${feePercent()} platform fee.`}>Plan and billing</Title>
       {sp.ok === "club" ? <Notice tone="good">Welcome to Club. Everything is switched on.</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
 

@@ -19,6 +19,15 @@ export async function POST(request: NextRequest) {
   await asService(async (q) => {
     switch (event.type) {
       case "checkout.session.completed": {
+        if (event.data.object.metadata?.family_plus) {
+          const s = event.data.object;
+          const sub = typeof s.subscription === "string" ? s.subscription : s.subscription?.id ?? null;
+          await q(`insert into family_plans (user_id, status, subscription_id, customer_id) values ($1, 'active', $2, $3)
+                   on conflict (user_id) do update set status = 'active', subscription_id = excluded.subscription_id,
+                   customer_id = coalesce(family_plans.customer_id, excluded.customer_id), updated_at = now()`,
+            [s.metadata!.family_plus, sub, typeof s.customer === "string" ? s.customer : null]);
+          break;
+        }
         if (event.data.object.metadata?.org_plan) {
           const s = event.data.object;
           const sub = typeof s.subscription === "string" ? s.subscription : s.subscription?.id ?? null;
@@ -63,11 +72,18 @@ export async function POST(request: NextRequest) {
         if (typeof inv.subscription === "string") {
           await q("update memberships set status = 'past_due' where stripe_subscription_id = $1", [inv.subscription]);
           await q("update orgs set plan_status = 'past_due' where plan_subscription_id = $1", [inv.subscription]);
+          await q("update family_plans set status = 'past_due', updated_at = now() where subscription_id = $1", [inv.subscription]);
         }
         break;
       }
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription & { current_period_end?: number };
+        if (sub.metadata?.family_plus) {
+          const end = sub.current_period_end ?? (sub.items?.data?.[0] as { current_period_end?: number } | undefined)?.current_period_end;
+          const status = ["active", "trialing", "past_due"].includes(sub.status) ? sub.status : "canceled";
+          await q("update family_plans set status = $2, plan_interval = $3, renews_at = $4, updated_at = now() where subscription_id = $1",
+            [sub.id, status, sub.items?.data?.[0]?.price?.recurring?.interval ?? null, end ? new Date(end * 1000).toISOString() : null]);
+        }
         if (sub.metadata?.org_plan) {
           const end = sub.current_period_end ?? (sub.items?.data?.[0] as { current_period_end?: number } | undefined)?.current_period_end;
           const status = ["active", "trialing", "past_due"].includes(sub.status) ? sub.status : "canceled";
@@ -79,6 +95,7 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.deleted": {
         await q("update memberships set status = 'canceled' where stripe_subscription_id = $1", [event.data.object.id]);
         await q("update orgs set plan = 'starter', plan_status = 'canceled' where plan_subscription_id = $1", [event.data.object.id]);
+        await q("update family_plans set status = 'canceled', updated_at = now() where subscription_id = $1", [event.data.object.id]);
         break;
       }
       case "account.updated": {

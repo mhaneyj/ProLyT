@@ -1,3 +1,4 @@
+import { asUser } from "@/lib/db";
 import Link from "next/link";
 import { requireMe } from "@/lib/auth";
 import { blobConfigured } from "@/lib/film";
@@ -14,7 +15,8 @@ export default async function Feed({ searchParams }: { searchParams: Promise<{ t
   const me = await requireMe();
   const scope = sp.tab === "all" ? "all" : "following";
   const before = sp.before && !Number.isNaN(Date.parse(sp.before)) ? sp.before : null;
-  const [posts, as] = await Promise.all([loadFeed(me.id, { scope, before }), postingAs(me)]);
+  const [posts, as, plus] = await Promise.all([loadFeed(me.id, { scope, before }), postingAs(me),
+    me.features.film_uploads ? Promise.resolve(false) : asUser(me.id, (q) => q<{ ok: boolean }>("select has_plus() ok")).then((r) => Boolean(r[0]?.ok))]);
   const ref = await refCode(me.id);
   const back = `/feed${scope === "all" ? "?tab=all" : ""}`;
   return (
@@ -32,7 +34,7 @@ export default async function Feed({ searchParams }: { searchParams: Promise<{ t
         ))}
       </nav>
       {sp.reported ? <Notice tone="good">Thanks. ProLyt&apos;s safety team will review it.</Notice> : null}
-      {as.length && !before ? <Composer options={as} canVideo={blobConfigured && me.features.film_uploads} /> : null}
+      {as.length && !before ? <Composer options={as} canVideo={blobConfigured && (me.features.film_uploads || plus)} /> : null}
       {posts.length === 0 ? (
         scope === "following"
           ? <Empty title="Your feed is quiet">Follow athletes and programs to see their PRs, highlights and news here.<div className="mt-3"><LinkButton href="/discover">Find athletes</LinkButton></div></Empty>

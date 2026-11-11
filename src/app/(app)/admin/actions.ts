@@ -164,3 +164,10 @@ export async function compClub(form: FormData) {
   await adminRun(`/admin/programs/${org}`, until ? `Club comped through ${until}.` : "Comp ended. The program is on its paid plan (or Starter).",
     "select admin_comp_club($1, $2::date)", [org, until]);
 }
+
+export async function compPlus(form: FormData) {
+  const user = String(form.get("user"));
+  const raw = String(form.get("until") ?? "");
+  const until = form.get("end") ? null : /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+  await adminRun(`/admin/people/${user}`, until ? `ProLyt+ on us through ${until}.` : "ProLyt+ comp ended.", "select admin_comp_plus($1, $2::date)", [user, until]);
+}

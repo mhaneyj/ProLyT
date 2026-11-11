@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
+import { pushTo } from "@/lib/push";
 import type { Metadata } from "next";
 import { asService } from "@/lib/db";
 import { shareHash } from "@/lib/share";
@@ -20,6 +22,11 @@ export default async function PublicProfile({ params }: { params: Promise<{ toke
   const { token } = await params;
   const p = await load(token);
   if (!p) notFound();
+  // ProLyt+ families get a heads-up when their link is opened (at most once an hour; never who opened it).
+  after(async () => {
+    const who = await asService((q) => q<{ user_id: string; first_name: string; athlete_id: string }>("select * from profile_view_alert($1)", [shareHash(token)]));
+    if (who.length) await pushTo(who.map((w) => w.user_id), { title: `${who[0].first_name}'s profile was just opened`, body: "Someone opened your recruiting link. See the trend in ProLyt.", url: `/athlete/${who[0].athlete_id}#recruiting`, tag: `view-${who[0].athlete_id}` });
+  });
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">

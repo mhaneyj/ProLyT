@@ -914,6 +914,11 @@ let coachLink = "";
   await pg.getByRole("button", { name: "Sign in", exact: true }).click();
   await pg.waitForURL(/\/family/, { timeout: 15000 });
   check("family home shows their program's events", await seen(pg.getByRole("heading", { name: "Events" })) && await seen(pg.getByText("Loomis 7v7 Classic").first()));
+  // ── 22. ProLyt+: families find it from Account; the free tier is clear.
+  await pg.goto(url("gamefit-loomis", "/account"));
+  await pg.getByRole("link", { name: /ProLyt\+/ }).click();
+  await pg.waitForURL(/\/plus/);
+  check("ProLyt+ page shows plans and what's free", await seen(pg.getByRole("heading", { name: "ProLyt+" })) && await seen(pg.getByText("Alerts when a coach opens the profile")) && await seen(pg.getByText("$5.99")));
   await pctx.close();
 }
 

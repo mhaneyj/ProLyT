@@ -58,6 +58,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
       where sa.athlete_id = $1 and s.starts_at > now() order by s.starts_at limit 3`, [id]),
     share: a.family ? (await q<{ created_at: string; views: number }>(
       "select created_at, views from profile_shares where athlete_id = $1 and revoked_at is null", [id]))[0] ?? null : null,
+    insights: a.family ? (await q<{ i: Insights | null }>("select profile_insights($1) i", [id]))[0]?.i ?? null : null,
     pendingParent: a.family ? (await q<{ email: string }>(
       "select email from athlete_links where athlete_id = $1 and kind = 'parent' and used_at is null and expires_at > now() order by created_at desc limit 1", [id]))[0] ?? null : null,
     note: (await q<{ body: string; focus: string | null; coach: string | null; created_at: string }>(`
@@ -281,7 +282,10 @@ export default async function AthleteProfile({ params, searchParams }: { params:
                 <CopyLink url={fresh} />
               </>
             ) : d.share ? (
-              <p className="text-sm text-soft">Sharing is on. Opened {d.share.views} time{d.share.views === 1 ? "" : "s"}. Lost the link? Make a new one; the old one stops working.</p>
+              <>
+                <p className="text-sm text-soft">Sharing is on. Opened {d.share.views} time{d.share.views === 1 ? "" : "s"}. Lost the link? Make a new one; the old one stops working.</p>
+                <ViewInsights i={d.insights} />
+              </>
             ) : (
               <p className="text-sm text-soft">One link with {a.first_name}&apos;s name, position, class, career, official numbers and highlights. Never school, birthday, contact info or coach notes.{!canShare ? " A parent turns this on." : ""}</p>
             )}
@@ -361,6 +365,28 @@ export default async function AthleteProfile({ params, searchParams }: { params:
           {a.first_name} is under 13, so you manage this page and nothing is ever shared publicly.
         </div>
       ) : null}
+    </div>
+  );
+}
+
+type Insights = { plus: boolean; total: number; last_30: number | null; last_viewed: string | null; days: { day: string; n: number }[] | null };
+
+// Recruiting-link opens: the 30-day trend for ProLyt+ families, a pointer to Plus for everyone else.
+function ViewInsights({ i }: { i: Insights | null }) {
+  if (!i) return null;
+  if (!i.plus || !i.days) return (
+    <Link href="/plus" className="text-[13px] font-semibold text-gold">Get an alert when a coach opens it, and the 30-day trend, with ProLyt+ →</Link>
+  );
+  const max = Math.max(1, ...i.days.map((d) => d.n));
+  const last = i.last_viewed ? new Date(i.last_viewed).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-line p-3">
+      <div className="flex items-baseline justify-between text-sm"><span><b>{i.last_30}</b> open{i.last_30 === 1 ? "" : "s"} in 30 days</span>
+        <span className="text-[12px] text-muted">{last ? `Last opened ${last}` : "Not opened yet"}</span></div>
+      <div className="flex h-10 items-end gap-[2px]" role="img" aria-label={`Opens per day for the last 30 days, ${i.last_30} in total`}>
+        {i.days.map((d) => <span key={d.day} title={`${d.day}: ${d.n}`} className={`flex-1 rounded-sm ${d.n ? "bg-gold" : "bg-line"}`} style={{ height: `${Math.max(8, (d.n / max) * 100)}%` }} />)}
+      </div>
+      <p className="text-[11px] text-muted">ProLyt+ alerts you when it&apos;s opened. We never know or show who opened it.</p>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireMe } from "@/lib/auth";
@@ -67,6 +68,13 @@ export default async function Account({ searchParams }: { searchParams: Promise<
           <Button type="submit">{u?.has_pw ? "Change password" : "Set password"}</Button>
         </form>
       </Card>
+
+      {me.isParent || me.athleteId ? (
+        <Link href="/plus" className="flex min-h-14 items-center justify-between rounded-[14px] border border-gold/60 bg-gold/5 px-4">
+          <span><span className="block font-semibold">ProLyt+</span><span className="block text-[12px] text-muted">Recruiting alerts and insights, video uploads</span></span>
+          <span className="text-gold">→</span>
+        </Link>
+      ) : null}
 
       <p className="text-[13px] text-muted">{u?.passkeys ? `Face ID / passkey is on for ${u.passkeys} device${u.passkeys === 1 ? "" : "s"}.` : "Tip: turn on Face ID from the banner on your home screen for one-tap sign-in."}</p>
       <EnablePush why="for messages, check-in and your teams' games." />

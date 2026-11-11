@@ -5,7 +5,7 @@ import { asUser } from "@/lib/db";
 import { shortDate } from "@/lib/domain/format";
 import { Card, Notice, Pill, SectionLabel } from "@/components/ui";
 import { PermFields } from "@/components/perm-editor";
-import { saveStaffPerms, setDisabled, setMember, setPlatformAdmin } from "../../actions";
+import { compPlus, saveStaffPerms, setDisabled, setMember, setPlatformAdmin } from "../../actions";
 import { AdminTabs } from "../../tabs";
 import type { Person } from "../page";
 
@@ -17,9 +17,10 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const me = await requirePlatformAdmin();
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
-  const { person, orgs } = await asUser(me.id, async (q) => {
+  const { person, orgs, plus } = await asUser(me.id, async (q) => {
     const all = await q<Person>("select * from admin_people(null, 200)");
-    return { person: all.find((p) => p.user_id === id), orgs: await q<{ id: string; name: string }>("select id, name from orgs order by name") };
+    return { person: all.find((p) => p.user_id === id), orgs: await q<{ id: string; name: string }>("select id, name from orgs order by name"),
+      plus: (await q<{ p: { plus: boolean; status: string | null; comped_until: string | null } }>("select admin_plus_status($1) p", [id]))[0]?.p };
   });
   if (!person) notFound();
   const staff = person.memberships.filter((m) => m.role !== "guardian");
@@ -78,6 +79,18 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
             </select>
           </div>
           <button className={`${btn} border-2 border-[#3a3a3a] hover:border-gold`}>Add with standard permissions</button>
+        </form>
+      </Card>
+
+      <Card className="flex flex-col gap-2">
+        <SectionLabel>ProLyt+</SectionLabel>
+        <p className="text-sm text-soft">{plus?.plus ? (plus.status && plus.status !== "canceled" ? `Subscribed (${plus.status.replace("_", " ")})` : "On us") : "Free"}{plus?.comped_until ? ` · comp through ${shortDate(plus.comped_until)}` : ""}</p>
+        <form action={compPlus} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="user" value={id} />
+          <label className="flex flex-col text-sm">Give ProLyt+ through
+            <input type="date" name="until" defaultValue={plus?.comped_until ?? ""} className="mt-1 min-h-11 rounded-md border border-line bg-transparent px-3" /></label>
+          <button className={`${btn} border-2 border-[#3a3a3a] hover:border-gold`}>Save</button>
+          {plus?.comped_until ? <button name="end" value="1" className={`${btn} text-muted`}>End</button> : null}
         </form>
       </Card>
 
