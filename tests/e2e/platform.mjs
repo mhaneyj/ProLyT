@@ -108,7 +108,9 @@ async function signIn(sub, userName) {
   check("connected and landed on family home", await seen(page.getByText(/is connected to this program/)));
   const speedAccent = await page.evaluate(() => getComputedStyle(document.querySelector("header").parentElement.parentElement).getPropertyValue("--color-gold").trim().toUpperCase());
   check("second program themed in its color", speedAccent === "#3EC1F3", speedAccent);
-  await page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" }).click();
+  // With one athlete in this program there's no switcher; Jordan is already showing.
+  const sw = page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" });
+  if (await sw.count()) await sw.click();
   await page.waitForLoadState("networkidle");
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
   await page.waitForURL(/\/progress/);

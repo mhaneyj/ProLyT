@@ -4,12 +4,12 @@ import { asService } from "@/lib/db";
 import { ruleText, type Division } from "@/lib/domain/events";
 import { ProLytMark } from "@/components/brand";
 
-type Ev = { id: string; name: string; kind: string; starts_on: string; ends_on: string | null; location: string | null; details: string | null; status: string; closes: string | null; host: string; open: boolean };
+type Ev = { id: string; name: string; kind: string; starts_on: string; ends_on: string | null; location: string | null; details: string | null; status: string; closes: string | null; host: string; open: boolean; age_check: boolean };
 
 async function load(id: string) {
   if (!/^[0-9a-f-]{36}$/.test(id)) return null;
   return asService(async (q) => {
-    const [e] = await q<Ev>(`select e.id, e.name, e.kind, e.starts_on::text, e.ends_on::text, e.location, e.details, e.status,
+    const [e] = await q<Ev>(`select e.id, e.name, e.kind, e.starts_on::text, e.ends_on::text, e.location, e.details, e.status, e.require_age_check age_check,
       to_char(e.registration_closes_at at time zone 'America/Los_Angeles', 'Mon FMDD') closes, o.name host,
       e.status = 'open' and (e.registration_closes_at is null or now() <= e.registration_closes_at) open
       from events e join orgs o on o.id = e.org_id where e.id = $1 and e.status <> 'draft'`, [id]);
@@ -49,7 +49,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         </a>
       ) : <p className="rounded-xl border border-line p-3 text-center text-sm text-soft">{e.status === "live" ? "This event is happening now." : e.status === "done" ? "This event is over." : "Registration is closed."}</p>}
       {e.open && e.closes ? <p className="-mt-3 text-center text-[12px] text-muted">Registration closes {e.closes}</p> : null}
-      <p className="text-[13px] text-muted">Coaches register a team, then share the team&apos;s link. Each family signs up their athlete and signs the waiver. Ages and grades are checked automatically.</p>
+      <p className="text-[13px] text-muted">Coaches register a team, then share the team&apos;s link. Each family signs up their athlete and signs the waiver. Ages and grades are checked automatically.{e.age_check ? " This event also requires a one-time age check (birth certificate, passport or ID). Athletes already verified on ProLyt skip it." : ""}</p>
       {e.details ? <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-soft">{e.details}</p> : null}
       <section className="flex flex-col gap-2">
         <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Divisions</h2>

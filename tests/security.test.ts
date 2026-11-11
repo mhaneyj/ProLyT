@@ -886,3 +886,64 @@ describe("measurement stays private", () => {
     await expect(as(db, COACH, () => db.query("select admin_growth(30)"))).rejects.toThrow(/ProLyt staff/);
   });
 });
+
+describe("age verification", () => {
+  const HOSTX = "10000000-0000-0000-0000-00000000f0a1";       // owner of another program hosting a different event
+  const VCOACH = "10000000-0000-0000-0000-00000000f0a2";
+  const VPARENT = "10000000-0000-0000-0000-00000000f0a3";
+  const ORGX = "00000000-0000-0000-0000-00000000f0b1";
+  let ev: string, evX: string, kid: string, team: string, ver: string;
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+  const iso = (y: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - y); d.setDate(d.getDate() - 20); return d.toISOString().slice(0, 10); };
+  beforeAll(async () => {
+    for (const [u, e] of [[HOSTX, "hostx@example.com"], [VCOACH, "vcoach@example.com"], [VPARENT, "vparent@example.com"]]) await addUser(db, u, e);
+    await db.query("insert into orgs (id, name, slug) values ($1,'Other Host','other-host')", [ORGX]);
+    await db.query("insert into org_members (org_id, user_id, role) values ($1,$2,'owner')", [ORGX, HOSTX]);
+    ev = (await as(db, OWNER, () => db.query<{ id: string }>("insert into events (org_id, name, starts_on, status, require_age_check) values ($1,'Verify Cup',current_date + 20,'open',true) returning id", [ORG]))).rows[0].id;
+    evX = (await as(db, HOSTX, () => db.query<{ id: string }>("insert into events (org_id, name, starts_on, status) values ($1,'Other Cup',current_date + 20,'open') returning id", [ORGX]))).rows[0].id;
+    const div = (await as(db, OWNER, () => db.query<{ id: string }>("insert into divisions (event_id, name, basis, max_age, age_cutoff) values ($1,'14U','age',14,current_date) returning id", [ev]))).rows[0].id;
+    kid = (await as(db, VPARENT, () => db.query<{ id: string }>("select add_my_athlete('Vee','Kid',$1,null,'WR','male','V Parent') id", [iso(12)]))).rows[0].id;
+    team = (await as(db, VCOACH, () => db.query<{ id: string }>("select register_team($1,'Verify Team',null,$2) id", [div, "v".repeat(64)]))).rows[0].id;
+    await as(db, VPARENT, () => db.query("select join_team($1,$2,'V Parent')", ["v".repeat(64), kid]));
+  });
+  it("only a parent submits; report cards don't prove age", async () => {
+    await expect(as(db, VCOACH, () => db.query("select submit_age_document($1,'age','birth_certificate',$2,'image/jpeg',$3)", [kid, jpeg, ev]))).rejects.toThrow(/Only a parent/);
+    await expect(as(db, VPARENT, () => db.query("select submit_age_document($1,'age','report_card',$2,'image/jpeg',$3)", [kid, jpeg, ev]))).rejects.toThrow(/report card shows grade/);
+    ver = (await as(db, VPARENT, () => db.query<{ id: string }>("select submit_age_document($1,'age','birth_certificate',$2,'image/jpeg',$3) id", [kid, jpeg, ev]))).rows[0].id;
+  });
+  it("the document is visible only to this event's host and ProLyt; every view is logged", async () => {
+    await expect(as(db, VPARENT, () => db.query("select doc_data from age_verifications where id=$1", [ver]))).rejects.toThrow(/permission denied/);
+    expect((await as(db, VPARENT, () => db.query<{ status: string }>("select status from age_verifications where id=$1", [ver]))).rows[0].status).toBe("pending");
+    for (const u of [VCOACH, HOSTX, PARENT_B]) await expect(as(db, u, () => db.query("select * from view_age_document($1)", [ver]))).rejects.toThrow(/Only the event host/);
+    const [d] = (await as(db, OWNER, () => db.query<{ doc: Buffer }>("select doc from view_age_document($1)", [ver]))).rows;
+    expect(Buffer.from(d.doc).equals(jpeg)).toBe(true);
+    expect((await db.query("select 1 from audit_log where action='view_age_document' and target=$1", [ver])).rows.length).toBeGreaterThan(0);
+    expect((await as(db, OWNER, () => db.query("select * from age_review_queue($1)", [ev]))).rows).toHaveLength(1);
+    expect((await as(db, HOSTX, () => db.query("select * from age_review_queue($1)", [evX]))).rows).toHaveLength(0);
+  });
+  it("approving records the document's birth date, corrects the profile, deletes the document and locks the birth date", async () => {
+    const real = iso(15); // the document shows they're actually 15
+    await as(db, OWNER, () => db.query("select decide_age_document($1,true,$2,null,null)", [ver, real]));
+    const [v] = (await db.query<{ status: string; doc_data: Buffer | null; doc_deleted_at: string | null }>("select status, doc_data, doc_deleted_at from age_verifications where id=$1", [ver])).rows;
+    expect(v).toMatchObject({ status: "approved", doc_data: null });
+    expect(v.doc_deleted_at).not.toBeNull();
+    const [a] = (await db.query<{ b: string; verified: boolean }>("select birth_date::text b, age_verified_at is not null verified from athletes where id=$1", [kid])).rows;
+    expect(a).toEqual({ b: real, verified: true });
+    // Now 15: ineligible for 14U, and the roster says so
+    const roster = (await as(db, VCOACH, () => db.query<{ eligible: boolean; age_verified: boolean }>("select eligible, age_verified from team_roster($1)", [team]))).rows[0];
+    expect(roster).toEqual({ eligible: false, age_verified: true });
+    await expect(as(db, VPARENT, () => db.query("update athletes set birth_date = $2 where id=$1", [kid, iso(12)]))).rejects.toThrow(/verified from a document/);
+    await expect(as(db, OWNER, () => db.query("select decide_age_document($1,true,$2,null,null)", [ver, real]))).rejects.toThrow(/already reviewed/);
+  });
+  it("rejecting needs a reason and deletes the document; stale uploads are purged", async () => {
+    const v2 = (await as(db, VPARENT, () => db.query<{ id: string }>("select submit_age_document($1,'grade','report_card',$2,'image/jpeg',$3) id", [kid, jpeg, ev]))).rows[0].id;
+    await expect(as(db, OWNER, () => db.query("select decide_age_document($1,false,null,null,'')", [v2]))).rejects.toThrow(/Tell the family why/);
+    await as(db, OWNER, () => db.query("select decide_age_document($1,false,null,null,'Too blurry to read')", [v2]));
+    expect((await db.query("select doc_data from age_verifications where id=$1", [v2])).rows[0]).toEqual({ doc_data: null });
+    const v3 = (await as(db, VPARENT, () => db.query<{ id: string }>("select submit_age_document($1,'grade','report_card',$2,'image/jpeg',$3) id", [kid, jpeg, ev]))).rows[0].id;
+    await db.query("update age_verifications set submitted_at = now() - interval '31 days' where id=$1", [v3]);
+    expect((await db.query<{ n: number }>("select purge_stale_age_documents() n")).rows[0].n).toBe(1);
+    expect((await db.query("select status, doc_data from age_verifications where id=$1", [v3])).rows[0]).toEqual({ status: "rejected", doc_data: null });
+    await expect(as(db, VPARENT, () => db.query("select purge_stale_age_documents()"))).rejects.toThrow(/permission denied/);
+  });
+});

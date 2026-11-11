@@ -11,7 +11,7 @@ import { deleteDivision, saveDivision, saveEventDetails, setEventStatus } from "
 export const metadata = { title: "Event" };
 
 type Ev = { id: string; name: string; kind: string; starts_on: string; ends_on: string | null; location: string | null; details: string | null;
-  waiver_text: string | null; status: string; closes: string | null; host: boolean };
+  waiver_text: string | null; status: string; closes: string | null; host: boolean; require_age_check: boolean; checks: number };
 type Team = { team_id: string; team: string; division_id: string; division: string; coach: string | null; program: string | null; players: number; waivers: number; problems: number; status: string };
 
 const NEXT: Record<string, { to: string; label: string; help: string }[]> = {
@@ -29,7 +29,8 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
   const me = await requireMe();
   const data = await asUser(me.id, async (q) => {
     const [e] = await q<Ev>(`select id, name, kind, starts_on::text, ends_on::text, location, details, waiver_text, status,
-      to_char(registration_closes_at at time zone 'America/Los_Angeles', 'YYYY-MM-DD') closes, is_event_host(id) host from events where id = $1`, [id]);
+      to_char(registration_closes_at at time zone 'America/Los_Angeles', 'YYYY-MM-DD') closes, is_event_host(id) host, require_age_check,
+      (select count(*)::int from age_review_queue(id)) checks from events where id = $1`, [id]);
     if (!e?.host) return null;
     return {
       e,
@@ -101,6 +102,11 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
         <div className={`rounded-xl border p-3 ${problems || missingWaivers ? "border-bad" : "border-line"}`}><div className="font-display text-[28px]">{problems + missingWaivers}</div><div className="text-[11px] uppercase text-muted">To fix</div></div>
       </div>
 
+      <Link href={`/host/events/${e.id}/checks`} className={`flex min-h-14 items-center justify-between rounded-xl border px-3 ${e.checks ? "border-gold bg-gold/5" : "border-line"}`}>
+        <span><span className="block font-semibold">Age checks</span><span className="block text-[12px] text-muted">{e.require_age_check ? "Required for this event" : "Optional for this event"}</span></span>
+        {e.checks ? <Pill tone="gold">{e.checks} to review</Pill> : <span className="text-sm text-muted">None waiting</span>}
+      </Link>
+
       <section className="flex flex-col gap-2">
         <SectionLabel>Teams</SectionLabel>
         {teams.length === 0 ? <p className="text-sm text-muted">No teams yet. Share your event link with coaches.</p> : divisions.map((d) => {
@@ -153,6 +159,8 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
           <label className="text-xs text-soft">Registration closes<input name="closes" type="date" defaultValue={e.closes ?? ""} className={`${input} mt-1`} /></label>
           <label className="text-xs text-soft">Details for coaches and families (schedule, fees, parking…)
             <textarea name="details" rows={4} defaultValue={e.details ?? ""} className="mt-1 w-full rounded-md border border-[#333] bg-[#111] p-2.5 text-[14px] text-cream" /></label>
+          <label className="flex min-h-11 items-start gap-2 text-sm"><input type="checkbox" name="require_age_check" defaultChecked={e.require_age_check} className="mt-0.5 size-5 flex-none accent-[var(--color-gold)]" />
+            <span>Require an age check (birth certificate, passport or ID). Families upload once; athletes already verified on ProLyt skip it.</span></label>
           <label className="text-xs text-soft">Waiver
             <textarea name="waiver" rows={6} defaultValue={e.waiver_text ?? ""} className="mt-1 w-full rounded-md border border-[#333] bg-[#111] p-2.5 text-[14px] text-cream" /></label>
           <button className="min-h-11 rounded-md bg-gold text-sm font-bold text-on-gold">Save</button>

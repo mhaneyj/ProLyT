@@ -92,3 +92,19 @@ export async function sendMessageAlert(to: string, link: string, where: string, 
   });
   if (!res.ok) console.error("[email] message alert refused:", res.status);
 }
+
+/** Age/grade check result. No document details in email. */
+export async function sendAgeCheckEmail(to: string, first: string, approved: boolean, note: string | null, link: string) {
+  const key = process.env.RESEND_API_KEY;
+  const sender = process.env.EMAIL_FROM ?? `ProLyt <signin@${ROOT_DOMAIN}>`;
+  const subject = approved ? `${first}'s age is verified on ProLyt` : `${first}'s document needs another try`;
+  if (!key) { console.log(`[age check] ${to} → ${approved ? "approved" : "rejected"}: ${link}`); return; }
+  const body = approved
+    ? `<p style="font-size:15px;line-height:1.5">${escapeHtml(first)} now has a <b>✓ Age verified</b> badge that works at every ProLyt event. The document you sent has been deleted.</p>`
+    : `<p style="font-size:15px;line-height:1.5">The reviewer couldn't verify the document${note ? `: <i>${escapeHtml(note)}</i>` : ""}. It has been deleted. Please upload a clear photo again.</p>`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#111">
+    <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(subject)}</h1>${body}
+    <p style="margin:24px 0"><a href="${link}" style="background:#F8C40A;color:#070707;padding:14px 22px;border-radius:6px;text-decoration:none;font-weight:bold">Open ProLyt</a></p></div>`;
+  const res = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: sender, to, subject, html }) });
+  if (!res.ok) console.error("[email] age check refused:", res.status);
+}

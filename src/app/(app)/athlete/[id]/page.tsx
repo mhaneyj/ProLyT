@@ -10,6 +10,8 @@ import { NoteCard, ProfileCircle } from "@/components/athlete";
 import { Icon } from "@/components/icons";
 import { Player } from "@/components/player";
 import { Notice, Pill, SectionLabel } from "@/components/ui";
+import { AgeCheckUpload } from "@/components/age-check-upload";
+import { ageStatuses } from "@/lib/age-check";
 import { loadAthlete, sportName } from "./header";
 import { PhotoButton } from "./photo-button";
 import { heroBackground } from "@/lib/domain/brand";
@@ -32,6 +34,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
   const me = await requireMe();
   const { a, switcher } = await loadAthlete(me, id, "");
   const d = await asUser(me.id, async (q) => ({
+    check: (await ageStatuses(q, [id])).get(id),
     results: await q<R>(`select r.metric, r.value::float value, r.source, r.method, r.recorded_at, o.name org, r.proof_url
       from results r left join orgs o on o.id = r.org_id where r.athlete_id = $1 and r.voided_at is null`, [id]),
     ranks: await q<Rank>("select * from stat_ranks($1)", [id]),
@@ -328,6 +331,16 @@ export default async function AthleteProfile({ params, searchParams }: { params:
               ) : null}
             </form>
           ) : <p className="text-sm text-muted">{a.first_name} can get their own login at 13.</p>}
+          <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
+            <div className="text-sm font-semibold">Age check</div>
+            {d.check?.age_verified ? <p className="text-sm text-good">✓ {a.first_name}&apos;s age is verified. It counts at every ProLyt event.</p>
+              : d.check?.pending_age ? <p className="text-sm text-soft">Document sent. Waiting for review.</p>
+              : (<>
+                {d.check?.last_rejected ? <Notice tone="bad">Last upload couldn&apos;t be verified: {d.check.last_rejected}</Notice> : null}
+                <p className="text-sm text-soft">Verify once and {a.first_name} skips age checks at tournaments that use ProLyt.</p>
+                <AgeCheckUpload athlete={a.id} first={a.first_name} />
+              </>)}
+          </div>
           <a href={`/api/athlete/${a.id}/export`} className="min-h-11 pt-2 text-sm font-semibold text-gold">Download {a.first_name}&apos;s full record (JSON)</a>
         </section>
       ) : a.self ? (

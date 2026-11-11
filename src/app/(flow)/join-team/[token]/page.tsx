@@ -3,11 +3,13 @@ import { meOrSignIn } from "@/lib/flow";
 import { asUser } from "@/lib/db";
 import { Button, Notice, Title } from "@/components/ui";
 import { addAthleteForTeam, joinTeam } from "@/app/(app)/host/actions";
+import { AgeCheckUpload } from "@/components/age-check-upload";
+import { ageStatuses } from "@/lib/age-check";
 
 export const metadata = { title: "Join a team" };
 
 type Prev = { team_id: string; team: string; division: string; event_id: string; event: string; starts_on: string; location: string | null; host: string; waiver_text: string | null; roster: number; roster_max: number; open: boolean };
-type Kid = { id: string; name: string; ok: boolean; reason: string | null; on_team: string | null };
+type Kid = { id: string; name: string; first: string; ok: boolean; reason: string | null; on_team: string | null; age_ok: boolean; grade_ok: boolean; pending: boolean };
 
 export default async function JoinTeam({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string; joined?: string; r?: string }> }) {
   const [{ token }, sp] = await Promise.all([params, searchParams]);
@@ -18,7 +20,9 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
       from join_team_preview($1)`, [token]);
     if (!t) return null;
     const kids = await q<Kid>(`
-      select a.id, a.first_name || ' ' || a.last_name name, el.ok, el.reason,
+      select a.id, a.first_name || ' ' || a.last_name name, a.first_name first, el.ok, el.reason,
+        a.age_verified_at is not null age_ok, a.grade_verified_at is not null grade_ok,
+        exists (select 1 from age_verifications v where v.athlete_id = a.id and v.status = 'pending') pending,
         (select et.name from event_roster r join event_teams et on et.id = r.team_id where r.athlete_id = a.id and r.event_id = $2) on_team
       from athletes a
       join divisions d on d.id = (select division_id from event_teams where id = $1)
@@ -26,7 +30,10 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
       where is_guardian(a.id) or (is_self(a.id) and age_on(a.birth_date) >= 18)
       order by a.first_name`, [t.team_id, t.event_id]);
     const [p] = await q<{ full_name: string }>("select full_name from profiles where id = auth.uid()");
-    return { t, kids, signer: p?.full_name ?? "" };
+    const [ev] = await q<{ required: boolean; basis: string }>(`select e.require_age_check required, d.basis from events e
+      join event_teams et on et.event_id = e.id join divisions d on d.id = et.division_id where et.id = $1`, [t.team_id]);
+    const statuses = await ageStatuses(q, kids.filter((k) => k.on_team).map((k) => k.id));
+    return { t, kids, statuses, signer: p?.full_name ?? "", required: ev?.required ?? false, purpose: (ev?.basis === "grade" ? "grade" : "age") as "age" | "grade" };
   });
   if (!data) return (
     <>
@@ -34,7 +41,8 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
       <p className="text-soft">This team link was replaced or the team withdrew. Ask the coach for the current link.</p>
     </>
   );
-  const { t, kids, signer } = data;
+  const { t, kids, statuses, signer, required, purpose } = data;
+  const needsCheck = kids.filter((k) => k.on_team && !k.pending && !(purpose === "grade" ? k.grade_ok : k.age_ok));
   const joined = kids.find((k) => k.id === sp.joined);
   const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
   const when = new Date(`${t.starts_on}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -79,6 +87,15 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
           <div className="px-3 pb-3"><AddAthlete token={token} division={t.division} signer={signer} input={input} /></div>
         </details>
       ) : null}
+      {needsCheck.map((k) => (
+        <section key={`chk-${k.id}`} className={`flex flex-col gap-2 rounded-xl border p-4 ${required ? "border-gold bg-gold/5" : "border-line"}`}>
+          <h2 className="font-semibold">{required ? `${t.host} requires an ${purpose} check for ${k.first}` : `Verify ${k.first}'s ${purpose} once, for every event`}</h2>
+          {statuses.get(k.id)?.last_rejected ? <Notice tone="bad">Last upload couldn&apos;t be verified: {statuses.get(k.id)?.last_rejected}</Notice> : null}
+          <p className="text-[13px] text-soft">{required ? "Upload it now so check-in is quick." : "Skip the line at check-in. The badge stays on the profile."}</p>
+          <AgeCheckUpload athlete={k.id} first={k.first} event={t.event_id} purpose={purpose} />
+        </section>
+      ))}
+      {kids.filter((k) => k.on_team && k.pending).map((k) => <p key={`p-${k.id}`} className="text-sm text-soft">{k.first}&apos;s document is waiting for review.</p>)}
       {kids.filter((k) => k.on_team).map((k) => <p key={k.id} className="text-sm text-soft">{k.name} is on <span className="font-semibold">{k.on_team}</span> for this event.</p>)}
       <p className="text-[12px] text-muted">{t.roster}/{t.roster_max} players signed up</p>
     </>

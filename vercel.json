@@ -1,4 +1,15 @@
 {
-  "regions": ["pdx1"],
-  "crons": [{ "path": "/api/cron/payouts", "schedule": "0 17 * * 5" }]
+  "regions": [
+    "pdx1"
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/payouts",
+      "schedule": "0 17 * * 5"
+    },
+    {
+      "path": "/api/cron/purge-docs",
+      "schedule": "15 11 * * *"
+    }
+  ]
 }

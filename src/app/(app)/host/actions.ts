@@ -126,9 +126,9 @@ export async function saveEventDetails(form: FormData) {
   if (!isId(ev)) return;
   try {
     await asUser(me.id, (q) => q(`update events set location = nullif($2, ''), details = nullif($3, ''), waiver_text = nullif($4, ''),
-      registration_closes_at = nullif($5, '')::timestamptz where id = $1`,
+      registration_closes_at = nullif($5, '')::timestamptz, require_age_check = $6 where id = $1`,
       [ev, String(form.get("location") ?? "").slice(0, 200), String(form.get("details") ?? "").slice(0, 4000), String(form.get("waiver") ?? "").slice(0, 20000),
-        form.get("closes") ? `${form.get("closes")}T23:59:00-08:00` : ""]));
+        form.get("closes") ? `${form.get("closes")}T23:59:00-08:00` : "", form.get("require_age_check") === "on"]));
   } catch (e) {
     back(`/host/events/${ev}`, "error", dbMessage(e));
   }

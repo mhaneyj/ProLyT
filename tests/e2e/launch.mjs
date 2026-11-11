@@ -672,6 +672,67 @@ let coachLink = "";
   check("Growth dashboard counts teams joined", Number((await a.page.locator("li").filter({ hasText: "Athletes joined teams" }).textContent()).replace(/\D/g, "")) >= 2);
   check("no client errors (growth)", a.errors.length === 0, a.errors.join("; "));
   await a.ctx.close();
+
+  // ── 18. Age verification: host requires it, family uploads once, host approves, the document is deleted
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP8z4APMOGVHbHSAH6bAQ0Ix0yvAAAAAElFTkSuQmCC", "base64");
+  const h2 = await signIn("gamefit-loomis", "josh.personal@gmail.test", `/login?next=/host/events/${eventId}`);
+  await h2.page.getByText("Event details and waiver").click();
+  await h2.page.getByRole("checkbox", { name: /Require an age check/ }).check();
+  await h2.page.getByRole("button", { name: "Save", exact: true }).click();
+  check("host requires an age check", await seen(h2.page.getByText("Required for this event")));
+
+  const f = await signIn("gamefit-loomis", "new.family@example.test", `/login?next=${encodeURIComponent(path15)}`);
+  await f.page.waitForURL(/join-team/);
+  check("family is asked for Drew's age check", await seen(f.page.getByText(/requires an age check for Drew/)));
+  await f.page.locator('input[type=file]').setInputFiles({ name: "birth.png", mimeType: "image/png", buffer: png });
+  check("family uploads the document", await seen(f.page.getByText(/Sent\. A reviewer will check it/)));
+  check("no client errors (upload)", f.errors.length === 0, f.errors.join("; "));
+
+  await h2.page.goto(url("gamefit-loomis", `/host/events/${eventId}`));
+  check("host dashboard shows a check to review", await seen(h2.page.getByText("1 to review")));
+  const teamHref = await h2.page.getByRole("link", { name: /Rocklin Raptors 15U/ }).getAttribute("href");
+  await h2.page.getByRole("link", { name: /Age checks/ }).click();
+  await h2.page.waitForURL(/checks/);
+  const docUrl = await h2.page.locator("object").first().getAttribute("data");
+  check("host sees Drew's document with the birth date filled in", await seen(h2.page.getByText("Drew Newcomer")) && (await h2.page.getByLabel("Birth date on the document").inputValue()) === `${nextYear - 15}-06-01`);
+  const fetchIn = (page, u) => page.evaluate((u) => fetch(u).then((r) => ({ status: r.status, cache: r.headers.get("cache-control") ?? "" })), u);
+  const peek = await fetchIn(h2.page, docUrl);
+  check("document opens for the host", peek.status === 200 && peek.cache.includes("no-store"), JSON.stringify(peek));
+  // Coaches never see documents
+  const rc = await signIn("gamefit-loomis", "coach@rocklin.test", "/login?next=/feed");
+  check("coach can't open the document", (await fetchIn(rc.page, docUrl)).status === 404);
+  await h2.page.getByRole("button", { name: "Approve" }).click();
+  check("host approves", await seen(h2.page.getByText(/Verified\. The document is deleted/)));
+  check("document is gone after approval", (await fetchIn(h2.page, docUrl)).status === 404);
+  await rc.page.goto(url("gamefit-loomis", teamHref));
+  check("coach roster shows Drew as age verified", await seen(rc.page.getByText("Age ✓")));
+  await rc.ctx.close();
+  await f.page.reload();
+  check("verified athlete isn't asked again", (await f.page.getByText(/requires an age check for Drew/).count()) === 0);
+  await f.ctx.close();
+  await h2.ctx.close();
+
+  // A blurry upload goes to ProLyt staff, who send it back with a reason
+  const pa = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pg = await pa.newPage();
+  await pg.goto(url("gamefit-loomis", `/login?next=${encodeURIComponent(path15)}`));
+  await pg.getByLabel("Email").fill("parent@family.test");
+  await pg.getByLabel("Password").fill("Loomis-Mom-77");
+  await pg.getByRole("button", { name: "Sign in", exact: true }).click();
+  await pg.waitForURL(/join-team/, { timeout: 15000 });
+  await pg.locator('input[type=file]').setInputFiles({ name: "blurry.png", mimeType: "image/png", buffer: png });
+  await seen(pg.getByText(/Sent\./));
+  const s = await signIn("", "marcus@prolyt.test", "/login?next=/admin/checks");
+  await s.page.goto(url("", "/admin/checks"));
+  check("ProLyt staff see every pending check", await seen(s.page.getByText("Avery Real")));
+  await s.page.getByText("Can't verify…").click();
+  await s.page.getByLabel("Tell the family why").fill("Photo is too blurry to read");
+  await s.page.getByRole("button", { name: "Send back" }).click();
+  check("staff send it back with a reason", await seen(s.page.getByText(/Sent back to the family/)));
+  await s.ctx.close();
+  await pg.reload();
+  check("parent sees why and can upload again", await seen(pg.getByText(/Photo is too blurry to read/)) && await seen(pg.getByRole("button", { name: /photo of Avery's document/ })));
+  await pa.close();
 }
 
 await browser.close();

@@ -11,7 +11,7 @@ import { newTeamLink, overridePlayer, removePlayer } from "../../host/actions";
 export const metadata = { title: "Team" };
 
 type P = { athlete_id: string; name: string; pos: string | null; birth_date: string | null; age_at_cutoff: number | null; grade: number | null;
-  eligible: boolean; reason: string | null; waiver_signed_at: string | null; waiver_signer: string | null; host_override: string | null };
+  eligible: boolean; reason: string | null; waiver_signed_at: string | null; waiver_signer: string | null; host_override: string | null; age_verified: boolean; grade_verified: boolean; check_pending: boolean };
 
 export default async function Team({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ new?: string; link?: string; error?: string }> }) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
@@ -23,7 +23,7 @@ export default async function Team({ params, searchParams }: { params: Promise<{
         d.name division, d.name, d.basis, d.max_age, d.age_cutoff::text, d.max_grade, d.min_grade, d.no_seniors, d.gender, d.roster_max
       from event_teams t join events e on e.id = t.event_id join divisions d on d.id = t.division_id where t.id = $1`, [id]);
     if (!t || !(t.host || t.coach)) return null;
-    const roster = await q<P>(`select athlete_id, name, pos, birth_date::text, age_at_cutoff, grade, eligible, reason, waiver_signed_at, waiver_signer, host_override
+    const roster = await q<P>(`select athlete_id, name, pos, birth_date::text, age_at_cutoff, grade, eligible, reason, waiver_signed_at, waiver_signer, host_override, age_verified, grade_verified, check_pending
       from team_roster($1)`, [id]);
     const [l] = await q<{ link: string }>("select team_link($1) link", [id]);
     return { t, roster, link: l.link };
@@ -60,6 +60,7 @@ export default async function Team({ params, searchParams }: { params: Promise<{
                 <span className="flex flex-none flex-col items-end gap-1">
                   {p.eligible ? <Pill tone="good">{p.host_override ? "Approved by host" : "Eligible"}</Pill> : <Pill tone="bad">Not eligible</Pill>}
                   {p.waiver_signed_at ? <Pill tone="muted">Waiver ✓</Pill> : <Pill tone="warn">No waiver</Pill>}
+                  {p.age_verified || p.grade_verified ? <Pill tone="good">{p.age_verified ? "Age ✓" : "Grade ✓"}</Pill> : p.check_pending ? <Pill tone="warn">Check pending</Pill> : <Pill tone="muted">Not verified</Pill>}
                 </span>
               </div>
               {!p.eligible && p.reason ? <p className="text-[13px] text-bad">{p.reason}</p> : null}
