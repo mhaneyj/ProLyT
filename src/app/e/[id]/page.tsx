@@ -11,6 +11,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Bracket, Chips, StandingsTable, type Standing } from "@/components/event-live";
 import { GameLine } from "@/components/game-line";
 import { CopyLink } from "@/components/copy-link";
+import { EnablePush } from "@/components/enable-push";
 
 type Ev = { id: string; name: string; kind: string; starts_on: string; ends_on: string | null; location: string | null; details: string | null; status: string; closes: string | null; host: string; open: boolean; age_check: boolean };
 
@@ -92,6 +93,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               ) : <a href={`/login?next=${encodeURIComponent(`${base}?team=${team.id}`)}`} className="flex min-h-11 items-center rounded-full bg-gold px-4 text-sm font-bold text-on-gold">Follow</a>}
             </div>
           ) : null}
+          {me && mine.size ? <EnablePush compact why="when your team's games start and finish." /> : null}
           {live.length ? <><h2 className="text-[12px] font-bold uppercase tracking-[2px] text-bad">● Live now</h2>{live.map((g) => <GameLine key={g.id} g={g} mine={mine} />)}</> : null}
           {next.length ? <><h2 className="text-[12px] font-bold uppercase tracking-[2px] text-soft">Up next</h2>{next.map((g) => <GameLine key={g.id} g={g} mine={mine} />)}</> : null}
           {finals.length ? <><h2 className="text-[12px] font-bold uppercase tracking-[2px] text-soft">Final</h2>{finals.map((g) => <GameLine key={g.id} g={g} mine={mine} />)}</> : null}

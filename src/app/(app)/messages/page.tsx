@@ -6,6 +6,7 @@ import { ago } from "@/lib/domain/format";
 import { Empty, LinkButton, Title } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { LiveRefresh } from "./live";
+import { EnablePush } from "@/components/enable-push";
 
 export const metadata = { title: "Messages" };
 
@@ -19,6 +20,7 @@ export default async function Inbox() {
     <>
       <LiveRefresh every={15000} />
       <Title sub={staff ? "Announcements, team chats and family conversations" : "From your coaches and teams"}>Messages</Title>
+      <EnablePush compact why="when a coach or teammate messages you." />
       {staff ? <LinkButton href="/messages/new">New message</LinkButton> : null}
       {threads.length === 0 ? (
         <Empty title="No messages yet">{staff ? "Post an announcement or message a team." : "When a coach posts, it shows up here."}</Empty>

@@ -2,6 +2,7 @@ import "server-only";
 import { asService, asUser } from "./db";
 import { sendMessageAlert } from "./email";
 import { programOrigin } from "./invite";
+import { pushTo } from "./push";
 
 export type ThreadRow = {
   id: string; org_id: string; org_name: string; kind: "announcements" | "team" | "athlete"; title: string;
@@ -35,6 +36,13 @@ export async function alertThread(threadId: string, senderId: string, current: {
       from threads t join orgs o on o.id = t.org_id left join teams tm on tm.id = t.team_id left join athletes a on a.id = t.athlete_id
       left join profiles p on p.id = $2 where t.id = $1`, [threadId, senderId]);
     if (!t) return;
+    // Phone notification right away to everyone else who hasn't muted the conversation (one per conversation on the lock screen).
+    const everyone = await q<{ user_id: string }>(`select au.user_id from thread_audience($1) au
+      left join thread_reads r on r.thread_id = $1 and r.user_id = au.user_id where au.user_id <> $2 and coalesce(r.muted, false) = false`, [threadId, senderId]);
+    const [last] = await q<{ body: string }>("select body from messages where thread_id = $1 and sender_id = $2 order by created_at desc limit 1", [threadId, senderId]);
+    const label = t.kind === "announcements" ? "Announcements" : t.kind === "team" ? `${t.title} team chat` : t.title;
+    const preview = (last?.body ?? "").replace(/\s+/g, " ").trim();
+    void pushTo(everyone.map((e) => e.user_id), { title: `${t.sender} · ${label}`, body: preview.length > 120 ? `${preview.slice(0, 117)}…` : preview, url: `/messages/${threadId}`, tag: `thread-${threadId}` });
     const due = await q<{ user_id: string; email: string }>(`
       select au.user_id, au.email from thread_audience($1) au
       left join thread_reads r on r.thread_id = $1 and r.user_id = au.user_id

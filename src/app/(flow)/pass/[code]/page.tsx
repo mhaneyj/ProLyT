@@ -5,6 +5,7 @@ import { asUser } from "@/lib/db";
 import { isPass, origin, qrSvg } from "@/lib/event-day";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Notice } from "@/components/ui";
+import { EnablePush } from "@/components/enable-push";
 
 export const metadata = { title: "Event pass" };
 
@@ -40,6 +41,7 @@ export default async function Pass({ params }: { params: Promise<{ code: string 
           {p.problems.length ? <Notice tone="bad">Fix before check-in: {p.problems.join(", ")}.{p.problems.includes("Age not verified") ? " Upload the age document from the team link or the athlete's profile." : ""}</Notice> : null}
         </>
       )}
+      <EnablePush compact why={`when ${p.first_name} checks in and when ${p.team}'s games start and finish.`} />
       <Link href={`/e/${p.event_id}`} className="flex min-h-12 items-center justify-center rounded-md border border-line text-sm font-semibold">Schedule and live scores →</Link>
     </>
   );

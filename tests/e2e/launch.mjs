@@ -27,6 +27,13 @@ async function logged(kind, email, after = 0) {
   throw new Error(`No sign-in ${kind} logged for ` + email);
 }
 const logLines = () => readFileSync(LOG, "utf8").split("\n").length;
+async function pushed(text, after = 0) {
+  for (let i = 0; i < 40; i++) {
+    if (readFileSync(LOG, "utf8").split("\n").slice(after).some((l) => l.startsWith("[push] ") && l.includes(text))) return true;
+    await sleep(250);
+  }
+  return false;
+}
 
 async function signIn(sub, email, path = "/login") {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
@@ -324,6 +331,7 @@ let coachLink = "";
   await p.page.getByLabel("Message").fill("Thanks coach!");
   await p.page.getByRole("button", { name: "Send" }).click();
   check("parent replies", await seen(p.page.getByText("Thanks coach!")));
+  check("the coach gets a phone notification with the message", await pushed("| Thanks coach! |"));
   await p.page.goto(url("gamefit-loomis", "/messages"));
   await p.page.getByRole("link", { name: /Announcements/ }).click();
   await p.page.waitForURL(/\/messages\/[0-9a-f-]{36}$/);
@@ -479,7 +487,8 @@ let coachLink = "";
   await p.page.locator("#photo input[type=file]").setInputFiles("public/icon-512.png");
   await p.page.waitForLoadState("load");
   const img = p.page.getByRole("img", { name: "Avery Real" });
-  check("parent adds Avery's profile picture", await seen(img) && await img.evaluate((i) => i.complete && i.naturalWidth > 0));
+  const loaded = await seen(img) && await img.first().evaluate((i) => new Promise((r) => { if (i.complete) return r(i.naturalWidth > 0); i.onload = () => r(true); i.onerror = () => r(false); setTimeout(() => r(i.naturalWidth > 0), 8000); }));
+  check("parent adds Avery's profile picture", loaded);
   await p.page.goto(url("gamefit-loomis", `/athlete/${id}/edit`));
   await p.page.getByText("Blue", { exact: true }).click();
   await p.page.getByRole("button", { name: "Save profile" }).click();
@@ -772,6 +781,11 @@ let coachLink = "";
   await fam.page.waitForURL(/\/pass\//);
   const passCode = fam.page.url().match(/pass\/([0-9a-f]{32})/)[1];
   check("pass shows a QR code for check-in", await seen(fam.page.getByRole("img", { name: /Check-in code for Drew/ })) && (await fam.page.locator("svg path").count()) > 0);
+  const sub = await fam.page.evaluate(() => fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: "https://fcm.googleapis.com/fcm/send/e2e-test-device", keys: { p256dh: "B".repeat(87), auth: "a".repeat(22) } }) }).then((r) => r.status));
+  check("a phone can register for notifications", sub === 200);
+  const badSub = await fam.page.evaluate(() => fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: "http://evil" }) }).then((r) => r.status));
+  check("bad notification registrations are refused", badSub === 400);
   // A parent opening someone's check-in link sees nothing private
   await fam.page.goto(url("gamefit-loomis", `/checkin/${passCode}`));
   check("non-staff can't open a check-in screen", await seen(fam.page.getByText(/Only the event's check-in staff/)));
@@ -787,6 +801,7 @@ let coachLink = "";
   check("check-in screen shows the verified badge", await seen(vol.page.getByText("✓ Age verified")));
   await vol.page.getByRole("button", { name: "Check in", exact: true }).click();
   check("volunteer checks Drew in", await seen(vol.page.getByText(/Drew Newcomer is checked in/)));
+  check("Drew's family gets a check-in notification", await pushed("✓ Drew is checked in"));
   await fam.page.goto(url("gamefit-loomis", `/pass/${passCode}`));
   check("the family's pass turns to Checked in", await seen(fam.page.getByText("Checked in", { exact: true })));
 
@@ -802,7 +817,10 @@ let coachLink = "";
     await vol.page.getByRole("button", { name: "End game · Final" }).click();
     await vol.page.waitForURL(/final=1/);
   };
+  const beforeScore = logLines();
   await score("Rocklin Raptors 15U");
+  check("families and followers are notified when the game starts", await pushed("Loomis Bolts 15U is starting", beforeScore - 1) || await pushed("Rocklin Raptors 15U is starting", beforeScore - 1));
+  check("…and get the final score", await pushed("Final: ", beforeScore - 1));
   // Anyone with the link (signed out) sees the score and standings
   const pub2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const pg2 = await pub2.newPage();
@@ -811,6 +829,7 @@ let coachLink = "";
   check("bracket fills in the pool winner", await seen(pg2.getByText("Championship").first()));
   await score("Rocklin Raptors 15U");
   await pg2.reload();
+  check("champions notification goes out", await pushed("🏆 Rocklin Raptors 15U win 15U!"));
   check("champions banner on the public page", await seen(pg2.getByText("15U champions")) && await seen(pg2.getByText("Rocklin Raptors 15U").first()));
   await pub2.close();
   check("no client errors (scoring)", vol.errors.length === 0, vol.errors.join("; "));

@@ -6,6 +6,7 @@ import { asService, asUser, dbMessage } from "./db";
 import { sendAgeCheckEmail } from "./email";
 import { ROOT_DOMAIN } from "./site";
 import { track } from "./track";
+import { pushTo } from "./push";
 
 const isId = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
 
@@ -32,8 +33,10 @@ export async function decideAgeCheck(form: FormData) {
   }
   await track(approve ? "age_check_approved" : "age_check_rejected", { userId: me.id, props: { minutes_waited: waited } });
   // Email whoever submitted it.
-  const [who] = await asService((q) => q<{ email: string; first: string }>(`select u.email, a.first_name first from age_verifications v
+  const [who] = await asService((q) => q<{ email: string; first: string; uid: string; athlete: string }>(`select u.email, a.first_name first, u.id uid, a.id athlete from age_verifications v
     join auth.users u on u.id = v.submitted_by join athletes a on a.id = v.athlete_id where v.id = $1`, [id]));
+  if (who) await pushTo([who.uid], { title: approve ? `✓ ${who.first}'s age is verified` : `${who.first}'s document needs another try`,
+    body: approve ? "The badge works at every ProLyt event. The document was deleted." : (note ?? "Please upload a clearer photo."), url: `/athlete/${who.athlete}#family`, tag: `age-${who.athlete}` });
   if (who) await sendAgeCheckEmail(who.email, who.first, approve, approve ? null : note, `https://${ROOT_DOMAIN}/account`).catch(() => {});
   revalidatePath(safeBack);
   redirect(`${safeBack}?done=${approve ? "approved" : "rejected"}`);

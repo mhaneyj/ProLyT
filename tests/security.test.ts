@@ -1043,3 +1043,14 @@ describe("event day: passes, check-in, staff, scores, brackets", () => {
     expect((await as(db, PARENT_B, () => db.query("select * from team_follows"))).rows).toHaveLength(0);
   });
 });
+
+describe("phone notifications", () => {
+  it("each person sees and manages only their own devices", async () => {
+    await as(db, PARENT_A, () => db.query("insert into push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, 'https://push.example/a', $2, 'authauthauth12')", [PARENT_A, "k".repeat(65)]));
+    expect((await as(db, PARENT_B, () => db.query("select * from push_subscriptions"))).rows).toHaveLength(0);
+    expect((await as(db, PARENT_A, () => db.query("select * from push_subscriptions"))).rows).toHaveLength(1);
+    await expect(as(db, PARENT_B, () => db.query("insert into push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, 'https://push.example/b', $2, 'authauthauth12')", [PARENT_A, "k".repeat(65)]))).rejects.toThrow();
+    await expect(as(db, PARENT_A, () => db.query("insert into push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, 'http://insecure', $2, 'authauthauth12')", [PARENT_A, "k".repeat(65)]))).rejects.toThrow();
+    expect((await as(db, PARENT_B, () => db.query("delete from push_subscriptions"))).affectedRows).toBe(0);
+  });
+});

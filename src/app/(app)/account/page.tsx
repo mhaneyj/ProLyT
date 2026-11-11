@@ -5,6 +5,7 @@ import { asService, asUser } from "@/lib/db";
 import { BadCode, setPassword } from "@/lib/session";
 import { Button, Card, Notice, Title } from "@/components/ui";
 import { signOut } from "@/app/sign-out";
+import { EnablePush } from "@/components/enable-push";
 
 export const metadata = { title: "Account" };
 
@@ -68,6 +69,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
       </Card>
 
       <p className="text-[13px] text-muted">{u?.passkeys ? `Face ID / passkey is on for ${u.passkeys} device${u.passkeys === 1 ? "" : "s"}.` : "Tip: turn on Face ID from the banner on your home screen for one-tap sign-in."}</p>
+      <EnablePush why="for messages, check-in and your teams' games." />
       <form action={signOut}><Button kind="ghost">Sign out</Button></form>
     </>
   );

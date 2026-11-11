@@ -8,6 +8,7 @@ import { PERFORMANCE, bestOfficial, formatValue, improvement, metricShort, type 
 import { Checklist, Hero, KidSwitcher, NoteCard, StatTile, Tile } from "@/components/athlete";
 import { LinkButton, Notice, Pill } from "@/components/ui";
 import { PassCards, type PassRow } from "@/components/pass-cards";
+import { EnablePush } from "@/components/enable-push";
 
 export const metadata = { title: "Home" };
 
@@ -85,6 +86,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
     <>
       <KidSwitcher kids={kids} current={a.id} to="/family" />
       <PassCards passes={passes} />
+      <EnablePush compact why={passes.length ? `when ${a.first_name} checks in and when games start and finish.` : `when a coach messages you about ${a.first_name}.`} />
       {welcome ? <Notice tone="good">{a.first_name} is all set. Start with the steps below.</Notice> : null}
       {connected ? <Notice tone="good">{a.first_name} is connected to this program.</Notice> : null}
       {chosen ? <Notice tone="good">Package saved. Your coach will be in touch about payment.</Notice> : null}
