@@ -1310,3 +1310,17 @@ describe("autographs", () => {
     expect((await db.query<{ autograph_path: string | null }>("select autograph_path from athletes where id=$1", [jordan])).rows[0].autograph_path).toBeNull();
   });
 });
+
+describe("training plans", () => {
+  it("owners describe plans; families and coaches can't edit; a plan in use can't be deleted", async () => {
+    const id = (await as(db, OWNER, () => db.query<{ id: string }>(
+      "insert into plans (org_id, name, price_cents, sessions_per_week, description, includes) values ($1,'Speed Lab',18000,1,'Speed only.',$2) returning id", [ORG, ["Weekly speed session", "Monthly 40 test"]]))).rows[0].id;
+    expect((await as(db, PARENT_A, () => db.query<{ includes: string[] }>("select includes from plans where id=$1", [id]))).rows[0].includes).toEqual(["Weekly speed session", "Monthly 40 test"]);
+    expect((await as(db, PARENT_A, () => db.query("update plans set price_cents = 100 where id=$1", [id]))).affectedRows ?? 0).toBe(0);
+    expect((await as(db, COACH, () => db.query("update plans set price_cents = 100 where id=$1", [id]))).affectedRows ?? 0).toBe(0);
+    await expect(as(db, OWNER, () => db.query("update plans set includes = $2 where id=$1", [id, ["<script>"]]))).rejects.toThrow();
+    await as(db, PARENT_A, () => db.query("select choose_plan($1,$2)", [jordan, id]));
+    await expect(as(db, OWNER, () => db.query("delete from plans where id=$1", [id]))).rejects.toThrow(/Turn it off instead/);
+    await as(db, OWNER, () => db.query("update plans set active=false where id=$1", [id]));
+  });
+});

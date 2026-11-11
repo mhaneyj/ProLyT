@@ -12,7 +12,7 @@ import { Notice } from "@/components/ui";
 
 export const metadata = { title: "Training" };
 
-type Plan = { id: string; name: string; price_cents: number; sessions_per_week: number | null; program: string; fee_paid_by: "program" | "family" };
+type Plan = { id: string; name: string; price_cents: number; sessions_per_week: number | null; program: string; fee_paid_by: "program" | "family"; description: string | null; includes: string[]; featured: boolean };
 
 /** Price per session, using an average month (52 weeks / 12). */
 const perSession = (p: Plan) => (p.sessions_per_week ? Math.round(p.price_cents / (p.sessions_per_week * (52 / 12)) / 100) * 100 : null);
@@ -26,10 +26,10 @@ export default async function Training({ params, searchParams }: { params: Promi
       "select a.first_name from athletes a join guardians g on g.athlete_id = a.id and g.user_id = $2 where a.id = $1", [id, me.id]);
     if (!a) return null;
     const plans = await q<Plan>(`
-      select p.id, p.name, p.price_cents, p.sessions_per_week, o.name program, o.fee_paid_by
+      select p.id, p.name, p.price_cents, p.sessions_per_week, o.name program, o.fee_paid_by, p.description, p.includes, p.featured
       from plans p join orgs o on o.id = p.org_id
       join program_athletes pa on pa.org_id = p.org_id and pa.athlete_id = $1 and pa.status = 'active'
-      where p.active order by o.name, p.price_cents`, [id]);
+      where p.active order by o.name, p.sort, p.price_cents`, [id]);
     const [cur] = await q<{ plan_id: string; status: string }>(
       "select plan_id, status from memberships where athlete_id = $1 order by created_at desc limit 1", [id]);
     return { a, plans, cur: cur ?? null };
@@ -42,7 +42,7 @@ export default async function Training({ params, searchParams }: { params: Promi
   const rates = plans.map(perSession).filter((n): n is number => n !== null);
   const best = rates.length > 1 ? Math.min(...rates) : null;
   const active = cur && cur.status === "active" ? cur.plan_id : null;
-  const picked = cur?.plan_id ?? plans[Math.min(1, plans.length - 1)]?.id; // default: their current plan, else the middle option
+  const picked = cur?.plan_id ?? plans.find((p) => p.featured)?.id ?? plans[Math.min(1, plans.length - 1)]?.id; // their plan, else the program's featured one, else the middle
   const familyFee = plans.some((p) => p.fee_paid_by === "family");
   const program = plans[0]?.program ?? "your program";
 
@@ -87,7 +87,7 @@ export default async function Training({ params, searchParams }: { params: Promi
               return (
                 <label key={p.id} className="relative block cursor-pointer">
                   <input type="radio" name="plan_id" value={p.id} defaultChecked={p.id === picked} className="peer sr-only" />
-                  <span className="flex items-center gap-4 rounded-[14px] border-2 border-line bg-panel p-4 transition-colors peer-checked:border-gold peer-checked:bg-gold/[0.07] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-gold">
+                  <span className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] border-2 border-line bg-panel p-4 transition-colors peer-checked:border-gold peer-checked:bg-gold/[0.07] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-gold">
                     <span className="flex w-16 flex-none flex-col items-center leading-none">
                       <span className="font-display text-[40px]">{p.sessions_per_week ?? "—"}<span className="text-[22px]">×</span></span>
                       <span className="mt-1 font-cond text-[12px] font-extrabold uppercase tracking-[1.5px] text-muted">a week</span>
@@ -96,6 +96,7 @@ export default async function Training({ params, searchParams }: { params: Promi
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold">{p.name}</span>
                         {active === p.id ? <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-bold text-good">Current</span>
+                          : p.featured ? <span className="rounded-full bg-gold px-2 py-0.5 text-[11px] font-bold text-on-gold">Most popular</span>
                           : best !== null && each === best ? <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-bold text-gold">Best value</span> : null}
                       </span>
                       <span className="block text-[13px] text-muted">{each ? `About ${money(each)} a session` : "Sessions as scheduled"}</span>
@@ -104,6 +105,16 @@ export default async function Training({ params, searchParams }: { params: Promi
                       <span className="tabular font-display text-[26px]">{money(p.price_cents)}</span>
                       <span className="block text-[12px] text-muted">a month</span>
                     </span>
+                    {p.description || p.includes.length ? (
+                      <span className="block w-full border-t border-line pt-2.5">
+                        {p.description ? <span className="block text-[13px] text-soft">{p.description}</span> : null}
+                        {p.includes.length ? (
+                          <span className="mt-1.5 grid gap-1">
+                            {p.includes.map((i) => <span key={i} className="flex gap-2 text-[13px]"><span aria-hidden="true" className="text-gold">✓</span><span>{i}</span></span>)}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
                   </span>
                   <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 hidden size-6 place-items-center rounded-full bg-gold text-[13px] font-bold text-on-gold peer-checked:grid">✓</span>
                 </label>
