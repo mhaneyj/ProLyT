@@ -7,6 +7,7 @@ import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { CopyLink } from "@/components/copy-link";
 import { refCode } from "@/lib/track";
 import { deleteDivision, saveDivision, saveEventDetails, setEventStatus } from "../../actions";
+import { removeStaff, staffLink } from "../../schedule-actions";
 
 export const metadata = { title: "Event" };
 
@@ -37,10 +38,14 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
       divisions: await q<Division & { id: string; age_cutoff: string | null }>(`select id, name, basis, max_age, min_age, age_cutoff::text, max_grade, min_grade, no_seniors, gender, roster_max, team_cap, sort
         from divisions where event_id = $1 order by sort, name`, [id]),
       teams: await q<Team>("select * from event_teams_summary($1)", [id]),
+      staffToken: (await q<{ t: string | null }>("select staff_link($1) t", [id]))[0]?.t ?? null,
+      staff: await q<{ user_id: string; name: string }>("select user_id, name from event_staff_list($1)", [id]),
+      games: (await q<{ n: number; fin: number }>("select count(*)::int n, count(*) filter (where status = 'final')::int fin from games where event_id = $1", [id]))[0],
+      checkedIn: (await q<{ n: number }>("select count(*)::int n from event_roster where event_id = $1 and checked_in_at is not null", [id]))[0].n,
     };
   });
   if (!data) notFound();
-  const { e, divisions, teams } = data;
+  const { e, divisions, teams, staffToken, staff, games, checkedIn } = data;
   const ref = await refCode(me.id);
   const h = `/e/${e.id}`;
   const input = "min-h-11 w-full rounded-md border border-[#333] bg-[#111] px-2.5 text-[15px] text-cream";
@@ -101,6 +106,23 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
         <div className="rounded-xl border border-line p-3"><div className="font-display text-[28px]">{players}</div><div className="text-[11px] uppercase text-muted">Players</div></div>
         <div className={`rounded-xl border p-3 ${problems || missingWaivers ? "border-bad" : "border-line"}`}><div className="font-display text-[28px]">{problems + missingWaivers}</div><div className="text-[11px] uppercase text-muted">To fix</div></div>
       </div>
+
+      <section id="staff" className="flex scroll-mt-4 flex-col gap-2 rounded-xl border border-line p-3">
+        <div className="font-cond text-[15px] font-extrabold uppercase tracking-[2px]">Event day</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/host/events/${e.id}/schedule`} className="flex min-h-14 flex-col items-center justify-center rounded-lg border border-line text-sm font-semibold hover:border-gold">Schedule<span className="text-[11px] font-normal text-muted">{games.n ? `${games.fin}/${games.n} final` : "Not built yet"}</span></Link>
+          <Link href={`/day/${e.id}`} className="flex min-h-14 flex-col items-center justify-center rounded-lg border border-line text-sm font-semibold hover:border-gold">Check-in & scores<span className="text-[11px] font-normal text-muted">{checkedIn}/{players} checked in</span></Link>
+        </div>
+        {staffToken ? <CopyLink path={`/staff/${staffToken}`} label="Staff link for volunteers" text="Help run the event: check in athletes and keep score." />
+          : <form action={staffLink}><input type="hidden" name="event" value={e.id} /><button className="min-h-11 w-full rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Get a staff link for volunteers</button></form>}
+        <p className="text-[12px] text-muted">Volunteers who open it can scan passes and keep score. They can&apos;t change the event, rosters or schedule.</p>
+        {staff.map((s) => (
+          <form key={s.user_id} action={removeStaff} className="flex min-h-11 items-center justify-between text-sm">
+            <input type="hidden" name="event" value={e.id} /><input type="hidden" name="user" value={s.user_id} />
+            <span>{s.name}</span><button className="text-[13px] text-muted hover:text-bad">Remove</button>
+          </form>
+        ))}
+      </section>
 
       <Link href={`/host/events/${e.id}/checks`} className={`flex min-h-14 items-center justify-between rounded-xl border px-3 ${e.checks ? "border-gold bg-gold/5" : "border-line"}`}>
         <span><span className="block font-semibold">Age checks</span><span className="block text-[12px] text-muted">{e.require_age_check ? "Required for this event" : "Optional for this event"}</span></span>

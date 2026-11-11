@@ -733,6 +733,90 @@ let coachLink = "";
   await pg.reload();
   check("parent sees why and can upload again", await seen(pg.getByText(/Photo is too blurry to read/)) && await seen(pg.getByRole("button", { name: /photo of Avery's document/ })));
   await pa.close();
+
+  // ── 19. Event day: staff link, schedule and bracket, pass check-in, live scoring, champions
+  const j = await signIn("gamefit-loomis", "josh.personal@gmail.test", `/login?next=/register-team/${eventId}`);
+  await j.page.waitForURL(/register-team/);
+  await j.page.getByLabel("Team name").fill("Loomis Bolts 15U");
+  await j.page.getByRole("radio", { name: /^15U\b/ }).check();
+  await j.page.getByRole("button", { name: "Register team" }).click();
+  await j.page.waitForURL(/\/teams\//);
+  await j.page.goto(url("gamefit-loomis", `/host/events/${eventId}`));
+  await j.page.getByRole("button", { name: /Get a staff link/ }).click();
+  const staffUrl = await j.page.getByLabel("Staff link for volunteers").inputValue();
+  check("host gets a staff link for volunteers", /\/staff\/[\w-]{32,}$/.test(staffUrl), staffUrl);
+  await j.page.goto(url("gamefit-loomis", `/host/events/${eventId}/schedule`));
+  await j.page.getByRole("button", { name: "Save", exact: true }).click();
+  await j.page.waitForURL(/saved=1/);
+  await j.page.getByLabel("Field names").fill("Field 1, Field 2");
+  await j.page.getByRole("button", { name: "Add field" }).click();
+  check("host adds fields", await seen(j.page.getByRole("button", { name: "Remove Field 2" })));
+  const d15 = j.page.locator("section").filter({ has: j.page.getByText(/^15U · 2 teams/) });
+  await d15.getByRole("button", { name: "Build pool games" }).click();
+  check("pool games scheduled", await seen(j.page.getByText(/1 game scheduled/)));
+  await j.page.locator("section").filter({ has: j.page.getByText(/^15U · 2 teams/) }).getByRole("button", { name: "Build bracket" }).click();
+  check("bracket scheduled after pool play", await seen(j.page.getByText(/1 game scheduled/)) && await seen(j.page.getByText("Championship").first()));
+  check("no client errors (schedule)", j.errors.length === 0, j.errors.join("; "));
+
+  // The family's pass shows a QR code
+  const fam = await signIn("gamefit-loomis", "new.family@example.test", "/login?next=/family");
+  const passLink = fam.page.getByRole("link", { name: /Drew's event pass/ });
+  check("family home shows Drew's event pass", await seen(passLink));
+  await passLink.click();
+  await fam.page.waitForURL(/\/pass\//);
+  const passCode = fam.page.url().match(/pass\/([0-9a-f]{32})/)[1];
+  check("pass shows a QR code for check-in", await seen(fam.page.getByRole("img", { name: /Check-in code for Drew/ })) && (await fam.page.locator("svg path").count()) > 0);
+  // A parent opening someone's check-in link sees nothing private
+  await fam.page.goto(url("gamefit-loomis", `/checkin/${passCode}`));
+  check("non-staff can't open a check-in screen", await seen(fam.page.getByText(/Only the event's check-in staff/)));
+
+  // A volunteer joins from the staff link and checks Drew in from the list
+  const vol = await signIn("gamefit-loomis", "lem@gamefit.test", `/login?next=${encodeURIComponent(new URL(staffUrl, "http://x").pathname)}`);
+  await vol.page.getByRole("button", { name: "Join event staff" }).click();
+  await vol.page.waitForURL(/\/day\//);
+  check("volunteer lands on the event-day desk", await seen(vol.page.getByText(/You're on event staff/)));
+  await vol.page.getByLabel("Find an athlete").fill("Drew");
+  await vol.page.getByRole("link", { name: /Drew Newcomer/ }).click();
+  await vol.page.waitForURL(/\/checkin\//);
+  check("check-in screen shows the verified badge", await seen(vol.page.getByText("✓ Age verified")));
+  await vol.page.getByRole("button", { name: "Check in", exact: true }).click();
+  check("volunteer checks Drew in", await seen(vol.page.getByText(/Drew Newcomer is checked in/)));
+  await fam.page.goto(url("gamefit-loomis", `/pass/${passCode}`));
+  check("the family's pass turns to Checked in", await seen(fam.page.getByText("Checked in", { exact: true })));
+
+  // Live scoring: pool game, then the championship
+  const score = async (team) => {
+    await vol.page.goto(url("gamefit-loomis", `/day/${eventId}#scores`));
+    await vol.page.locator('a[href*="/game/"]').first().click();
+    await vol.page.waitForURL(/\/game\//);
+    await vol.page.getByRole("button", { name: "Start game" }).click();
+    await vol.page.getByRole("button", { name: `${team} plus 6` }).click();
+    await seen(vol.page.getByText(/Live\. Everyone following/));
+    await vol.page.waitForTimeout(400);
+    await vol.page.getByRole("button", { name: "End game · Final" }).click();
+    await vol.page.waitForURL(/final=1/);
+  };
+  await score("Rocklin Raptors 15U");
+  // Anyone with the link (signed out) sees the score and standings
+  const pub2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pg2 = await pub2.newPage();
+  await pg2.goto(url("gamefit-loomis", `/e/${eventId}`));
+  check("public page shows the final and standings", await seen(pg2.getByText("Final", { exact: true }).first()) && await seen(pg2.getByRole("cell", { name: "Rocklin Raptors 15U" })));
+  check("bracket fills in the pool winner", await seen(pg2.getByText("Championship").first()));
+  await score("Rocklin Raptors 15U");
+  await pg2.reload();
+  check("champions banner on the public page", await seen(pg2.getByText("15U champions")) && await seen(pg2.getByText("Rocklin Raptors 15U").first()));
+  await pub2.close();
+  check("no client errors (scoring)", vol.errors.length === 0, vol.errors.join("; "));
+  await vol.ctx.close();
+
+  // The result stays on Drew's profile
+  await fam.page.goto(url("gamefit-loomis", "/family"));
+  await fam.page.goto(url("gamefit-loomis", `/athlete/${await fam.page.evaluate(() => document.querySelector('a[href^="/athlete/"]')?.getAttribute("href")?.split("/")[2])}`));
+  check("Drew's profile shows the tournament win", await seen(fam.page.getByText("🏆 Champions")) && await seen(fam.page.getByText("2–0")));
+  check("no client errors (family event day)", fam.errors.length === 0, fam.errors.join("; "));
+  await fam.ctx.close();
+  await j.ctx.close();
 }
 
 await browser.close();

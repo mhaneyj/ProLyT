@@ -18,9 +18,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!p) return new Response("Not found", { status: 404 });
   const color = p.color && /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : "#F8C40A";
   const who = p.name ?? p.org ?? "ProLyt";
-  const headline = p.kind === "pr" ? "NEW PERSONAL RECORD" : p.kind === "highlight" ? "NEW HIGHLIGHT" : p.kind === "joined" ? "NEW TEAM" : who.toUpperCase();
+  const headline = p.kind === "pr" ? "NEW PERSONAL RECORD" : p.kind === "highlight" ? "NEW HIGHLIGHT" : p.kind === "joined" ? "NEW TEAM" : p.kind === "result" ? "CHAMPIONS" : who.toUpperCase();
   const big = p.kind === "pr" && p.metric && p.value != null ? formatValue(p.metric, Number(p.value)) : null;
-  const sub = p.kind === "pr" && p.metric ? metricLabel(p.metric) : p.kind === "joined" ? `Joined ${p.body ?? ""}` : (p.body ?? "").slice(0, 220);
+  const sub = p.kind === "pr" && p.metric ? metricLabel(p.metric) : p.kind === "joined" ? `Joined ${p.body ?? ""}` : (p.body ?? "").replace(/\p{Extended_Pictographic}\uFE0F?\s*/gu, "").slice(0, 220);
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 96,

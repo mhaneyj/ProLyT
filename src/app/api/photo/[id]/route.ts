@@ -17,7 +17,7 @@ async function canSee(id: string, share: string | null) {
   }
   const me = await getMe();
   if (!me) return false;
-  const [ok] = await asUser(me.id, (q) => q<{ ok: boolean }>("select athlete_listed($1) or is_family($1) or staff_sees_athlete($1) ok", [id]));
+  const [ok] = await asUser(me.id, (q) => q<{ ok: boolean }>("select athlete_listed($1) or is_family($1) or staff_sees_athlete($1) or event_staff_sees($1) ok", [id]));
   return Boolean(ok?.ok);
 }
 

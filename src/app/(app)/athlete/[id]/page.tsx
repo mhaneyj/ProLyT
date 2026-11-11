@@ -12,6 +12,8 @@ import { Player } from "@/components/player";
 import { Notice, Pill, SectionLabel } from "@/components/ui";
 import { AgeCheckUpload } from "@/components/age-check-upload";
 import { ageStatuses } from "@/lib/age-check";
+import { EventHistory, type EventRow } from "@/components/event-history";
+import { PassCards, type PassRow } from "@/components/pass-cards";
 import { loadAthlete, sportName } from "./header";
 import { PhotoButton } from "./photo-button";
 import { heroBackground } from "@/lib/domain/brand";
@@ -35,6 +37,8 @@ export default async function AthleteProfile({ params, searchParams }: { params:
   const { a, switcher } = await loadAthlete(me, id, "");
   const d = await asUser(me.id, async (q) => ({
     check: (await ageStatuses(q, [id])).get(id),
+    events: await q<EventRow>("select event_id, event, starts_on::text, host, team, division, place, w, l, t from athlete_events($1)", [id]),
+    passes: await q<PassRow>("select pass_code, first_name, event, event_id, starts_on::text, checked_in_at from my_event_passes() where athlete_id = $1", [id]),
     results: await q<R>(`select r.metric, r.value::float value, r.source, r.method, r.recorded_at, o.name org, r.proof_url
       from results r left join orgs o on o.id = r.org_id where r.athlete_id = $1 and r.voided_at is null`, [id]),
     ranks: await q<Rank>("select * from stat_ranks($1)", [id]),
@@ -95,6 +99,8 @@ export default async function AthleteProfile({ params, searchParams }: { params:
           </form>
         </div>
       ) : null}
+
+      <PassCards passes={d.passes} />
 
       <div className="relative flex flex-col gap-4 overflow-hidden rounded-[14px] border border-line p-[18px]" style={{ background: heroBackground(a.theme_color, false) }}>
         <ProfileCircle src={a.has_photo ? `/api/photo/${a.id}` : null} first={a.first_name} last={a.last_name} size={104}>
@@ -166,6 +172,8 @@ export default async function AthleteProfile({ params, searchParams }: { params:
           ))}
         </section>
       ) : null}
+
+      <EventHistory rows={d.events} />
 
       <section id="timeline" className="flex scroll-mt-4 flex-col gap-2">
         <SectionLabel>Career</SectionLabel>

@@ -3,7 +3,7 @@ import { asUser, type Q } from "./db";
 import type { Me } from "./auth";
 
 export type FeedPost = {
-  id: string; kind: "post" | "pr" | "highlight" | "joined"; body: string | null; created_at: string;
+  id: string; kind: "post" | "pr" | "highlight" | "joined" | "result"; body: string | null; created_at: string;
   athlete_id: string | null; athlete_name: string | null; athlete_line: string | null; athlete_photo: boolean;
   org_id: string | null; org_name: string | null; org_slug: string | null;
   clip_id: string | null; film_id: string | null; storage_path: string | null; start_s: number | null; end_s: number | null; photo_path: string | null;

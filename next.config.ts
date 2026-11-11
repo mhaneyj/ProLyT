@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     const common = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-      { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
+      { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
     ];
     return [
       // Age documents embed inside the reviewer's own page only.

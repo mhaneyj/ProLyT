@@ -8,6 +8,7 @@ import { PostCard } from "@/components/post-card";
 import { Player } from "@/components/player";
 import { Notice } from "@/components/ui";
 import { setFollow, setInNetwork } from "../../feed/actions";
+import { EventHistory, type EventRow } from "@/components/event-history";
 
 export const metadata = { title: "Athlete" };
 
@@ -22,7 +23,8 @@ export default async function NetworkProfile({ params }: { params: Promise<{ id:
     "select network_profile($1) p, is_guardian($1) guardian, is_self($1) and coalesce((select age_on(birth_date) >= 18 from athletes where id = $1), false) adult_self", [id]));
   const p = row?.p;
   if (!p) notFound();
-  const posts = await loadFeed(me.id, { athlete: id, scope: "all", limit: 20 });
+  const [posts, events] = await Promise.all([loadFeed(me.id, { athlete: id, scope: "all", limit: 20 }),
+    asUser(me.id, (q) => q<EventRow>("select event_id, event, starts_on::text, host, team, division, place, w, l, t from athlete_events($1)", [id]))]);
   const back = `/a/${id}`;
   const canToggle = row.guardian || row.adult_self;
   return (
@@ -53,6 +55,8 @@ export default async function NetworkProfile({ params }: { params: Promise<{ id:
           <button className="min-h-11 flex-none rounded-md border border-line px-3 text-sm font-bold hover:border-gold">{p.listed ? "Turn off" : "Turn on"}</button>
         </form>
       ) : null}
+
+      <EventHistory rows={events} />
 
       {p.clips.length ? (
         <section className="flex flex-col gap-3">

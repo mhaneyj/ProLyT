@@ -5,6 +5,7 @@ import { Button, Notice, Title } from "@/components/ui";
 import { addAthleteForTeam, joinTeam } from "@/app/(app)/host/actions";
 import { AgeCheckUpload } from "@/components/age-check-upload";
 import { ageStatuses } from "@/lib/age-check";
+import { PassCards, type PassRow } from "@/components/pass-cards";
 
 export const metadata = { title: "Join a team" };
 
@@ -32,8 +33,9 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
     const [p] = await q<{ full_name: string }>("select full_name from profiles where id = auth.uid()");
     const [ev] = await q<{ required: boolean; basis: string }>(`select e.require_age_check required, d.basis from events e
       join event_teams et on et.event_id = e.id join divisions d on d.id = et.division_id where et.id = $1`, [t.team_id]);
+    const passes = await q<PassRow>("select pass_code, first_name, event, event_id, starts_on::text, checked_in_at from my_event_passes() where event_id = $1", [t.event_id]);
     const statuses = await ageStatuses(q, kids.filter((k) => k.on_team).map((k) => k.id));
-    return { t, kids, statuses, signer: p?.full_name ?? "", required: ev?.required ?? false, purpose: (ev?.basis === "grade" ? "grade" : "age") as "age" | "grade" };
+    return { t, kids, passes, statuses, signer: p?.full_name ?? "", required: ev?.required ?? false, purpose: (ev?.basis === "grade" ? "grade" : "age") as "age" | "grade" };
   });
   if (!data) return (
     <>
@@ -41,7 +43,7 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
       <p className="text-soft">This team link was replaced or the team withdrew. Ask the coach for the current link.</p>
     </>
   );
-  const { t, kids, statuses, signer, required, purpose } = data;
+  const { t, kids, passes, statuses, signer, required, purpose } = data;
   const needsCheck = kids.filter((k) => k.on_team && !k.pending && !(purpose === "grade" ? k.grade_ok : k.age_ok));
   const joined = kids.find((k) => k.id === sp.joined);
   const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
@@ -51,6 +53,7 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
     <>
       <Title sub={`${t.division} · ${t.event} · ${when}${t.location ? ` · ${t.location}` : ""}`}>{t.team}</Title>
       {joined ? <Notice tone="good">{joined.name} is on the roster and the waiver is signed. See you at {t.event}!</Notice> : null}
+      {passes.length ? <PassCards passes={passes} /> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
       {!t.open ? <Notice tone="bad">Registration for this event has closed.</Notice> : kids.length === 0 ? (
         <AddAthlete token={token} division={t.division} signer={signer} input={input} first />

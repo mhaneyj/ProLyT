@@ -7,6 +7,7 @@ import { money, dayTime, ageOn } from "@/lib/domain/format";
 import { PERFORMANCE, bestOfficial, formatValue, improvement, metricShort, type Source } from "@/lib/domain/metrics";
 import { Checklist, Hero, KidSwitcher, NoteCard, StatTile, Tile } from "@/components/athlete";
 import { LinkButton, Notice, Pill } from "@/components/ui";
+import { PassCards, type PassRow } from "@/components/pass-cards";
 
 export const metadata = { title: "Home" };
 
@@ -56,6 +57,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
     return { a, results, note };
   });
   const { a, results, note } = d;
+  const passes = await asUser(me.id, (q) => q<PassRow>("select pass_code, first_name, event, event_id, starts_on::text, checked_in_at from my_event_passes()"));
 
   // Three headline numbers: best official result, with change since the first one.
   const stats = PERFORMANCE
@@ -82,6 +84,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
   return (
     <>
       <KidSwitcher kids={kids} current={a.id} to="/family" />
+      <PassCards passes={passes} />
       {welcome ? <Notice tone="good">{a.first_name} is all set. Start with the steps below.</Notice> : null}
       {connected ? <Notice tone="good">{a.first_name} is connected to this program.</Notice> : null}
       {chosen ? <Notice tone="good">Package saved. Your coach will be in touch about payment.</Notice> : null}

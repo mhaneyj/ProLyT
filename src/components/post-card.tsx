@@ -92,6 +92,11 @@ export function PostCard({ p, back, full = false, refCode }: { p: FeedPost; back
           <span className="text-[15px]">{first} joined <span className="font-semibold">{p.body}</span></span>
         </div>
       ) : null}
+      {p.kind === "result" ? (
+        <div className="flex items-center gap-3 rounded-xl border-2 border-gold bg-gold/10 p-3">
+          <span className="whitespace-pre-wrap break-words text-[16px] font-semibold leading-snug">{p.body}</span>
+        </div>
+      ) : null}
       {p.kind === "highlight" ? <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">★ New highlight</div> : null}
       {p.kind === "post" || p.kind === "highlight" ? (p.body ? <p className={`whitespace-pre-wrap break-words text-[15px] leading-relaxed ${p.kind === "highlight" ? "font-semibold" : ""}`}>{p.body}</p> : null) : null}
 

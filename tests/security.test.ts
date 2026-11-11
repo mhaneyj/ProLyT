@@ -947,3 +947,99 @@ describe("age verification", () => {
     await expect(as(db, VPARENT, () => db.query("select purge_stale_age_documents()"))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("event day: passes, check-in, staff, scores, brackets", () => {
+  const C1 = "10000000-0000-0000-0000-00000000d0a1", C2 = "10000000-0000-0000-0000-00000000d0a2", C3 = "10000000-0000-0000-0000-00000000d0a5";
+  const FAM = "10000000-0000-0000-0000-00000000d0a3", VOL = "10000000-0000-0000-0000-00000000d0a4";
+  let ev: string, div: string, t1: string, t2: string, t3: string, kidA: string, kidB: string, passA: string, semi: string, fin: string, pool: string;
+  const iso = (y: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - y); d.setDate(d.getDate() - 20); return d.toISOString().slice(0, 10); };
+  beforeAll(async () => {
+    for (const [u, e] of [[C1, "c1@example.com"], [C2, "c2@example.com"], [C3, "c3@example.com"], [FAM, "fam@example.com"], [VOL, "vol@example.com"]]) await addUser(db, u, e);
+    ev = (await as(db, OWNER, () => db.query<{ id: string }>("insert into events (org_id, name, starts_on, status, waiver_text) values ($1,'Day Cup',current_date,'open','Waiver') returning id", [ORG]))).rows[0].id;
+    div = (await as(db, OWNER, () => db.query<{ id: string }>("insert into divisions (event_id, name, basis, max_age, age_cutoff) values ($1,'14U','age',14,current_date) returning id", [ev]))).rows[0].id;
+    t1 = (await as(db, C1, () => db.query<{ id: string }>("select register_team($1,'Hawks',null,$2) id", [div, "1".repeat(64)]))).rows[0].id;
+    t2 = (await as(db, C2, () => db.query<{ id: string }>("select register_team($1,'Owls',null,$2) id", [div, "2".repeat(64)]))).rows[0].id;
+    t3 = (await as(db, C3, () => db.query<{ id: string }>("select register_team($1,'Crows',null,$2) id", [div, "3".repeat(64)]))).rows[0].id;
+    kidA = (await as(db, FAM, () => db.query<{ id: string }>("select add_my_athlete('Ace','Day',$1,null,'QB','male','Fam Day') id", [iso(14)]))).rows[0].id;
+    kidB = (await as(db, FAM, () => db.query<{ id: string }>("select add_my_athlete('Bo','Day',$1,null,'WR','male','Fam Day') id", [iso(10)]))).rows[0].id;
+    await as(db, FAM, () => db.query("select join_team($1,$2,'Fam Day')", ["1".repeat(64), kidA]));
+    await as(db, FAM, () => db.query("select join_team($1,$2,'Fam Day')", ["2".repeat(64), kidB]));
+    await db.query("update athletes set in_network = true, parent_approved_at = now() where id = $1", [kidA]);
+  });
+  it("families see their own passes; nobody but event staff can look a pass up", async () => {
+    const passes = (await as(db, FAM, () => db.query<{ pass_code: string; first_name: string }>("select pass_code, first_name from my_event_passes() order by first_name"))).rows;
+    expect(passes.map((p) => p.first_name)).toEqual(["Ace", "Bo"]);
+    passA = passes[0].pass_code;
+    expect(passA).toMatch(/^[0-9a-f]{32}$/);
+    expect((await as(db, C2, () => db.query("select pass_code from my_event_passes()"))).rows).toHaveLength(0);
+    for (const u of [C1, FAM, VOL, PARENT_B]) expect((await as(db, u, () => db.query("select * from checkin_lookup($1)", [passA]))).rows).toHaveLength(0);
+    await expect(as(db, C1, () => db.query("select check_in($1)", [passA]))).rejects.toThrow(/Pass not found/);
+    await expect(as(db, FAM, () => db.query("select checkin_problems($1,$2)", [t1, kidA]))).rejects.toThrow(/permission denied/);
+  });
+  it("volunteers join with the host's staff link, check in, and can't run the event", async () => {
+    await expect(as(db, C1, () => db.query("select staff_link($1,$2)", [ev, "s".repeat(40)]))).rejects.toThrow(/Only the host/);
+    expect((await as(db, OWNER, () => db.query<{ t: string }>("select staff_link($1,$2) t", [ev, "s".repeat(40)]))).rows[0].t).toBe("s".repeat(40));
+    await expect(as(db, VOL, () => db.query("select join_staff($1)", ["x".repeat(40)]))).rejects.toThrow(/staff link was replaced/);
+    expect((await as(db, VOL, () => db.query<{ id: string }>("select join_staff($1) id", ["s".repeat(40)]))).rows[0].id).toBe(ev);
+    const [l] = (await as(db, VOL, () => db.query<{ name: string; problems: string[]; has_photo: boolean }>("select name, problems, has_photo from checkin_lookup($1)", [passA]))).rows;
+    expect(l).toMatchObject({ name: "Ace Day", problems: [] });
+    expect((await as(db, VOL, () => db.query<{ n: string }>("select check_in($1) n", [passA]))).rows[0].n).toBe("Ace Day");
+    expect((await db.query("select 1 from audit_log where action='check_in' and target=$1", [kidA])).rows).toHaveLength(1);
+    expect((await as(db, VOL, () => db.query("select * from checkin_board($1)", [ev]))).rows).toHaveLength(2);
+    expect((await as(db, C1, () => db.query("select * from checkin_board($1)", [ev]))).rows).toHaveLength(0);
+    // Volunteers keep score but don't build the schedule or manage staff
+    await expect(as(db, VOL, () => db.query("insert into event_fields (event_id, name) values ($1,'Field 9')", [ev]))).rejects.toThrow();
+    await expect(as(db, VOL, () => db.query("select remove_staff($1,$2)", [ev, VOL]))).rejects.toThrow(/Only the host/);
+    expect((await as(db, OWNER, () => db.query("select * from event_staff_list($1)", [ev]))).rows).toHaveLength(1);
+  });
+  it("problems block check-in unless staff give a reason", async () => {
+    await as(db, OWNER, () => db.query("update events set require_age_check = true where id=$1", [ev]));
+    const passB = (await as(db, FAM, () => db.query<{ pass_code: string }>("select pass_code from my_event_passes() where first_name='Bo'"))).rows[0].pass_code;
+    expect((await as(db, VOL, () => db.query<{ problems: string[] }>("select problems from checkin_lookup($1)", [passB]))).rows[0].problems).toEqual(["Age not verified"]);
+    await expect(as(db, VOL, () => db.query("select check_in($1)", [passB]))).rejects.toThrow(/Add a reason: Age not verified/);
+    await as(db, VOL, () => db.query("select check_in($1,$2)", [passB, "Showed passport at the desk"]));
+    expect((await db.query<{ checkin_note: string }>("select checkin_note from event_roster where pass_code=$1", [passB])).rows[0].checkin_note).toBe("Showed passport at the desk");
+    await as(db, VOL, () => db.query("select undo_check_in($1)", [passB]));
+    expect((await db.query("select checked_in_at from event_roster where pass_code=$1", [passB])).rows[0]).toEqual({ checked_in_at: null });
+  });
+  it("the host builds games; staff keep score; scores are public; brackets advance and crown a champion", async () => {
+    const field = (await as(db, OWNER, () => db.query<{ id: string }>("insert into event_fields (event_id, name) values ($1,'Field 1') returning id", [ev]))).rows[0].id;
+    pool = (await as(db, OWNER, () => db.query<{ id: string }>("insert into games (event_id, division_id, stage, pool, field_id, home_team, away_team, starts_at) values ($1,$2,'pool','A',$3,$4,$5,now()) returning id", [ev, div, field, t1, t2]))).rows[0].id;
+    fin = (await as(db, OWNER, () => db.query<{ id: string }>("insert into games (event_id, division_id, stage, round, label, home_team) values ($1,$2,'bracket',2,'Final',$3) returning id", [ev, div, t3]))).rows[0].id;
+    semi = (await as(db, OWNER, () => db.query<{ id: string }>("insert into games (event_id, division_id, stage, round, label, home_team, away_team, next_game, next_slot) values ($1,$2,'bracket',1,'Semifinal',$3,$4,$5,'away') returning id", [ev, div, t1, t2, fin]))).rows[0].id;
+    await expect(as(db, C1, () => db.query("select set_score($1,7,0,'final')", [pool]))).rejects.toThrow(/Only event staff/);
+    await expect(as(db, FAM, () => db.query("update games set home_score = 50 where id=$1", [pool]))).resolves.toMatchObject({ affectedRows: 0 });
+    await as(db, VOL, () => db.query("select set_score($1,21,14,'final')", [pool]));
+    expect((await db.query<{ status: string }>("select status from events where id=$1", [ev])).rows[0].status).toBe("live");
+    // Anyone signed in sees scores and standings
+    expect((await as(db, PARENT_B, () => db.query<{ home_score: number }>("select home_score from games where id=$1", [pool]))).rows[0].home_score).toBe(21);
+    const st = (await as(db, PARENT_B, () => db.query<{ team: string; w: number; l: number; diff: number }>("select team, w, l, diff from division_standings($1)", [div]))).rows;
+    expect(st[0]).toMatchObject({ team: "Hawks", w: 1, l: 0, diff: 7 });
+    expect(st.find((s) => s.team === "Owls")).toMatchObject({ w: 0, l: 1 });
+    // Bracket
+    await expect(as(db, VOL, () => db.query("select set_score($1,1,1,'final')", [fin]))).rejects.toThrow(/Both teams/);
+    await expect(as(db, VOL, () => db.query("select set_score($1,14,14,'final')", [semi]))).rejects.toThrow(/need a winner/);
+    await as(db, VOL, () => db.query("select set_score($1,13,20,'final')", [semi]));
+    expect((await db.query<{ away_team: string }>("select away_team from games where id=$1", [fin])).rows[0].away_team).toBe(t2);
+    // Correcting the semi swaps who advanced while the final hasn't started
+    await as(db, VOL, () => db.query("select set_score($1,24,20,'final')", [semi]));
+    expect((await db.query<{ away_team: string }>("select away_team from games where id=$1", [fin])).rows[0].away_team).toBe(t1);
+    await as(db, VOL, () => db.query("select set_score($1,0,6,'live')", [fin]));
+    await expect(as(db, VOL, () => db.query("select set_score($1,1,30,'final')", [semi]))).rejects.toThrow(/next game already started/);
+    await as(db, VOL, () => db.query("select set_score($1,7,28,'final')", [fin]));
+    const res = (await db.query<{ team_id: string; place: number }>("select team_id, place from event_results where division_id=$1 order by place", [div])).rows;
+    expect(res).toEqual([{ team_id: t1, place: 1 }, { team_id: t3, place: 2 }]);
+    const posts = (await db.query<{ body: string; athlete_id: string | null }>("select body, athlete_id from posts where kind='result' and deleted_at is null and metric=$1", ["champion:" + div])).rows;
+    expect(posts.find((p) => !p.athlete_id)?.body).toMatch(/Hawks won 14U at Day Cup \(28–7\)/);
+    expect(posts.filter((p) => p.athlete_id).map((p) => p.athlete_id)).toEqual([kidA]); // only listed athletes get a post
+    // The profile record
+    const hist = (await as(db, FAM, () => db.query<{ place: number; w: number; l: number }>("select place, w, l from athlete_events($1)", [kidA]))).rows[0];
+    expect(hist).toEqual({ place: 1, w: 3, l: 0 });
+    expect((await as(db, PARENT_B, () => db.query("select * from athlete_events($1)", [kidB]))).rows).toHaveLength(0);
+  });
+  it("follows are private to the follower", async () => {
+    await as(db, FAM, () => db.query("insert into team_follows (user_id, team_id) values ($1,$2)", [FAM, t1]));
+    await expect(as(db, FAM, () => db.query("insert into team_follows (user_id, team_id) values ($1,$2)", [PARENT_B, t1]))).rejects.toThrow();
+    expect((await as(db, PARENT_B, () => db.query("select * from team_follows"))).rows).toHaveLength(0);
+  });
+});
