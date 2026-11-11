@@ -28,7 +28,10 @@ export default async function Owner() {
       union all
       select coalesce(nullif(pr.full_name, ''), 'A coach') || ' · payout setup not finished', 'Their pending pay is held until they finish'
       from org_members om join profiles pr on pr.id = om.user_id
-      where om.org_id = $1 and om.role = 'coach' and om.pay_type = 'contractor' and not om.payouts_enabled`, [me.orgId]);
+      where om.org_id = $1 and om.role = 'coach' and om.pay_type = 'contractor' and not om.payouts_enabled
+      union all
+      select 'Set up payouts to get paid', 'Settings → Get paid. Family payments wait until your bank is connected.'
+      from orgs o where o.id = $1 and not o.payouts_enabled and coalesce((o.features->>'payments')::boolean, true)`, [me.orgId]);
     const mix = await q<{ name: string; n: number; cents: number }>(`
       select p.name, count(*)::int n, sum(p.price_cents)::int cents from memberships m join plans p on p.id = m.plan_id
       where p.org_id = $1 and m.status in ('active','past_due') group by p.name, p.price_cents order by p.price_cents`, [me.orgId]);

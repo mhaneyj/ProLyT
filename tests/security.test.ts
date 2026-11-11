@@ -1167,3 +1167,21 @@ describe("program operations", () => {
     expect((await as(db, PARENT_A, () => db.query<{ event_id: string }>("select event_id from my_program_events()"))).rows.map((r) => r.event_id)).toContain(ev);
   });
 });
+
+describe("program payouts", () => {
+  it("only owners see payouts and choose who covers the fee; the fee is recorded on payments", async () => {
+    await expect(as(db, COACH, () => db.query("select set_fee_paid_by($1,'family')", [ORG]))).rejects.toThrow(/Only the owner/);
+    expect((await as(db, COACH, () => db.query<{ p: unknown }>("select program_payouts($1) p", [ORG]))).rows[0].p).toBeNull();
+    await as(db, OWNER, () => db.query("select set_fee_paid_by($1,'family')", [ORG]));
+    const p = (await as(db, OWNER, () => db.query<{ p: { fee_paid_by: string; connected: boolean } }>("select program_payouts($1) p", [ORG]))).rows[0].p;
+    expect(p).toMatchObject({ fee_paid_by: "family", connected: false });
+    const s = (await db.query<{ id: string }>(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id, price_cents, capacity)
+      values ($1,'one_on_one','1on1','Fee test', now() + interval '3 days', now() + interval '3 days 1 hour', $2, 10000, 1) returning id`, [ORG, COACH])).rows[0].id;
+    const [sp] = (await as(db, PARENT_A, () => db.query<{ payment_id: string; fee_cents: number; fee_paid_by: string }>("select * from start_session_payment($1,$2,200)", [s, jordan]))).rows;
+    expect(sp).toMatchObject({ fee_cents: 200, fee_paid_by: "family" });
+    await db.query("select complete_session_payment($1,'cs_fee')", [sp.payment_id]);
+    expect((await db.query<{ amount_cents: number; platform_fee_cents: number }>("select amount_cents, platform_fee_cents from payments where session_payment_id=$1", [sp.payment_id])).rows[0])
+      .toEqual({ amount_cents: 10200, platform_fee_cents: 200 });
+    await as(db, OWNER, () => db.query("select set_fee_paid_by($1,'program')", [ORG]));
+  });
+});

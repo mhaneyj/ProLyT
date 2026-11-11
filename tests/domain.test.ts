@@ -151,3 +151,16 @@ describe("trainers", () => {
     expect(weekly(d, 50)).toHaveLength(12);
   });
 });
+
+import { feeOfCharged, priceWithFee } from "../src/lib/fees";
+describe("platform fee", () => {
+  it("program covers it: family pays the price; fee comes out of the payout", () => {
+    expect(priceWithFee(10000, "program", 200)).toEqual({ feeCents: 200, totalCents: 10000 });
+    expect(feeOfCharged(10000, "program", 200)).toBe(200);
+  });
+  it("family covers it: added to their total, and recovered exactly on renewals", () => {
+    expect(priceWithFee(10000, "family", 200)).toEqual({ feeCents: 200, totalCents: 10200 });
+    expect(feeOfCharged(10200, "family", 200)).toBe(200);
+    expect(priceWithFee(14900, "family", 200)).toEqual({ feeCents: 298, totalCents: 15198 });
+  });
+});

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { currentUserId } from "@/lib/auth";
-import { asUser } from "@/lib/db";
+import { asService, asUser } from "@/lib/db";
+import { feePercent, priceWithFee } from "@/lib/fees";
 import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 
 // Starts a monthly membership checkout for one athlete the signed-in parent registered.
@@ -25,8 +26,10 @@ async function start(request: NextRequest, athleteId: string | null) {
   });
   if (!m) return NextResponse.redirect(`${base}/family`, 303);
   // ProLyt can switch online payments off per program
-  const [f] = await asUser(uid, (q) => q<{ on: boolean }>("select coalesce((features->>'payments')::boolean, true) on from orgs where id = $1", [m.org_id]));
+  const [f] = await asUser(uid, (q) => q<{ on: boolean; paid_by: "program" | "family" }>("select coalesce((features->>'payments')::boolean, true) on, fee_paid_by paid_by from orgs where id = $1", [m.org_id]));
   if (!f?.on) return NextResponse.redirect(`${base}/family?chosen=1`, 303);
+  const { feeCents } = priceWithFee(m.price_cents, f.paid_by);
+  await asService((q) => q("update memberships set fee_paid_by = $2 where id = $1", [m.membership_id, f.paid_by]));
 
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
@@ -39,7 +42,10 @@ async function start(request: NextRequest, athleteId: string | null) {
         recurring: { interval: "month" },
         product_data: { name: `${m.program} · ${m.plan} membership · ${m.first_name}` },
       },
-    }],
+    }, ...(f.paid_by === "family" && feeCents > 0 ? [{
+      quantity: 1,
+      price_data: { currency: "usd", unit_amount: feeCents, recurring: { interval: "month" as const }, product_data: { name: `Service fee (${feePercent()})` } },
+    }] : [])],
     metadata: { membership_id: m.membership_id, org_id: m.org_id },
     subscription_data: { metadata: { membership_id: m.membership_id, org_id: m.org_id } },
     success_url: `${base}/family?paid=1`,

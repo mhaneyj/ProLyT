@@ -8,10 +8,16 @@ import { asUser } from "@/lib/db";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { BrandingForm, CoachPayForm, InviteForm } from "./forms";
 import { isProgramAdmin } from "@/lib/perms";
+import { feePercent } from "@/lib/fees";
+import { money } from "@/lib/domain/format";
+import { setFeePaidBy } from "./actions";
 
 export const metadata = { title: "Program settings" };
 
-export default async function Settings({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; link?: string }> }) {
+type Payouts = { connected: boolean; enabled: boolean; fee_paid_by: "program" | "family"; owed_cents: number;
+  recent: { period_end: string; collected_cents: number; platform_fee_cents: number; coach_cents: number; program_cents: number; sent: boolean }[] };
+
+export default async function Settings({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; link?: string; saved?: string }> }) {
   const sp = await searchParams;
   const me = await requireRole("owner");
   const staffOk = can(me, "staff.manage");
@@ -30,7 +36,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
     const teams = can(me, "roster.manage") ? await q<{ id: string; name: string; level: string | null; season: string | null; n: number }>(`
       select t.id, t.name, t.level, t.season, (select count(*)::int from stints s where s.team_id = t.id and s.ended_on is null) n
       from teams t where t.org_id = $1 and t.active order by t.name`, [me.orgId]) : [];
-    return { org, staff, invites, team, links, teams };
+    const payouts = can(me, "billing.manage") ? (await q<{ p: Payouts }>("select program_payouts($1) p", [me.orgId]))[0]?.p ?? null : null;
+    return { org, staff, invites, team, links, teams, payouts };
   });
   const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
 
@@ -42,6 +49,44 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       {sp.ok ? <Notice tone="good">{sp.ok}</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
+      {d.payouts ? (
+        <Card>
+          <section id="payouts" className="flex scroll-mt-4 flex-col gap-3">
+            <SectionLabel right={d.payouts.enabled ? <Pill tone="good">Payouts on</Pill> : d.payouts.connected ? <Pill tone="warn">Finishing setup</Pill> : <Pill tone="warn">Not set up</Pill>}>Get paid</SectionLabel>
+            {sp.saved === "payouts" ? <Notice tone="good">Saved. Stripe may take a few minutes to finish checking your details.</Notice> : null}
+            <p className="text-[13px] text-soft">Families pay through ProLyt. Every Friday we pay your coaches their share, take ProLyt&apos;s {feePercent()} platform fee, and send the rest to your bank through Stripe.</p>
+            {!d.payouts.enabled ? (
+              <>
+                <a href="/api/stripe/connect?for=program" className="flex min-h-12 items-center justify-center rounded-md bg-gold font-bold text-on-gold">{d.payouts.connected ? "Finish Stripe setup" : "Connect your bank with Stripe"}</a>
+                {d.payouts.owed_cents ? <p className="text-[13px] text-gold">{money(d.payouts.owed_cents)} is waiting for you. It&apos;s sent with the first payout after setup.</p> : null}
+              </>
+            ) : null}
+            <form action={setFeePaidBy} className="flex flex-col gap-2">
+              <span className="text-sm font-semibold">Who covers the {feePercent()} platform fee?</span>
+              {([["program", "My program", "Families pay your listed price. The fee comes out of your payout."], ["family", "Families", `Added at checkout as a ${feePercent()} service fee.`]] as const).map(([v, label, hint]) => (
+                <label key={v} className="flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border border-line p-3 has-[:checked]:border-gold">
+                  <input type="radio" name="who" value={v} defaultChecked={d.payouts!.fee_paid_by === v} className="mt-0.5 size-5 accent-[var(--color-gold)]" />
+                  <span><span className="block text-sm font-semibold">{label}</span><span className="block text-[12px] text-muted">{hint}</span></span>
+                </label>
+              ))}
+              <button className="min-h-11 rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Save</button>
+            </form>
+            {d.payouts.recent.length ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-semibold">Recent payouts</span>
+                {d.payouts.recent.map((r) => (
+                  <div key={r.period_end} className="flex items-center justify-between border-t border-line py-2 text-[13px]">
+                    <span>{new Date(r.period_end).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric" })}
+                      <span className="block text-[11px] text-muted">Collected {money(r.collected_cents)} · coaches {money(r.coach_cents)} · fee {money(r.platform_fee_cents)}</span></span>
+                    <span className={r.sent ? "font-semibold" : "text-gold"}>{money(r.program_cents)}{r.sent ? "" : " · waiting"}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        </Card>
+      ) : null}
+
       {can(me, "brand.manage") ? <Card>
         <SectionLabel>Branding</SectionLabel>
         <p className="mb-3 mt-1 text-xs text-muted">Shown to your families and coaches everywhere in the app, with a small &ldquo;Powered by ProLyt.&rdquo;</p>

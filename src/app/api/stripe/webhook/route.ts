@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { asService } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
+import { feeOfCharged } from "@/lib/fees";
 
 // Stripe → database. Every handler is safe to run twice (Stripe retries).
 export async function POST(request: NextRequest) {
@@ -38,15 +39,16 @@ export async function POST(request: NextRequest) {
         const inv = event.data.object as Stripe.Invoice & { subscription?: string | null };
         const sub = typeof inv.subscription === "string" ? inv.subscription : null;
         if (!sub) break;
-        const [ms] = await q<{ id: string; org_id: string }>(
-          "select ms.id, p.org_id from memberships ms join plans p on p.id = ms.plan_id where ms.stripe_subscription_id = $1", [sub]);
+        const [ms] = await q<{ id: string; org_id: string; paid_by: "program" | "family" }>(
+          `select ms.id, p.org_id, coalesce(ms.fee_paid_by, o.fee_paid_by) paid_by from memberships ms join plans p on p.id = ms.plan_id
+           join orgs o on o.id = p.org_id where ms.stripe_subscription_id = $1`, [sub]);
         if (!ms) break;
         const periodEnd = inv.lines?.data?.[0]?.period?.end;
         await q("update memberships set status = 'active', current_period_end = coalesce(to_timestamp($2), current_period_end) where id = $1",
           [ms.id, periodEnd ?? null]);
-        await q(`insert into payments (org_id, membership_id, amount_cents, status, stripe_invoice_id)
-                 values ($1, $2, $3, 'paid', $4) on conflict (stripe_invoice_id) do nothing`,
-          [ms.org_id, ms.id, inv.amount_paid, inv.id]);
+        await q(`insert into payments (org_id, membership_id, amount_cents, platform_fee_cents, status, stripe_invoice_id)
+                 values ($1, $2, $3, $4, 'paid', $5) on conflict (stripe_invoice_id) do nothing`,
+          [ms.org_id, ms.id, inv.amount_paid, feeOfCharged(inv.amount_paid, ms.paid_by), inv.id]);
         break;
       }
       case "invoice.payment_failed": {
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
       case "account.updated": {
         const a = event.data.object;
         await q("update org_members set payouts_enabled = $2 where stripe_account_id = $1", [a.id, Boolean(a.payouts_enabled)]);
+        await q("update orgs set payouts_enabled = $2 where stripe_account_id = $1", [a.id, Boolean(a.payouts_enabled)]);
         await q("update trainer_profiles set payouts_enabled = $2 where stripe_account_id = $1", [a.id, Boolean(a.payouts_enabled) && Boolean(a.charges_enabled)]);
         break;
       }

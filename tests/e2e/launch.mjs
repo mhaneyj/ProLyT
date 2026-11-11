@@ -896,6 +896,7 @@ let coachLink = "";
   check("owner makes a coach program admin", await seen(o.page.getByText(/program admin/).first()));
   await o.page.getByLabel("Team name").fill("Game-Fit 14U");
   await o.page.getByRole("button", { name: "Add team" }).click();
+  await seen(o.page.getByText("Game-Fit 14U").first());
   await o.page.goto(url("gamefit-loomis", "/rosters"));
   check("rosters page lists the program's teams", await seen(o.page.getByText("Game-Fit 14U").first()));
   await o.page.getByLabel("Add a player to Game-Fit 14U").selectOption({ index: 1 });

@@ -13,15 +13,15 @@ export async function GET(request: NextRequest) {
   if (!stripeConfigured) return NextResponse.json({ skipped: "Stripe not configured" });
 
   const report = await asService(async (q) => {
-    const orgs = await q<{ id: string; stripe_account_id: string | null; platform_fee_bps: number; since: string }>(
-      `select o.id, o.stripe_account_id, o.platform_fee_bps,
+    const orgs = await q<{ id: string; stripe_account_id: string | null; payouts_enabled: boolean; platform_fee_bps: number; since: string }>(
+      `select o.id, o.stripe_account_id, o.payouts_enabled, o.platform_fee_bps,
               coalesce((select max(period_end) from settlements s where s.org_id = o.id), o.created_at) since
        from orgs o`);
     const out = [];
     const now = new Date().toISOString();
     for (const o of orgs) {
-      const [{ collected }] = await q<{ collected: number }>(
-        "select coalesce(sum(amount_cents), 0)::int collected from payments where org_id = $1 and status = 'paid' and created_at > $2 and created_at <= $3",
+      const [{ collected, fee }] = await q<{ collected: number; fee: number }>(
+        "select coalesce(sum(amount_cents), 0)::int collected, coalesce(sum(platform_fee_cents), 0)::int fee from payments where org_id = $1 and status = 'paid' and created_at > $2 and created_at <= $3",
         [o.id, o.since, now]);
       const earnings = (await q<{ id: string; coach_id: string; amount_cents: number; status: Earning["status"] }>(
         "select id, coach_id, amount_cents, status from coach_earnings where org_id = $1 and status = 'pending'", [o.id]))
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         "select user_id, stripe_account_id, payouts_enabled from org_members where org_id = $1 and role = 'coach'", [o.id]))
         .map((c) => ({ id: c.user_id, stripeAccountId: c.stripe_account_id, payoutsEnabled: c.payouts_enabled }));
 
-      const plan = settleWeek({ collectedCents: collected, feeBps: o.platform_fee_bps, earnings, coaches });
+      const plan = settleWeek({ collectedCents: collected, feeBps: o.platform_fee_bps, feeCents: fee, earnings, coaches });
 
       for (const t of plan.coachTransfers) {
         const tr = await stripe().transfers.create(
@@ -39,12 +39,16 @@ export async function GET(request: NextRequest) {
         await q("update coach_earnings set status = 'paid', stripe_transfer_id = $2 where id = any($1::uuid[])", [t.earningIds, tr.id]);
       }
 
+      // The program's share, plus anything owed from weeks before payouts were set up.
       let programTransfer: string | null = null;
-      if (plan.programCents > 0 && o.stripe_account_id) {
+      const [{ owed }] = await q<{ owed: number }>(
+        "select coalesce(sum(program_cents), 0)::int owed from settlements where org_id = $1 and program_transfer_id is null and program_cents > 0", [o.id]);
+      if (plan.programCents + owed > 0 && o.stripe_account_id && o.payouts_enabled) {
         const tr = await stripe().transfers.create(
-          { amount: plan.programCents, currency: "usd", destination: o.stripe_account_id, transfer_group: `org_${o.id}` },
+          { amount: plan.programCents + owed, currency: "usd", destination: o.stripe_account_id, transfer_group: `org_${o.id}`, metadata: { org_id: o.id } },
           { idempotencyKey: `program_${o.id}_${o.since}` });
         programTransfer = tr.id;
+        if (owed) await q("update settlements set program_transfer_id = $2 where org_id = $1 and program_transfer_id is null and program_cents > 0", [o.id, tr.id]);
       }
       await q(`insert into settlements (org_id, period_start, period_end, collected_cents, platform_fee_cents, coach_cents, program_cents, program_transfer_id)
                values ($1,$2,$3,$4,$5,$6,$7,$8)`,

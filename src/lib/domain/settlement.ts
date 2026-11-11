@@ -14,7 +14,8 @@ export type Settlement = {
 
 export function settleWeek(input: {
   collectedCents: number;    // family payments received this period
-  feeBps: number;            // licensing fee in basis points
+  feeBps: number;            // licensing fee in basis points (used when feeCents isn't given)
+  feeCents?: number;         // ProLyt's fee as recorded on each payment this period
   earnings: Earning[];
   coaches: Coach[];
 }): Settlement {
@@ -36,7 +37,7 @@ export function settleWeek(input: {
     if (amountCents > 0) coachTransfers.push({ coachId, destination: coach.stripeAccountId, amountCents, earningIds: list.map((e) => e.id) });
   }
 
-  const platformFeeCents = Math.round((input.collectedCents * input.feeBps) / 10000);
+  const platformFeeCents = input.feeCents ?? Math.round((input.collectedCents * input.feeBps) / 10000);
   const coachTotal = coachTransfers.reduce((s, t) => s + t.amountCents, 0);
   const programCents = input.collectedCents - platformFeeCents - coachTotal;
   if (programCents < 0) {

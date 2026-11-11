@@ -163,3 +163,13 @@ export async function archiveTeam(form: FormData) {
   revalidatePath("/owner/settings");
   back({ ok: "Team archived. Athletes keep it on their career." });
 }
+
+/** Who covers ProLyt's platform fee on family payments. */
+export async function setFeePaidBy(form: FormData) {
+  const me = await requirePerm("billing.manage");
+  const who = form.get("who") === "family" ? "family" : "program";
+  try { await asUser(me.id, (q) => q("select set_fee_paid_by($1, $2)", [me.orgId, who])); }
+  catch (e) { redirect(`/owner/settings?error=${encodeURIComponent(dbMessage(e))}#payouts`); }
+  revalidatePath("/owner/settings");
+  redirect(`/owner/settings?ok=${encodeURIComponent(who === "family" ? "Families now see the fee added at checkout." : "Your program now covers the fee.")}#payouts`);
+}
