@@ -124,6 +124,11 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
         ))}
       </section>
 
+      <Link href={`/host/events/${e.id}/cards`} className="flex min-h-14 items-center justify-between rounded-xl border border-gold/60 bg-gold/5 px-3">
+        <span><span className="block font-semibold">Event cards</span><span className="block text-[12px] text-muted">A collectible card for every player who checks in. Gold for champions, holo for your MVP.</span></span>
+        <span aria-hidden="true" className="text-gold">→</span>
+      </Link>
+
       <Link href={`/host/events/${e.id}/checks`} className={`flex min-h-14 items-center justify-between rounded-xl border px-3 ${e.checks ? "border-gold bg-gold/5" : "border-line"}`}>
         <span><span className="block font-semibold">Age checks</span><span className="block text-[12px] text-muted">{e.require_age_check ? "Required for this event" : "Optional for this event"}</span></span>
         {e.checks ? <Pill tone="gold">{e.checks} to review</Pill> : <span className="text-sm text-muted">None waiting</span>}

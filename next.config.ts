@@ -2,7 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
-  outputFileTracingIncludes: { "/**": ["./db/**/*.sql"] },
+  outputFileTracingIncludes: {
+    "/**": ["./db/**/*.sql"],
+    "/api/card/[id]": ["./node_modules/@fontsource/anton/files/anton-latin-400-normal.woff", "./node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-800-normal.woff"],
+  },
   poweredByHeader: false,
   async headers() {
     const common = [

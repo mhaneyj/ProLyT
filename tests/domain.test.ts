@@ -164,3 +164,41 @@ describe("platform fee", () => {
     expect(priceWithFee(14900, "family", 200)).toEqual({ feeCents: 298, totalCents: 15198 });
   });
 });
+
+import { computeRating, nextGoal, positionGroup, scoreCoach, scoreTest } from "../src/lib/domain/rating";
+
+describe("player rating", () => {
+  it("scores tests against age: typical 70, elite 90, faster is better for times", () => {
+    expect(scoreTest("40yd", 5.6, 14)).toBe(70);
+    expect(scoreTest("40yd", 5.1, 14)).toBe(90);
+    expect(scoreTest("40yd", 5.1, 18)).toBeLessThan(scoreTest("40yd", 5.1, 14)!); // same time is less impressive older
+    expect(scoreTest("vertical", 26, 14)).toBe(90);
+    expect(scoreTest("40yd", 3.0, 14)).toBe(99);  // clamped
+    expect(scoreTest("40yd", 12, 14)).toBe(40);
+    expect(scoreTest("wingspan_in", 70, 14)).toBeNull();
+  });
+  it("maps coach ratings 1–10 onto 40–99", () => {
+    expect(scoreCoach(1)).toBe(40);
+    expect(scoreCoach(10)).toBe(99);
+  });
+  it("reads positions", () => {
+    expect(positionGroup("WR/DB")).toBe("WR");
+    expect(positionGroup("Center")).toBe("OL");
+    expect(positionGroup("OLB")).toBe("LB");
+    expect(positionGroup(null)).toBe("ATH");
+  });
+  it("needs 3 attributes for an OVR, blends coach ratings, and weighs by position", () => {
+    expect(computeRating({ age: 14, position: "WR", tests: [{ metric: "40yd", value: 5.1 }], coach: { iq: 6 } }).ovr).toBeNull();
+    const wr = computeRating({ age: 14, position: "WR", tests: [{ metric: "40yd", value: 5.1 }, { metric: "pro_agility", value: 4.5 }], coach: { str: 1 } });
+    const ol = computeRating({ age: 14, position: "OL", tests: [{ metric: "40yd", value: 5.1 }, { metric: "pro_agility", value: 4.5 }], coach: { str: 1 } });
+    expect(wr.ovr!).toBeGreaterThan(ol.ovr!); // a fast, weak player rates higher at WR than at OL
+    expect(ol.trench).toBe(true);
+    const both = computeRating({ age: 14, position: "WR", tests: [{ metric: "40yd", value: 5.6 }], coach: { spd: 10 } });
+    expect(both.attrs.find((a) => a.key === "spd")).toMatchObject({ value: 79, source: "both" });
+  });
+  it("suggests the test that moves OVR the most", () => {
+    const g = nextGoal({ age: 14, position: "WR", tests: [{ metric: "40yd", value: 5.6 }, { metric: "bench_max", value: 115 }], coach: { tec: 5 } });
+    expect(g?.metric).toBe("40yd");
+    expect(g!.target).toBeLessThan(5.6);
+  });
+});

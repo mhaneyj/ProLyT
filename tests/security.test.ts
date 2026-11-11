@@ -1043,6 +1043,27 @@ describe("event day: passes, check-in, staff, scores, brackets", () => {
     await expect(as(db, FAM, () => db.query("insert into team_follows (user_id, team_id) values ($1,$2)", [PARENT_B, t1]))).rejects.toThrow();
     expect((await as(db, PARENT_B, () => db.query("select * from team_follows"))).rows).toHaveLength(0);
   });
+  it("event card series: hosts design them; check-in and titles unlock cards; families see only their own", async () => {
+    await expect(as(db, C1, () => db.query("select save_card_series($1,'Day Cup','','#101010','#d4a537',null)", [ev]))).rejects.toThrow(/Only the event host/);
+    await expect(as(db, OWNER, () => db.query("select save_card_series($1,'Day Cup','','red','#d4a537',null)", [ev]))).rejects.toThrow();
+    await as(db, OWNER, () => db.query("select save_card_series($1,'Day Cup Series','Earned, not given','#101010','#d4a537','Loomis Tire')", [ev]));
+    // Already checked in and champions: backfilled the moment the series exists
+    const mine = (await as(db, FAM, () => db.query<{ tier: string; series: string; sponsor: string }>("select tier, series, sponsor from athlete_cards($1) order by tier", [kidA]))).rows;
+    expect(mine.map((c) => c.tier)).toEqual(["attendee", "champion"]);
+    expect(mine[0]).toMatchObject({ series: "Day Cup Series", sponsor: "Loomis Tire" });
+    expect((await as(db, PARENT_B, () => db.query("select * from athlete_cards($1)", [kidA]))).rows).toHaveLength(0);
+    expect((await as(db, PARENT_B, () => db.query("select * from card_awards"))).rows).toHaveLength(0);
+    await expect(as(db, FAM, () => db.query("insert into card_awards (athlete_id, series_id, tier) select $1, id, 'mvp' from card_series", [kidA]))).rejects.toThrow(/permission denied/);
+    // MVP is the host's call
+    await expect(as(db, C1, () => db.query("select award_mvp($1,$2,true)", [ev, kidA]))).rejects.toThrow(/Only the event host/);
+    await as(db, OWNER, () => db.query("select award_mvp($1,$2,true)", [ev, kidA]));
+    expect((await as(db, OWNER, () => db.query<{ tiers: string[] }>("select tiers from series_holders($1) where athlete_id=$2", [ev, kidA]))).rows[0].tiers).toEqual(["attendee", "champion", "mvp"]);
+    // Undoing a check-in takes the attendee card back; checking in again returns it
+    await as(db, VOL, () => db.query("select undo_check_in($1)", [passA]));
+    expect((await as(db, FAM, () => db.query("select 1 from athlete_cards($1) where tier='attendee'", [kidA]))).rows).toHaveLength(0);
+    await as(db, VOL, () => db.query("select check_in($1,$2)", [passA, "Checked in again at the desk"]));
+    expect((await as(db, FAM, () => db.query("select 1 from athlete_cards($1) where tier='attendee'", [kidA]))).rows).toHaveLength(1);
+  });
 });
 
 describe("phone notifications", () => {
@@ -1256,5 +1277,22 @@ describe("ProLyt+ for families", () => {
     await db.query("update family_plans set status='canceled' where user_id=$1", [PARENT_A]);
     expect((await as(db, PARENT_A, () => db.query<{ ok: boolean }>("select athlete_plus($1) ok", [jordan]))).rows[0].ok).toBe(false);
     await db.query("delete from family_plans where user_id=$1", [PARENT_A]);
+  });
+});
+
+describe("player ratings", () => {
+  it("only an athlete's coaches rate them; the card sees verified numbers only", async () => {
+    await expect(as(db, PARENT_A, () => db.query(`select rate_athlete($1, '{"tec": 9}')`, [jordan]))).rejects.toThrow(/Only this athlete's coaches/);
+    await expect(as(db, COACH, () => db.query(`select rate_athlete($1, '{"tec": 11}')`, [jordan]))).rejects.toThrow(/1 to 10/);
+    await expect(as(db, COACH, () => db.query(`select rate_athlete($1, '{"speed": 5}')`, [jordan]))).rejects.toThrow(/Unknown rating/);
+    await as(db, COACH, () => db.query(`select rate_athlete($1, '{"tec": 6, "iq": 7}')`, [jordan]));
+    await as(db, COACH, () => db.query(`select rate_athlete($1, '{"tec": 8}')`, [jordan]));
+    await expect(as(db, PARENT_A, () => db.query("insert into coach_ratings (athlete_id, org_id, attr, score, rated_by) values ($1,$2,'tec',10,$3)", [jordan, ORG, PARENT_A]))).rejects.toThrow(/permission denied/);
+    const d = (await as(db, PARENT_A, () => db.query<{ d: { coach: Record<string, number>; tests: { metric: string; value: number }[] } }>("select player_card_data($1) d", [jordan]))).rows[0].d;
+    expect(d.coach).toEqual({ tec: 8, iq: 7 });
+    // Jordan's self-reported 4.1 forty earlier must not count
+    expect(d.tests.find((t) => t.metric === "40yd" && Number(t.value) === 4.1)).toBeUndefined();
+    expect((await as(db, PARENT_B, () => db.query<{ d: unknown }>("select player_card_data($1) d", [jordan]))).rows[0].d).toBeNull();
+    expect((await as(db, PARENT_B, () => db.query("select * from coach_ratings"))).rows).toHaveLength(0);
   });
 });

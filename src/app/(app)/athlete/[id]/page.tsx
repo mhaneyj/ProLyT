@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { loadPlayerCard } from "@/lib/cards";
 import { headers } from "next/headers";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
@@ -67,6 +68,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
   }));
 
   const isStaff = me.roles.includes("coach") || me.roles.includes("owner");
+  const pc = await loadPlayerCard(me.id, a.id);
   const age = ageOn(a.birth_date);
   const minor = age < 18;
   const needsParent = minor && !a.approved;
@@ -117,6 +119,17 @@ export default async function AthleteProfile({ params, searchParams }: { params:
       {a.bio ? <p className="text-[15px] leading-relaxed text-soft">{a.bio}</p> : a.family ? <Link href={`/athlete/${a.id}/edit`} className="text-sm font-semibold text-gold">+ Add a bio, height, weight and a highlight link</Link> : null}
 
       {a.highlight_url ? <Player id="" storagePath={a.highlight_url} title={`${a.first_name}'s highlight reel`} /> : null}
+
+      {pc ? (
+        <Link href={`/athlete/${a.id}/cards`} className="flex min-h-16 items-center gap-3 rounded-[14px] border border-gold/60 bg-gold/5 px-4 hover:border-gold">
+          <span className="grid size-12 flex-none place-items-center rounded-lg bg-ink font-display text-[24px] text-gold">{pc.rating.ovr ?? "--"}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Player Card{pc.rating.trench ? " · In The Trenches" : ""}</span>
+            <span className="block truncate text-[12px] text-muted">{pc.rating.ovr === null ? "Get tested to unlock the rating" : `Overall ${pc.rating.ovr}`}{pc.cards.length ? ` · ${pc.cards.length} event card${pc.cards.length === 1 ? "" : "s"}` : ""}</span>
+          </span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
 
       <div className={`grid gap-2 ${a.family ? "grid-cols-4" : "grid-cols-3"}`}>
         {action(`/athlete/${a.id}/film`, "film", d.films ? `Film · ${d.films}` : "Film")}

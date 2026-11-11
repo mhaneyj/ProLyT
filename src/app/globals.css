@@ -23,3 +23,22 @@ html { color-scheme: dark; }
 body { background: var(--color-ink); color: var(--color-cream); font-family: var(--font-sans); }
 :focus-visible { outline: 3px solid var(--color-gold); outline-offset: 2px; }
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* ───── Player Card finishes ───── */
+.card-gold {
+  background: linear-gradient(115deg, transparent 20%, rgba(255, 226, 120, 0.35) 38%, rgba(255, 255, 255, 0.55) 45%, rgba(255, 210, 80, 0.3) 52%, transparent 70%);
+  background-size: 250% 100%;
+  mix-blend-mode: overlay;
+  animation: card-sheen 4.5s ease-in-out infinite;
+}
+.card-holo {
+  background:
+    linear-gradient(115deg, transparent 25%, rgba(255, 255, 255, 0.5) 45%, transparent 65%),
+    conic-gradient(from 210deg at 70% 30%, #ff6ec7, #7afcff, #feff9c, #b28dff, #ff6ec7);
+  background-size: 250% 100%, 100% 100%;
+  mix-blend-mode: color-dodge;
+  opacity: 0.35;
+  animation: card-sheen 5s ease-in-out infinite;
+}
+@keyframes card-sheen { 0%, 100% { background-position: 100% 0, 0 0; } 50% { background-position: 0% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .card-gold, .card-holo { animation: none; } }

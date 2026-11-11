@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { asService } from "@/lib/db";
+import { PlayerCard } from "@/components/player-card";
 import { ruleText, type Division } from "@/lib/domain/events";
 import { ProLytMark } from "@/components/brand";
 import { getMe } from "@/lib/auth";
@@ -33,7 +34,9 @@ async function load(id: string) {
     const champs = await q<{ division: string; team: string; place: number }>(`select d.name division, t.name team, r.place from event_results r
       join divisions d on d.id = r.division_id join event_teams t on t.id = r.team_id where r.event_id = $1 and r.place = 1 order by d.sort, d.name`, [id]);
     const teams = await q<{ id: string; name: string; division_id: string }>("select id, name, division_id from event_teams where event_id = $1 and status <> 'withdrawn' order by name", [id]);
-    return { e, divisions, games, standings, champs, teams };
+    const [series] = await q<{ name: string; tagline: string | null; color: string; accent: string; sponsor: string | null; collected: number }>(
+      "select name, tagline, color, accent, sponsor, (select count(*)::int from card_awards a where a.series_id = s.id and a.tier = 'attendee') collected from card_series s where event_id = $1", [id]);
+    return { e, divisions, games, standings, champs, teams, series: series ?? null };
   });
 }
 
@@ -74,6 +77,19 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {e.location ? <div className="text-sm text-soft">{e.location}</div> : null}
       </div>
       {e.status === "live" ? <AutoRefresh seconds={20} /> : null}
+      {d.series && e.status !== "done" ? (
+        <div className="flex items-center gap-4 rounded-[14px] border border-line bg-panel p-3.5">
+          <div className="w-[84px] flex-none">
+            <PlayerCard size="sm" tier="attendee" first="Your" last="Player" position="ATH" grad={null} photo={null} ovr={null} attrs={null}
+              color={d.series.color} accent={d.series.accent} series={d.series.name} footer={d.series.tagline ?? ""} sponsor={d.series.sponsor} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-[2px] text-gold">Collectible card</div>
+            <div className="font-semibold">Check in to collect the {d.series.name} card</div>
+            <div className="text-[13px] text-muted">Every player gets one. Champions get gold, the MVP gets holo.{d.series.collected ? ` ${d.series.collected} collected so far.` : ""}</div>
+          </div>
+        </div>
+      ) : null}
       {champs.map((c) => (
         <div key={c.division} className="flex items-center gap-3 rounded-[14px] border-2 border-gold bg-gold/10 p-4">
           <span aria-hidden="true" className="text-[34px] leading-none">🏆</span>
