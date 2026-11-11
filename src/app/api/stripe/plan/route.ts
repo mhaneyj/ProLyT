@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asService } from "@/lib/db";
-import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, requestBase, stripe, stripeConfigured } from "@/lib/stripe";
 import { CLUB_MONTHLY_CENTS, CLUB_YEARLY_CENTS } from "@/lib/plans";
 import { track } from "@/lib/track";
 
 // The owner subscribes their program to Club (billed by ProLyt), or opens Stripe's billing page to manage it.
 export const POST = payRoute(async (request: NextRequest) => {
-  const base = siteUrl(request.nextUrl.origin);
+  const base = requestBase(request);
   const back = `${base}/owner/billing`;
   const me = await getMe();
   if (!me?.orgId || !me.perms.includes("billing.manage")) return NextResponse.redirect(`${base}/home`, 303);

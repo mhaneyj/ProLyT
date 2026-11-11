@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
-import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, requestBase, stripe, stripeConfigured } from "@/lib/stripe";
 import { track } from "@/lib/track";
 import { PLATFORM_FEE_BPS, feePercent } from "@/lib/fees";
 
@@ -10,7 +10,7 @@ const descriptor = (name: string) => name.replace(/[^A-Za-z0-9 ]/g, "").replace(
 
 // Pay for a paid session (a 1-on-1, a camp) and book it. Stripe's confirmation does the booking.
 export const POST = payRoute(async (request: NextRequest) => {
-  const base = siteUrl(request.nextUrl.origin);
+  const base = requestBase(request);
   const me = await getMe();
   if (!me) return NextResponse.redirect(`${base}/login?next=/schedule`, 303);
   const form = await request.formData();

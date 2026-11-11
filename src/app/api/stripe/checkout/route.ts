@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { currentUserId } from "@/lib/auth";
 import { asService, asUser } from "@/lib/db";
 import { feePercent, priceWithFee } from "@/lib/fees";
-import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, requestBase, stripe, stripeConfigured } from "@/lib/stripe";
 
 // Starts a monthly membership checkout for one athlete the signed-in parent registered.
 async function start(request: NextRequest, athleteId: string | null) {
-  const base = siteUrl(request.nextUrl.origin);
+  const base = requestBase(request);
   const uid = await currentUserId();
   if (!uid) return NextResponse.redirect(`${base}/login`, 303);
   if (!athleteId) return NextResponse.redirect(`${base}/family`, 303);
@@ -26,8 +26,8 @@ async function start(request: NextRequest, athleteId: string | null) {
   });
   if (!m) return NextResponse.redirect(`${base}/family`, 303);
   // ProLyt can switch online payments off per program
-  const [f] = await asUser(uid, (q) => q<{ on: boolean; paid_by: "program" | "family" }>("select coalesce((features->>'payments')::boolean, true) on, fee_paid_by paid_by from orgs where id = $1", [m.org_id]));
-  if (!f?.on) return NextResponse.redirect(`${base}/family?chosen=1`, 303);
+  const [f] = await asUser(uid, (q) => q<{ enabled: boolean; paid_by: "program" | "family" }>("select has_feature(id, 'payments') enabled, fee_paid_by paid_by from orgs where id = $1", [m.org_id]));
+  if (!f?.enabled) return NextResponse.redirect(`${base}/family?chosen=1`, 303);
   const { feeCents } = priceWithFee(m.price_cents, f.paid_by);
   await asService((q) => q("update memberships set fee_paid_by = $2 where id = $1", [m.membership_id, f.paid_by]));
 

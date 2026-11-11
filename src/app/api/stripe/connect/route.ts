@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asService } from "@/lib/db";
-import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, requestBase, stripe, stripeConfigured } from "@/lib/stripe";
 
 // Sends a contractor coach to Stripe's hosted payout setup (bank + tax info).
 // ProLyt never sees or stores bank details.
 async function handle(request: NextRequest) {
-  const base = siteUrl(request.nextUrl.origin);
+  const base = requestBase(request);
   const me = await getMe();
   if (me && request.nextUrl.searchParams.get("for") === "trainer") return trainer(me.id, me.email, base);
   if (me && request.nextUrl.searchParams.get("for") === "program") return program(me, base);

@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asService } from "@/lib/db";
-import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, requestBase, stripe, stripeConfigured } from "@/lib/stripe";
 import { PLUS_MONTHLY_CENTS, PLUS_TRIAL_DAYS, PLUS_YEARLY_CENTS } from "@/lib/plans";
 import { track } from "@/lib/track";
 
 // A parent (or athlete) subscribes to ProLyt+, or opens Stripe's billing page to manage it.
 export const POST = payRoute(async (request: NextRequest) => {
-  const base = siteUrl(request.nextUrl.origin);
+  const base = requestBase(request);
   const back = `${base}/plus`;
   const me = await getMe();
   if (!me) return NextResponse.redirect(`${base}/login?next=/plus`, 303);

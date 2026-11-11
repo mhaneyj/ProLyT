@@ -914,6 +914,13 @@ let coachLink = "";
   await pg.getByRole("button", { name: "Sign in", exact: true }).click();
   await pg.waitForURL(/\/family/, { timeout: 15000 });
   check("family home shows their program's events", await seen(pg.getByRole("heading", { name: "Events" })) && await seen(pg.getByText("Loomis 7v7 Classic").first()));
+  // Payment buttons keep families on their program's address (cookies are per address) and explain themselves.
+  await pg.goto(url("gamefit-loomis", "/family"));
+  if (await pg.getByRole("button", { name: /Finish payment/i }).count()) {
+    await pg.getByRole("button", { name: /Finish payment/i }).click();
+    await pg.waitForURL(/error=/, { timeout: 15000 }).catch(() => {});
+    check("Finish payment stays on the program's address and explains", pg.url().includes("gamefit-loomis.") && await seen(pg.getByText(/payments aren't switched on|Payment didn't start/)), pg.url());
+  }
   // ── 22. ProLyt+: families find it from Account; the free tier is clear.
   await pg.goto(url("gamefit-loomis", "/account"));
   await pg.getByRole("link", { name: /ProLyt\+/ }).click();
