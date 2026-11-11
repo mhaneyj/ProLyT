@@ -1,6 +1,13 @@
 import "server-only";
 export { SPECIALTIES, KIND_LABEL } from "./domain/trainers";
 
+/**
+ * Independent trainers (selling their own services, paid to their own Stripe) are off for launch:
+ * coaches sell 1-on-1s through their program, and ProLyt takes no extra cut of a program's own sessions.
+ * Set INDEPENDENT_TRAINERS=1 to turn the marketplace on.
+ */
+export const MARKETPLACE = process.env.INDEPENDENT_TRAINERS === "1";
+
 /** ProLyt's cut of online trainer payments, in basis points (10% default). */
 export const TRAINER_FEE_BPS = Math.max(0, Math.min(3000, Number(process.env.TRAINER_FEE_BPS ?? 1000)));
 

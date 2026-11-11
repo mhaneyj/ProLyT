@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { meOrSignIn } from "@/lib/flow";
 import { asService, asUser } from "@/lib/db";
 import { stripeConfigured } from "@/lib/stripe";
+import { MARKETPLACE } from "@/lib/trainers";
 import { money } from "@/lib/domain/format";
 import { TZ } from "@/lib/domain/time";
 import { addAthleteToBook, bookTrainer } from "@/app/trainers/actions";
@@ -12,7 +13,7 @@ export const metadata = { title: "Book a session" };
 
 export default async function Book({ params, searchParams }: { params: Promise<{ slot: string }>; searchParams: Promise<{ error?: string }> }) {
   const [{ slot }, sp] = await Promise.all([params, searchParams]);
-  if (!/^[0-9a-f-]{36}$/.test(slot)) notFound();
+  if (!/^[0-9a-f-]{36}$/.test(slot) || !MARKETPLACE) notFound();
   const me = await meOrSignIn(`/book/${slot}`);
   const [s] = await asService((q) => q<{ starts_at: string; minutes: number; location: string | null; title: string; price_cents: number; trainer: string; slug: string; payouts: boolean; spots: number }>(`
     select ts.starts_at, sv.minutes, ts.location, sv.title, sv.price_cents, t.display_name trainer, t.slug, t.payouts_enabled payouts, slot_spots_left(ts.id) spots

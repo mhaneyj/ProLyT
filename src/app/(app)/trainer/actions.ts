@@ -9,6 +9,7 @@ import { zonedToUtc } from "@/lib/domain/time";
 import { track } from "@/lib/track";
 import { pushTo } from "@/lib/push";
 import { refundTrainerBooking } from "@/lib/trainer-pay";
+import { MARKETPLACE } from "@/lib/trainers";
 
 const isId = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
 const fail = (msg: unknown, hash = "") => redirect(`/trainer?error=${encodeURIComponent(typeof msg === "string" ? msg : dbMessage(msg))}${hash}`);
@@ -20,6 +21,7 @@ export async function saveTrainerProfile(form: FormData) {
   if (name.length < 2) fail("Add the name families will see");
   const specialties = form.getAll("specialties").map(String).filter((s) => (SPECIALTIES as readonly string[]).includes(s)).slice(0, 8);
   const org = String(form.get("org") ?? "");
+  if (!MARKETPLACE && !isId(org)) fail("Pick your program");
   const vals = [me.id, name, str(form, "headline", 90) || null, str(form, "bio", 1500) || null, str(form, "city", 60) || null, specialties, isId(org) ? org : null];
   try {
     await asUser(me.id, async (q) => {

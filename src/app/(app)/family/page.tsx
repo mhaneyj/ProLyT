@@ -156,8 +156,8 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         </form>
       ) : null}
 
-      <Link href="/trainers" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
-        <span><span className="block font-semibold">Find a trainer</span><span className="block text-[12px] text-muted">QB, WR, line play, speed. Book and pay in the app.</span></span>
+      <Link href="/coaches" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
+        <span><span className="block font-semibold">Our coaches</span><span className="block text-[12px] text-muted">Who they are, what they teach, and open 1-on-1 times.</span></span>
         <span aria-hidden="true" className="text-gold">→</span>
       </Link>
       <Link href="/register" className="mt-1 flex min-h-12 items-center justify-center text-sm font-semibold text-muted hover:text-cream">+ Add another athlete</Link>

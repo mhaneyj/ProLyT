@@ -1122,6 +1122,10 @@ describe("trainers for hire", () => {
     expect((await as(db, TR, () => db.query<{ r: boolean }>("select cancel_trainer_booking($1) r", [booking]))).rows[0].r).toBe(true);
     expect((await db.query<{ status: string }>("select status from trainer_bookings where id=$1", [booking])).rows[0].status).toBe("cancelled");
   });
+  it("a program's own coach goes live without services of their own", async () => {
+    await as(db, OWNER, () => db.query("insert into trainer_profiles (user_id, slug, display_name, org_id, listed) values ($1,'owner-coach','Owner Coach',$2,true)", [OWNER, ORG]));
+    expect((await as(db, FAM, () => db.query("select user_id from trainer_profiles where slug='owner-coach'"))).rows).toHaveLength(1);
+  });
   it("ProLyt staff verify background checks", async () => {
     await expect(as(db, TR, () => db.query("select admin_verify_trainer($1,true)", [TR]))).rejects.toThrow(/ProLyt staff/);
   });

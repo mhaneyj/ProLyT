@@ -10,6 +10,7 @@ import { unreadCount } from "@/lib/messages";
 import { hasPasskeyHere } from "@/lib/passkeys";
 import { PasskeyNudge } from "@/components/passkey";
 import { NameNudge } from "@/components/name-nudge";
+import { MARKETPLACE } from "@/lib/trainers";
 import { asUser } from "@/lib/db";
 
 const isTrainer = (uid: string) => asUser(uid, (q) => q<{ t: boolean }>("select is_trainer() t")).then((r) => Boolean(r[0]?.t)).catch(() => false);
@@ -56,7 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     items.push(feed, { href: "/discover", label: "Find", icon: "profile" });
     if (msgs) items.push(msgs);
   }
-  if (await isTrainer(me.id)) items.splice(Math.min(items.length, 4), 0, { href: "/trainer", label: "Trainer", icon: "schedule", match: "/trainer" });
+  if (MARKETPLACE && await isTrainer(me.id)) items.splice(Math.min(items.length, 4), 0, { href: "/trainer", label: "Trainer", icon: "schedule", match: "/trainer" });
   if (me.isPlatformAdmin) items.push({ href: "/admin", label: "ProLyt", icon: "admin" });
 
   return (

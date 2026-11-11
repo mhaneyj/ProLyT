@@ -12,10 +12,10 @@ export function TrainerAvatar({ id, name, has, size = 64 }: { id: string; name: 
   ) : <span aria-hidden="true" style={{ width: size, height: size }} className="flex flex-none items-center justify-center rounded-full border-2 border-gold/60 bg-gold/10 font-display text-[22px] text-gold">{initials}</span>;
 }
 
-export function TrainerCard({ t }: { t: TrainerCardRow }) {
+export function TrainerCard({ t, base = "/trainers" }: { t: TrainerCardRow; base?: string }) {
   const next = t.next_at ? new Date(t.next_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", hour: "numeric", minute: "2-digit" }) : null;
   return (
-    <Link href={`/trainers/${t.slug}`} className="flex gap-3 rounded-[14px] border border-line bg-panel p-3.5 hover:border-gold">
+    <Link href={`${base}/${t.slug}`} className="flex gap-3 rounded-[14px] border border-line bg-panel p-3.5 hover:border-gold">
       <TrainerAvatar id={t.user_id} name={t.display_name} has={t.has_photo} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">
@@ -27,7 +27,7 @@ export function TrainerCard({ t }: { t: TrainerCardRow }) {
           {t.verified ? <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-bold text-good">✓ Background checked</span> : null}
           {t.specialties.slice(0, 4).map((s) => <span key={s} className="rounded-full border border-line px-2 py-0.5 text-[11px] text-soft">{s}</span>)}
         </span>
-        <span className="text-[12px] text-muted">{[t.city, t.program, next ? `Next open: ${next}` : "No open times right now"].filter(Boolean).join(" · ")}</span>
+        <span className="text-[12px] text-muted">{[t.city, t.program, next ? `Next open 1-on-1: ${next}` : null].filter(Boolean).join(" · ")}</span>
       </span>
     </Link>
   );

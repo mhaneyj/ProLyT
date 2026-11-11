@@ -117,7 +117,8 @@ begin
   if new.org_id is not null and current_user = 'authenticated' and not is_staff(new.org_id) then
     raise exception 'You can only list a program you coach for';
   end if;
-  if new.listed and current_user = 'authenticated'
+  -- Program coaches book through their program; independent trainers need a service of their own.
+  if new.listed and current_user = 'authenticated' and new.org_id is null
      and not exists (select 1 from trainer_services s where s.trainer_id = new.user_id and s.active) then
     raise exception 'Add at least one service before you go live';
   end if;

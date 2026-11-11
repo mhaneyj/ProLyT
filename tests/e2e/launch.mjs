@@ -844,68 +844,43 @@ let coachLink = "";
   await j.ctx.close();
 }
 
-// ── 20. Trainers for hire: an outside coach lists 1-on-1 line play, a parent finds him, books, and cancels
+// ── 20. Coach pages: a coach publishes a page; families find it; 1-on-1s book through the program
 {
-  const lem = await signIn("gamefit-loomis", "coach@rocklin.test", "/login?next=/trainer");
-  await lem.page.waitForURL(/\/trainer/);
-  await lem.page.getByLabel("Name families see").fill("Dre Collins");
-  await lem.page.getByLabel("Headline").fill("Former college OL · line play and pass pro");
-  await lem.page.getByLabel("City").fill("Loomis");
-  await lem.page.getByRole("checkbox", { name: "OL" }).check();
-  await lem.page.getByRole("button", { name: "Create my trainer profile" }).click();
-  await lem.page.waitForURL(/saved=profile/);
-  check("coach creates a trainer profile", await seen(lem.page.getByRole("heading", { name: "Dre Collins" })));
-  await lem.page.getByLabel("Name", { exact: true }).fill("1-on-1 Line play");
-  await lem.page.getByLabel("Price ($)").fill("80");
-  await lem.page.getByRole("button", { name: "Add service" }).click();
-  await lem.page.waitForURL(/saved=service/);
-  await lem.page.getByLabel("Where").fill("Del Oro HS turf");
-  await lem.page.getByLabel("Repeat").selectOption("2");
-  await lem.page.getByRole("button", { name: "Add", exact: true }).click();
-  await lem.page.waitForURL(/added=2/);
-  check("trainer adds weekly open times", await seen(lem.page.getByText("2 open times added.")));
-  await lem.page.getByRole("button", { name: "Go live" }).click();
-  check("trainer goes live with a booking link", await seen(lem.page.getByLabel("Your booking link")));
-  check("no client errors (trainer setup)", lem.errors.length === 0, lem.errors.join("; "));
+  const jo = await signIn("gamefit-loomis", "josh.personal@gmail.test", "/login?next=/trainer");
+  await jo.page.waitForURL(/\/trainer/);
+  await jo.page.getByLabel("Name families see").fill("Josh Parry");
+  await jo.page.getByLabel("Headline").fill("Founder · 7v7 and skill positions");
+  await jo.page.getByLabel("City").fill("Loomis");
+  await jo.page.getByRole("checkbox", { name: "WR" }).check();
+  await jo.page.getByRole("button", { name: "Create my coach page" }).click();
+  await jo.page.waitForURL(/saved=profile/);
+  check("coach creates a coach page", await seen(jo.page.getByRole("heading", { name: "Josh Parry" })));
+  check("no separate services or payouts for program coaches", (await jo.page.getByText("Get paid by card").count()) === 0 && await seen(jo.page.getByText(/book and pay through the program/)));
+  await jo.page.getByRole("button", { name: "Go live" }).click();
+  check("coach page goes live with a share link", await seen(jo.page.getByLabel("Your page link")));
+  check("no client errors (coach page)", jo.errors.length === 0, jo.errors.join("; "));
+  await jo.ctx.close();
 
-  // Anyone can browse; booking asks a parent to sign in, then comes right back
-  const fam = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  const fp = await fam.newPage(); const ferr = []; fp.on("pageerror", (e) => ferr.push(e.message));
-  await fp.goto(url("gamefit-loomis", "/trainers?s=OL"));
-  check("trainer shows in the public directory", await seen(fp.getByRole("link", { name: /Dre Collins/ })));
-  await fp.getByRole("link", { name: /Dre Collins/ }).click();
-  await fp.waitForURL(/\/trainers\/dre-collins/);
-  check("trainer page lists the service and open times", await seen(fp.getByText("1-on-1 Line play").first()) && (await fp.locator('a[href^="/book/"]').count()) === 2);
-  await fp.locator('a[href^="/book/"]').last().click(); // next week's time, so it can still be cancelled
-  await fp.waitForURL(/\/login/);
-  await fp.getByLabel("Email").fill("parent@family.test");
-  await fp.getByLabel("Password").fill("Loomis-Mom-77");
-  await fp.getByRole("button", { name: "Sign in", exact: true }).click();
-  await fp.waitForURL(/\/book\//, { timeout: 15000 });
-  const before = logLines();
-  await fp.getByLabel("Anything the trainer should know?").fill("Working on his punch and first step.");
-  await fp.getByRole("button", { name: "Book it" }).click();
-  await fp.waitForURL(/booked=1/);
-  check("parent books a session in a few taps", await seen(fp.getByText(/Training ·/)) && await seen(fp.getByText(/1-on-1 Line play with/)));
-  check("trainer gets a booking notification", await pushed("New booking: Avery", before - 1));
-  await lem.page.goto(url("gamefit-loomis", "/trainer"));
-  check("trainer sees who's coming and how to reach the parent", await seen(lem.page.getByText("Avery Real")) && await seen(lem.page.getByText(/parent@family\.test/)) && await seen(lem.page.getByText(/Working on his punch/)));
-  check("trainer sees it's paid at the session", await seen(lem.page.getByText(/Collect \$80 at the session/)));
-  await fp.getByRole("button", { name: "Cancel" }).first().click();
-  check("parent cancels a day ahead", await seen(fp.getByText(/Cancelled\. The trainer was told/)));
-  check("trainer is told about the cancellation", await pushed("Cancelled: 1-on-1 Line play"));
-  check("no client errors (booking)", ferr.length === 0, ferr.join("; "));
-  await fam.close();
-  await lem.ctx.close();
+  const pub = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pp = await pub.newPage(); const perr = []; pp.on("pageerror", (e) => perr.push(e.message));
+  await pp.goto(url("gamefit-loomis", "/trainers"));
+  check("the independent marketplace is off: /trainers goes to coaches", new URL(pp.url()).pathname === "/coaches");
+  check("coach shows in the program's coach list", await seen(pp.getByRole("link", { name: /Josh Parry/ })));
+  await pp.getByRole("link", { name: /Josh Parry/ }).click();
+  await pp.waitForURL(/\/coaches\/josh-parry/);
+  check("coach page sends families to the program's schedule to book", await seen(pp.getByRole("link", { name: "Book on the schedule" })) && await seen(pp.getByRole("link", { name: /New\? Join/ })));
+  check("independent booking pages are off", (await pp.goto(url("gamefit-loomis", "/book/00000000-0000-0000-0000-000000000000"))).status() === 404);
+  check("no client errors (coach list)", perr.length === 0, perr.join("; "));
+  await pub.close();
 
   // ProLyt staff mark the background check; families see the badge
   const s2 = await signIn("", "marcus@prolyt.test", "/login?next=/admin/trainers");
   await s2.page.goto(url("", "/admin/trainers"));
   await s2.page.getByRole("button", { name: "Mark background checked" }).click();
-  check("staff mark a trainer background checked", await seen(s2.page.getByRole("button", { name: /Background checked · remove/ })));
+  check("staff mark a coach background checked", await seen(s2.page.getByRole("button", { name: /Background checked · remove/ })));
   await s2.ctx.close();
   const pub3 = await browser.newContext(); const pp3 = await pub3.newPage();
-  await pp3.goto(url("gamefit-loomis", "/trainers/dre-collins"));
+  await pp3.goto(url("gamefit-loomis", "/coaches/josh-parry"));
   check("families see the background-checked badge", await seen(pp3.getByText("✓ Background checked by ProLyt")));
   await pub3.close();
 }

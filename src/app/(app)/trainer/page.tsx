@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
-import { PROFILE_COLS, type TrainerProfile } from "@/lib/trainers";
+import { MARKETPLACE, PROFILE_COLS, type TrainerProfile } from "@/lib/trainers";
 import { KIND_LABEL, SPECIALTIES } from "@/lib/domain/trainers";
 import { money } from "@/lib/domain/format";
 import { TZ } from "@/lib/domain/time";
@@ -12,7 +12,7 @@ import { TrainerPhoto } from "@/components/trainer-photo";
 import { EnablePush } from "@/components/enable-push";
 import { addSlots, archiveService, cancelSlot, saveService, saveTrainerProfile, setListed, trainerCancelBooking } from "./actions";
 
-export const metadata = { title: "Trainer" };
+export const metadata = { title: "Coach page" };
 
 type Svc = { id: string; title: string; kind: string; minutes: number; price_cents: number; capacity: number; details: string | null };
 type Cal = { slot_id: string; starts_at: string; minutes: number; location: string | null; title: string; kind: string; capacity: number; cancelled: boolean;
@@ -54,12 +54,26 @@ export default async function Trainer({ searchParams }: { searchParams: Promise<
       </fieldset>
       <label className="text-xs text-soft">About you<textarea name="bio" rows={4} maxLength={1500} defaultValue={t?.bio ?? ""} placeholder="Where you played or coached, how you train, who you work with best." className="mt-1 w-full rounded-md border border-[#333] bg-[#111] p-2.5 text-[15px] text-cream" /></label>
       {d.programs.length ? (
-        <label className="text-xs text-soft">Program<select name="org" defaultValue={t?.org_id ?? ""} className={`${input} mt-1`}><option value="">Independent</option>{d.programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        <label className="text-xs text-soft">Program<select name="org" defaultValue={t?.org_id ?? d.programs[0].id} className={`${input} mt-1`}>
+          {MARKETPLACE ? <option value="">Independent</option> : null}{d.programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       ) : null}
-      <button className="min-h-12 rounded-md bg-gold font-bold text-on-gold">{t ? "Save profile" : "Create my trainer profile"}</button>
+      <button className="min-h-12 rounded-md bg-gold font-bold text-on-gold">{t ? "Save profile" : MARKETPLACE ? "Create my trainer profile" : "Create my coach page"}</button>
     </form>
   );
 
+  if (!t && !MARKETPLACE && !d.programs.length) return (
+    <>
+      <Title>Coach page</Title>
+      <p className="text-soft">Coach pages are for coaches of a program on ProLyt. Ask your program&apos;s owner to add you as a coach.</p>
+    </>
+  );
+  if (!t && !MARKETPLACE) return (
+    <>
+      <Title sub="A page families can find and share: who you are, what you coach, and your open 1-on-1 times.">Your coach page</Title>
+      {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
+      {profileForm}
+    </>
+  );
   if (!t) return (
     <>
       <Title sub="Families find you, book your open times and pay in the app.">Train athletes</Title>
@@ -95,11 +109,26 @@ export default async function Trainer({ searchParams }: { searchParams: Promise<
         </div>
         <form action={setListed}><input type="hidden" name="on" value={t.listed ? "0" : "1"} />
           <button className={`min-h-11 w-full rounded-md text-sm font-bold ${t.listed ? "border border-line" : "bg-gold text-on-gold"}`}>{t.listed ? "Hide my page" : "Go live"}</button></form>
-        {!d.services.length ? <p className="text-[12px] text-muted">Add a service below, then go live.</p> : null}
-        {t.listed ? <CopyLink path={`/trainers/${t.slug}`} label="Your booking link" text={`Book a session with ${t.display_name} on ProLyt`} /> : null}
+        {MARKETPLACE && !d.services.length ? <p className="text-[12px] text-muted">Add a service below, then go live.</p> : null}
+        {t.listed ? <CopyLink path={`/${MARKETPLACE ? "trainers" : "coaches"}/${t.slug}`} label="Your page link" text={`Train with ${t.display_name} on ProLyt`} /> : null}
         {!t.verified_at ? <p className="text-[12px] text-muted">Families trust a ✓ Background checked badge. ProLyt adds it after a check; ask us from Account.</p> : null}
       </Card>
 
+      {!MARKETPLACE ? (
+        <>
+          <div className="flex flex-col gap-2 rounded-xl border border-line p-3 text-sm">
+            <span className="font-semibold">Your 1-on-1 times</span>
+            <span className="text-soft">Your page shows the 1-on-1 sessions you post on {t.program ?? "your program"}&apos;s schedule. Families book and pay through the program, and your share comes with your coach pay.</span>
+            <Link href="/coach/new" className="flex min-h-11 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-bold hover:border-gold">Post a 1-on-1 time</Link>
+          </div>
+          <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
+            <div className="text-sm font-semibold">Profile and photo</div>
+            <TrainerPhoto id={t.user_id} has={t.has_photo} name={t.display_name} />
+            {profileForm}
+          </div>
+          {t.listed ? <Link href={`/coaches/${t.slug}`} className="flex min-h-12 items-center justify-center rounded-md border border-line text-sm font-semibold">See your page as families do →</Link> : null}
+        </>
+      ) : <>
       <div className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
         <span className="text-sm"><span className="block font-semibold">{t.payouts_enabled ? "Card payments are on" : "Get paid by card"}</span>
           <span className="block text-[12px] text-muted">{t.payouts_enabled ? "Families pay when they book. Payouts go to your bank." : stripeConfigured ? "Until then, families pay you directly at the session." : "Families pay you directly at the session for now."}</span></span>
@@ -184,6 +213,7 @@ export default async function Trainer({ searchParams }: { searchParams: Promise<
         </div>
       </details>
       {t.listed ? <Link href={`/trainers/${t.slug}`} className="flex min-h-12 items-center justify-center rounded-md border border-line text-sm font-semibold">See your page as families do →</Link> : null}
+      </>}
     </>
   );
 }
