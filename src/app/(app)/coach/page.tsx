@@ -104,6 +104,7 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
           me.features.messaging ? ["/messages/new", "Message"] : null,
           me.perms.includes("film.manage") ? ["/coach/film", "Team film"] : null,
           ["/host", "Events"],
+          ["/trainer", "Train for hire"],
           me.roles.includes("owner") && me.roles.includes("coach") ? ["/coach/earnings", "Earnings"] : null,
         ].filter((x): x is string[] => Boolean(x)).map(([href, label]) => (
           <Link key={href} href={href} className="flex min-h-12 items-center justify-center rounded-[10px] border border-line bg-panel px-2 text-center text-[14px] font-semibold hover:border-gold">{label}</Link>

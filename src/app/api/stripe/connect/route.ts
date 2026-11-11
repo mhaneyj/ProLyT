@@ -8,6 +8,7 @@ import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 async function handle(request: NextRequest) {
   const base = siteUrl(request.nextUrl.origin);
   const me = await getMe();
+  if (me && request.nextUrl.searchParams.get("for") === "trainer") return trainer(me.id, me.email, base);
   if (!me || !me.orgId || !me.roles.includes("coach")) return NextResponse.redirect(`${base}/login`, 303);
   if (!stripeConfigured) return NextResponse.redirect(`${base}/coach/earnings?setup=unavailable`, 303);
 
@@ -35,6 +36,27 @@ async function handle(request: NextRequest) {
     refresh_url: `${base}/api/stripe/connect`,
     return_url: `${base}/coach/earnings?setup=done`,
   });
+  return NextResponse.redirect(link.url, 303);
+}
+
+// Trainers get paid for bookings into their own Stripe account (card payments, so it needs charges too).
+async function trainer(uid: string, email: string | null, base: string) {
+  if (!stripeConfigured) return NextResponse.redirect(`${base}/trainer?error=${encodeURIComponent("Online payments aren't set up yet")}`, 303);
+  const accountId = await asService(async (q) => {
+    const [t] = await q<{ stripe_account_id: string | null }>("select stripe_account_id from trainer_profiles where user_id = $1", [uid]);
+    if (!t) return null;
+    if (t.stripe_account_id) return t.stripe_account_id;
+    const acct = await stripe().accounts.create({
+      type: "express", country: "US", email: email ?? undefined, business_type: "individual",
+      capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
+      metadata: { user_id: uid, kind: "trainer" },
+    });
+    await q("update trainer_profiles set stripe_account_id = $2 where user_id = $1", [uid, acct.id]);
+    return acct.id;
+  });
+  if (!accountId) return NextResponse.redirect(`${base}/trainer`, 303);
+  const link = await stripe().accountLinks.create({ account: accountId, type: "account_onboarding",
+    refresh_url: `${base}/api/stripe/connect?for=trainer`, return_url: `${base}/trainer?saved=payouts` });
   return NextResponse.redirect(link.url, 303);
 }
 

@@ -19,6 +19,11 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const s = event.data.object;
+        if (s.metadata?.trainer_booking_id && s.payment_status === "paid") {
+          await q("update trainer_bookings set status = 'confirmed', paid_at = coalesce(paid_at, now()), stripe_checkout_id = $2 where id = $1 and status in ('pending_payment', 'confirmed')",
+            [s.metadata.trainer_booking_id, s.id]);
+          break;
+        }
         const id = s.metadata?.membership_id;
         if (id && typeof s.subscription === "string") {
           await q("update memberships set status = 'active', stripe_subscription_id = $2 where id = $1", [id, s.subscription]);
@@ -54,6 +59,7 @@ export async function POST(request: NextRequest) {
       case "account.updated": {
         const a = event.data.object;
         await q("update org_members set payouts_enabled = $2 where stripe_account_id = $1", [a.id, Boolean(a.payouts_enabled)]);
+        await q("update trainer_profiles set payouts_enabled = $2 where stripe_account_id = $1", [a.id, Boolean(a.payouts_enabled) && Boolean(a.charges_enabled)]);
         break;
       }
     }

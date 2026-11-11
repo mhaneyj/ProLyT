@@ -137,3 +137,17 @@ describe("event divisions", () => {
     expect(ruleText(PRESETS.girls.build("2027-03-06")[0])).toContain("Girls");
   });
 });
+
+import { slugify, weekly } from "../src/lib/domain/trainers";
+describe("trainers", () => {
+  it("makes clean profile addresses", () => {
+    expect(slugify("Coach Tee Smith")).toBe("coach-tee-smith");
+    expect(slugify("  Lem  Adams!! ")).toBe("lem-adams");
+    expect(slugify("Jo")).toMatch(/^jo-[a-z0-9]{1,4}$/);
+  });
+  it("repeats weekly, capped at 12", () => {
+    const d = new Date("2027-03-02T23:00:00Z");
+    expect(weekly(d, 3).map((x) => x.toISOString())).toEqual(["2027-03-02T23:00:00.000Z", "2027-03-09T23:00:00.000Z", "2027-03-16T23:00:00.000Z"]);
+    expect(weekly(d, 50)).toHaveLength(12);
+  });
+});

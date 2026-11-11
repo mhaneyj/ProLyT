@@ -1070,3 +1070,59 @@ describe("tournament entries linked to program teams", () => {
     expect((await as(db, PARENT_A, () => db.query("select * from program_tournaments($1)", [ORG]))).rows).toHaveLength(0);
   });
 });
+
+describe("trainers for hire", () => {
+  const TR = "10000000-0000-0000-0000-00000000c0a1", TR2 = "10000000-0000-0000-0000-00000000c0a2", FAM = "10000000-0000-0000-0000-00000000c0a3";
+  let svc: string, slot: string, soon: string, kid: string, booking: string;
+  const iso = (y: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - y); return d.toISOString().slice(0, 10); };
+  beforeAll(async () => {
+    for (const [u, e] of [[TR, "tr@example.com"], [TR2, "tr2@example.com"], [FAM, "trfam@example.com"]]) await addUser(db, u, e);
+    kid = (await as(db, FAM, () => db.query<{ id: string }>("select add_my_athlete('Tee','Kid',$1,null,'QB','male','Fam Tee') id", [iso(12)]))).rows[0].id;
+  });
+  it("anyone can set up a profile; going live needs a service; programs must be their own", async () => {
+    await as(db, TR, () => db.query("insert into trainer_profiles (user_id, slug, display_name, city, specialties) values ($1,'coach-tee','Coach Tee','Loomis','{QB,Speed}')", [TR]));
+    await expect(as(db, TR, () => db.query("update trainer_profiles set listed = true where user_id=$1", [TR]))).rejects.toThrow(/at least one service/);
+    await expect(as(db, TR, () => db.query("update trainer_profiles set org_id = $2 where user_id=$1", [TR, ORG]))).rejects.toThrow(/program you coach/);
+    await expect(as(db, TR, () => db.query("update trainer_profiles set verified_at = now() where user_id=$1", [TR]))).rejects.toThrow(/permission denied/);
+    await expect(as(db, TR, () => db.query("update trainer_profiles set payouts_enabled = true where user_id=$1", [TR]))).rejects.toThrow(/permission denied/);
+    await expect(as(db, TR2, () => db.query("insert into trainer_profiles (user_id, slug, display_name) values ($1,'fake','Fake')", [TR]))).rejects.toThrow();
+    svc = (await as(db, TR, () => db.query<{ id: string }>("insert into trainer_services (trainer_id, title, minutes, price_cents) values ($1,'1-on-1 QB',60,9000) returning id", [TR]))).rows[0].id;
+    await expect(as(db, TR2, () => db.query("insert into trainer_services (trainer_id, title, price_cents) values ($1,'Hijack',1)", [TR]))).rejects.toThrow();
+    slot = (await as(db, TR, () => db.query<{ id: string }>("insert into trainer_slots (trainer_id, service_id, starts_at, location) values ($1,$2,now() + interval '3 days','Del Oro turf') returning id", [TR, svc]))).rows[0].id;
+    soon = (await as(db, TR, () => db.query<{ id: string }>("insert into trainer_slots (trainer_id, service_id, starts_at) values ($1,$2,now() + interval '30 minutes') returning id", [TR, svc]))).rows[0].id;
+    // Not listed yet: nobody else sees it
+    expect((await as(db, FAM, () => db.query("select user_id from trainer_profiles where user_id=$1", [TR]))).rows).toHaveLength(0);
+    expect((await as(db, FAM, () => db.query("select * from trainer_open_slots($1)", [TR]))).rows).toHaveLength(0);
+    await as(db, TR, () => db.query("update trainer_profiles set listed = true where user_id=$1", [TR]));
+    const open = (await as(db, FAM, () => db.query<{ slot_id: string; price_cents: number }>("select slot_id, price_cents from trainer_open_slots($1)", [TR]))).rows;
+    expect(open.map((o) => o.slot_id)).toEqual([slot]); // the one starting in 30 minutes is too soon
+    await expect(as(db, FAM, () => db.query("select stripe_account_id from trainer_profiles where user_id=$1", [TR]))).rejects.toThrow(/permission denied/);
+  });
+  it("only a parent books; one-on-one fills; trainers see only what they need", async () => {
+    await expect(as(db, TR2, () => db.query("select book_trainer($1,$2,null,false,1000)", [slot, kid]))).rejects.toThrow(/Only a parent/);
+    await expect(as(db, FAM, () => db.query("select book_trainer($1,$2,null,false,1000)", [soon, kid]))).rejects.toThrow(/an hour ahead/);
+    booking = (await as(db, FAM, () => db.query<{ id: string }>("select book_trainer($1,$2,'Working on footwork',true,1000) id", [slot, kid]))).rows[0].id;
+    const [b] = (await db.query<{ status: string; price_cents: number; platform_fee_cents: number }>("select status, price_cents, platform_fee_cents from trainer_bookings where id=$1", [booking])).rows;
+    expect(b).toEqual({ status: "pending_payment", price_cents: 9000, platform_fee_cents: 900 });
+    expect((await as(db, FAM, () => db.query("select * from trainer_open_slots($1)", [TR]))).rows).toHaveLength(0); // held while paying
+    const cal = (await as(db, TR, () => db.query<{ athlete: string; parent_email: string; age: number }>("select athlete, parent_email, age from trainer_calendar() where booking_id is not null"))).rows;
+    expect(cal).toEqual([{ athlete: "Tee Kid", parent_email: "trfam@example.com", age: 12 }]);
+    expect((await as(db, TR, () => db.query("select id from trainer_bookings"))).rows).toHaveLength(0); // no direct table access
+    expect((await as(db, TR2, () => db.query("select * from trainer_calendar() where booking_id is not null"))).rows).toHaveLength(0);
+    // A stale unpaid hold frees the spot
+    await db.query("update trainer_bookings set created_at = now() - interval '31 minutes' where id=$1", [booking]);
+    expect((await as(db, FAM, () => db.query("select * from trainer_open_slots($1)", [TR]))).rows).toHaveLength(1);
+    await db.query("update trainer_bookings set status='confirmed', paid_at = now(), created_at = now() where id=$1", [booking]);
+    expect((await as(db, FAM, () => db.query<{ title: string }>("select title from my_trainer_bookings()"))).rows.map((r) => r.title)).toEqual(["1-on-1 QB"]);
+  });
+  it("families cancel up to a day before; the trainer anytime; paid bookings are refunded", async () => {
+    await expect(as(db, TR2, () => db.query("select cancel_trainer_booking($1)", [booking]))).rejects.toThrow(/not found/);
+    await db.query("update trainer_slots set starts_at = now() + interval '5 hours' where id=$1", [slot]);
+    await expect(as(db, FAM, () => db.query("select cancel_trainer_booking($1)", [booking]))).rejects.toThrow(/24 hours/);
+    expect((await as(db, TR, () => db.query<{ r: boolean }>("select cancel_trainer_booking($1) r", [booking]))).rows[0].r).toBe(true);
+    expect((await db.query<{ status: string }>("select status from trainer_bookings where id=$1", [booking])).rows[0].status).toBe("cancelled");
+  });
+  it("ProLyt staff verify background checks", async () => {
+    await expect(as(db, TR, () => db.query("select admin_verify_trainer($1,true)", [TR]))).rejects.toThrow(/ProLyt staff/);
+  });
+});

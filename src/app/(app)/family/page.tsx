@@ -9,6 +9,8 @@ import { Checklist, Hero, KidSwitcher, NoteCard, StatTile, Tile } from "@/compon
 import { LinkButton, Notice, Pill } from "@/components/ui";
 import { PassCards, type PassRow } from "@/components/pass-cards";
 import { EnablePush } from "@/components/enable-push";
+import { familyCancelBooking } from "@/app/trainers/actions";
+type Training = { booking_id: string; starts_at: string; minutes: number; location: string | null; title: string; trainer: string; trainer_slug: string; athlete: string; status: string; paid: boolean; pay_online: boolean; price_cents: number };
 
 export const metadata = { title: "Home" };
 
@@ -21,8 +23,8 @@ type A = {
 type R = { metric: string; value: number; source: Source };
 type N = { body: string; focus: string | null; coach: string | null; created_at: string };
 
-export default async function FamilyHome({ searchParams }: { searchParams: Promise<{ chosen?: string; welcome?: string; connected?: string }> }) {
-  const { chosen, welcome, connected } = await searchParams;
+export default async function FamilyHome({ searchParams }: { searchParams: Promise<{ chosen?: string; welcome?: string; connected?: string; booked?: string; cancelled?: string; error?: string }> }) {
+  const { chosen, welcome, connected, booked, cancelled, error } = await searchParams;
   const me = await requireParent();
   const { kids, current } = await familyKids(me.id);
 
@@ -58,6 +60,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
     return { a, results, note };
   });
   const { a, results, note } = d;
+  const trainings = await asUser(me.id, (q) => q<Training>("select * from my_trainer_bookings()"));
   const passes = await asUser(me.id, (q) => q<PassRow>("select pass_code, first_name, event, event_id, starts_on::text, checked_in_at from my_event_passes()"));
 
   // Three headline numbers: best official result, with change since the first one.
@@ -87,6 +90,19 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
       <KidSwitcher kids={kids} current={a.id} to="/family" />
       <PassCards passes={passes} />
       <EnablePush compact why={passes.length ? `when ${a.first_name} checks in and when games start and finish.` : `when a coach messages you about ${a.first_name}.`} />
+      {booked ? <Notice tone="good">Booked. The trainer gets a notification; you&apos;ll see it below.</Notice> : null}
+      {cancelled ? <Notice tone="good">Cancelled. The trainer was told{" "}and any card payment is refunded.</Notice> : null}
+      {error ? <Notice tone="bad">{error}</Notice> : null}
+      {trainings.map((b) => (
+        <div key={b.booking_id} className="flex flex-col gap-1.5 rounded-[14px] border border-line bg-panel p-3.5">
+          <div className="text-[11px] font-bold uppercase tracking-[2px] text-gold">Training · {new Date(b.starts_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+          <div className="font-semibold">{b.athlete} · {b.title} with <Link href={`/trainers/${b.trainer_slug}`} className="text-gold">{b.trainer}</Link></div>
+          <div className="flex items-center justify-between gap-2 text-[12px] text-muted">
+            <span>{[b.location, b.status === "pending_payment" ? "Finishing payment…" : b.paid ? "Paid" : b.price_cents ? `Pay ${money(b.price_cents)} at the session` : null].filter(Boolean).join(" · ")}</span>
+            <form action={familyCancelBooking}><input type="hidden" name="id" value={b.booking_id} /><button className="min-h-10 hover:text-bad">Cancel</button></form>
+          </div>
+        </div>
+      ))}
       {welcome ? <Notice tone="good">{a.first_name} is all set. Start with the steps below.</Notice> : null}
       {connected ? <Notice tone="good">{a.first_name} is connected to this program.</Notice> : null}
       {chosen ? <Notice tone="good">Package saved. Your coach will be in touch about payment.</Notice> : null}
@@ -140,6 +156,10 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         </form>
       ) : null}
 
+      <Link href="/trainers" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
+        <span><span className="block font-semibold">Find a trainer</span><span className="block text-[12px] text-muted">QB, WR, line play, speed. Book and pay in the app.</span></span>
+        <span aria-hidden="true" className="text-gold">→</span>
+      </Link>
       <Link href="/register" className="mt-1 flex min-h-12 items-center justify-center text-sm font-semibold text-muted hover:text-cream">+ Add another athlete</Link>
     </>
   );

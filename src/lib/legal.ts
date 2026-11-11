@@ -26,6 +26,7 @@ export const LEGAL: Record<string, LegalDoc> = {
         "Event hosts, for events your athlete is registered for: name, team, position, age on the cutoff date, grade and photo, plus the birth date for age checks.",
         "Other ProLyt members: only athletes 13 or older whose parent turned on the ProLyt network. They see name, position, class, verified results, highlights and posts. Never birth date, school, contact details or coach notes.",
         "Anyone with a recruiting link you share: the same limited profile. You can turn a link off at any time.",
+        "A trainer you book: your athlete's name, age, position and graduation year, plus your name and email to coordinate the session.",
         "ProLyt staff: only what is needed to run and support the service, such as reviewing an age document or a reported post.",
       ] },
       { h: "Children under 13", p: [
