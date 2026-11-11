@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./icons";
 
-export type NavItem = { href: string; label: string; icon: IconName; match?: string; badge?: number };
+export type NavItem = { href: string; label: string; icon: IconName; match?: string; also?: string[]; badge?: number };
 
 export function NavLinks({ items }: { items: NavItem[] }) {
   const path = usePathname();
@@ -11,7 +11,10 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   const score = (i: NavItem) => {
     const m = i.match ?? i.href;
     if (path === m || path === i.href) return 1000;
-    return path.startsWith(m + "/") ? m.length : -1;
+    if (path.startsWith(m + "/")) return m.length;
+    // Extra sections that belong to this tab (a family's athlete pages light up Home).
+    const extra = (i.also ?? []).filter((p) => path === p || path.startsWith(p + "/")).map((p) => p.length);
+    return extra.length ? Math.max(...extra) : -1;
   };
   const best = items.reduce((b, i) => (score(i) > score(b) ? i : b), items[0]);
   const activeHref = best && score(best) >= 0 ? best.href : null;

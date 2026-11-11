@@ -4,6 +4,19 @@ import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright"); // uses NODE_PATH or a local install
 import { mkdirSync } from "node:fs";
 
+// Family tabs are Home · Schedule · Feed · Messages; the kid's Progress/Film/Profile live on Home.
+async function openTab(page, name) {
+  const nav = page.getByRole("navigation", { name: "Main" });
+  const tab = nav.getByRole("link", { name, exact: true });
+  if (await tab.count()) return tab.click();
+  const here = page.locator("main").getByRole("link", { name: new RegExp(`^${name}\\b`) });
+  if (!(await here.count())) {
+    await nav.getByRole("link", { name: "Home", exact: true }).click();
+    await page.waitForURL((u) => u.pathname === "/family" || /^\/athlete\/[^/]+$/.test(u.pathname));
+  }
+  await page.locator("main").getByRole("link", { name: new RegExp(`^${name}\\b`) }).first().click();
+}
+
 const BASE = process.env.BASE ?? "http://gamefit-loomis.localhost:3100";
 const OUT = process.env.OUT ?? "./shots";
 mkdirSync(OUT, { recursive: true });
@@ -33,7 +46,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   check("home shows headline numbers and coach note", await seen(page.getByText(/Next focus:/)) && await seen(page.getByText("40 yd")));
   check("parent does NOT see other families", (await page.getByText(/Riley|Eli Park|Noah Park/).count()) === 0);
   await shot(page, "01-family-home");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
+  await openTab(page, "Progress");
   await page.waitForURL(/\/progress/);
   check("progress shows chart and coach notes", await seen(page.getByRole("img", { name: /40-yard dash trend/ })) && await seen(page.getByText("Coach notes")));
   await page.getByText(/All 40-yard dash results/).click();
@@ -63,7 +76,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await page.getByLabel(/My athlete is under 13/).check();
   await page.getByRole("button", { name: "Register" }).click();
   await page.waitForURL(/\/family/);
-  check("registration lands on the new athlete with next steps", await seen(page.getByText("Casey is all set")) && await seen(page.getByText("Get started")));
+  check("registration lands on the new athlete with next steps", await seen(page.getByText(/Casey.s Player Card is ready/)) && await seen(page.getByText(/Up next/)));
   check("kid switcher shows both athletes", await seen(page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" })));
   await page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" }).click();
   check("switching kids changes the home screen", await seen(page.getByText(/Next focus:/)));
@@ -117,7 +130,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
 {
   const { ctx, page } = await as("Pat Morgan");
   await page.goto(`${BASE}/family`);
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
+  await openTab(page, "Progress");
   await page.waitForURL(/\/progress/);
   await shot(page, "11-progress-after-coach");
   check("parent sees coach's new 5.18", await seen(page.getByText("5.18s")));
@@ -168,7 +181,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   check("spot count goes down", await seen(booked.getByText("7 spots left")));
   await shot(page, "13-booked");
   await page.goto(`${BASE}/family`);
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(page, "Profile");
   await page.waitForURL(/\/athlete\//);
   check("profile shows the athlete", await seen(page.getByRole("heading", { name: "Jordan Morgan" })));
   check("profile shows upcoming booked session", await seen(page.getByText("Speed & agility")));
@@ -196,7 +209,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
     check("turned-off link stops working", res.status() === 404);
     await anon.close();
   }
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Film" }).click();
+  await openTab(page, "Film");
   await page.waitForURL(/\/film/);
   await page.getByText("Add a clip").click();
   await page.getByLabel("Link").fill("https://youtu.be/dQw4w9WgXcQ");
@@ -216,7 +229,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   const { ctx, page } = await as("Sam Lee");
   await page.goto(`${BASE}/schedule`);
   check("other family can't see Jordan's booking", (await page.getByText(/Jordan/).count()) === 0);
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(page, "Profile");
   check("under-13 has no public profile option", await seen(page.getByText(/Available at 13/)) && (await page.getByRole("button", { name: "Create link" }).count()) === 0);
   await ctx.close();
 }

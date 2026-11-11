@@ -53,7 +53,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
         </a>
       ) : null}
 
-      <section className="flex flex-col gap-2">
+      <section id="sign" className="flex scroll-mt-4 flex-col gap-2">
         <SectionLabel>Signed card</SectionLabel>
         {v.autograph ? (
           <div className="relative flex justify-center">

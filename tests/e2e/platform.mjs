@@ -4,6 +4,19 @@
 // Usage: PORT=3100 OUT=./shots node tests/e2e/platform.mjs
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
+
+// Family tabs are Home · Schedule · Feed · Messages; the kid's Progress/Film/Profile live on Home.
+async function openTab(page, name) {
+  const nav = page.getByRole("navigation", { name: "Main" });
+  const tab = nav.getByRole("link", { name, exact: true });
+  if (await tab.count()) return tab.click();
+  const here = page.locator("main").getByRole("link", { name: new RegExp(`^${name}\\b`) });
+  if (!(await here.count())) {
+    await nav.getByRole("link", { name: "Home", exact: true }).click();
+    await page.waitForURL((u) => u.pathname === "/family" || /^\/athlete\/[^/]+$/.test(u.pathname));
+  }
+  await page.locator("main").getByRole("link", { name: new RegExp(`^${name}\\b`) }).first().click();
+}
 const { chromium } = createRequire(import.meta.url)("playwright");
 
 const PORT = process.env.PORT ?? "3100";
@@ -112,7 +125,7 @@ async function signIn(sub, userName) {
   const sw = page.getByRole("group", { name: "Athlete" }).getByRole("link", { name: "Jordan" });
   if (await sw.count()) await sw.click();
   await page.waitForLoadState("networkidle");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Progress" }).click();
+  await openTab(page, "Progress");
   await page.waitForURL(/\/progress/);
   await page.getByText(/All 40-yard dash results/).click();
   check("Jordan's verified record came along", await seen(page.getByText("Verified")));

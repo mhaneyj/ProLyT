@@ -5,7 +5,6 @@ import { isDemo } from "@/lib/db";
 import { brandById } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
 import { NavLinks, type NavItem } from "@/components/nav";
-import { familyKids } from "@/lib/kid";
 import { unreadCount } from "@/lib/messages";
 import { hasPasskeyHere } from "@/lib/passkeys";
 import { PasskeyNudge } from "@/components/passkey";
@@ -34,23 +33,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (me.roles.includes("coach") && !me.roles.includes("owner")) items.push({ href: "/coach/earnings", label: "Earnings", icon: "money" });
     if (me.roles.includes("guardian") || me.isParent) items.push({ href: "/family", label: "Family", icon: "home" });
   } else if (me.roles.includes("guardian") || me.isParent) {
-    const { current } = await familyKids(me.id);
-    items.push({ href: "/family", label: "Home", icon: "home" });
-    items.push(feed);
-    if (msgs) items.push(msgs);
-    if (current) {
-      items.push({ href: `/athlete/${current.id}/progress`, label: "Progress", icon: "progress" });
-      items.push({ href: `/athlete/${current.id}/film`, label: "Film", icon: "film" });
-    }
-    if (!msgs) items.push({ href: "/schedule", label: "Schedule", icon: "schedule" }); // reachable from Home
-    if (current) items.push({ href: `/athlete/${current.id}`, label: "Profile", icon: "profile" });
-  } else if (me.athleteId) {
-    items.push(feed);
-    items.push({ href: `/athlete/${me.athleteId}`, label: "Me", icon: "profile" });
-    if (msgs) items.push(msgs);
-    items.push({ href: `/athlete/${me.athleteId}/progress`, label: "Progress", icon: "progress" });
-    items.push({ href: `/athlete/${me.athleteId}/film`, label: "Film", icon: "film" });
+    // Four tabs: the kid lives on Home (card, progress, film, profile); booking gets its own tab.
+    items.push({ href: "/family", label: "Home", icon: "home", also: ["/athlete", "/family"] });
     items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
+    items.push(feed);
+    if (msgs) items.push(msgs);
+  } else if (me.athleteId) {
+    items.push({ href: `/athlete/${me.athleteId}`, label: "Me", icon: "profile", also: [`/athlete/${me.athleteId}`] });
+    items.push({ href: "/schedule", label: "Schedule", icon: "schedule" });
+    items.push(feed);
+    if (msgs) items.push(msgs);
   }
   if (!items.length) {
     // Members without a program role yet (a scout, a new adult athlete): the network.

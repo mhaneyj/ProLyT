@@ -4,6 +4,19 @@
 // Usage: PORT=3100 LOG=/path/server.log OUT=./shots node tests/e2e/launch.mjs
 import { createRequire } from "node:module";
 import { readFileSync, mkdirSync } from "node:fs";
+
+// Family tabs are Home · Schedule · Feed · Messages; the kid's Progress/Film/Profile live on Home.
+async function openTab(page, name) {
+  const nav = page.getByRole("navigation", { name: "Main" });
+  const tab = nav.getByRole("link", { name, exact: true });
+  if (await tab.count()) return tab.click();
+  const here = page.locator("main").getByRole("link", { name: new RegExp(`^${name}\\b`) });
+  if (!(await here.count())) {
+    await nav.getByRole("link", { name: "Home", exact: true }).click();
+    await page.waitForURL((u) => u.pathname === "/family" || /^\/athlete\/[^/]+$/.test(u.pathname));
+  }
+  await page.locator("main").getByRole("link", { name: new RegExp(`^${name}\\b`) }).first().click();
+}
 const { chromium } = createRequire(import.meta.url)("playwright");
 
 const PORT = process.env.PORT ?? "3100";
@@ -152,9 +165,9 @@ let coachLink = "";
   await page.getByLabel("Type your full name to sign").fill("Jamie Real");
   await page.getByRole("button", { name: "Register" }).click();
   await page.waitForURL(/\/family/);
-  check("athlete registered on the real database", await seen(page.getByText("Avery is all set")));
+  check("athlete registered on the real database", await seen(page.getByText(/Avery.s Player Card is ready/)));
   check("registered free, no payment asked", await seen(page.getByText("Free access")));
-  check("new family gets a get-started checklist", await seen(page.getByText("Get started")));
+  check("new family sees the card and one next step", await seen(page.getByRole("button", { name: /Chrome card/ })) && await seen(page.getByText(/Up next/)));
   await page.getByRole("link", { name: "Pick a training plan" }).click();
   await page.waitForURL(/\/family\/choose\//);
   check("training page shows plans with a per-session price", await seen(page.getByText(/About \$\d+ a session/).first()));
@@ -278,7 +291,7 @@ let coachLink = "";
 // ── 8. A parent gives their registered 13+ athlete their own login
 {
   const { ctx, page } = await signIn("gamefit-loomis", "parent@family.test");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(page, "Profile");
   await page.waitForURL(/\/athlete\//);
   const n = logLines();
   await page.getByPlaceholder("Avery's email").fill("avery.real@example.test");
@@ -419,7 +432,7 @@ let coachLink = "";
 // ── 12. Passwords: a parent sets their teen's password; an adult sets their own
 {
   const p = await signIn("gamefit-loomis", "parent@family.test");
-  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(p.page, "Profile");
   await p.page.waitForURL(/\/athlete\//);
   await p.page.getByLabel("New password for Avery").fill("football");
   await p.page.getByRole("button", { name: "Set", exact: true }).click();
@@ -483,7 +496,7 @@ let coachLink = "";
 // ── 14. Profile picture and profile color
 {
   const p = await signIn("gamefit-loomis", "parent@family.test");
-  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(p.page, "Profile");
   await p.page.waitForURL(/\/athlete\/[0-9a-f-]{36}$/);
   const id = p.page.url().split("/").at(-1);
   await p.page.locator("#photo input[type=file]").setInputFiles("public/icon-512.png");
@@ -511,7 +524,7 @@ let coachLink = "";
 // ── 15. Stats showcase: a parent adds Avery's 100m (with proof) and a vertical; a typo is caught
 {
   const p = await signIn("gamefit-loomis", "parent@family.test");
-  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(p.page, "Profile");
   await p.page.waitForURL(/\/athlete\/[0-9a-f-]{36}$/);
   const id = p.page.url().split("/").at(-1);
   const add = async (metric, value, proof) => {
@@ -573,7 +586,7 @@ let coachLink = "";
     check("Story graphic renders as an image", card.startsWith("200 image/png"), card);
   }
   void pr;
-  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await openTab(p.page, "Profile");
   await p.page.waitForURL(/\/athlete\//);
   const circle = await p.page.getByRole("img", { name: "Avery Real" }).evaluate((i) => { const r = i.getBoundingClientRect(); return Math.round(r.width) + "x" + Math.round(r.height) + " " + getComputedStyle(i.parentElement).borderRadius; });
   const [w, h] = circle.split(" ")[0].split("x").map(Number);
