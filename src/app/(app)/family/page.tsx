@@ -158,9 +158,10 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         </form>
       ) : null}
 
-      {events.length ? (
+      {(
         <section className="flex flex-col gap-2">
           <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Events</h2>
+          {!events.length ? <p className="rounded-[14px] border border-dashed border-line p-3.5 text-sm text-muted">No upcoming events from your programs yet. When your program opens a tournament or camp, it shows here.</p> : null}
           {events.map((e) => (
             <Link key={e.event_id} href={`/e/${e.event_id}`} className="flex items-center justify-between gap-3 rounded-[14px] border border-line bg-panel p-3.5 hover:border-gold">
               <span className="min-w-0">
@@ -172,7 +173,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
             </Link>
           ))}
         </section>
-      ) : null}
+      )}
       <Link href="/coaches" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
         <span><span className="block font-semibold">Our coaches</span><span className="block text-[12px] text-muted">Who they are, what they teach, and open 1-on-1 times.</span></span>
         <span aria-hidden="true" className="text-gold">→</span>
