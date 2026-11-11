@@ -8,7 +8,7 @@ export const metadata = { title: "Earnings" };
 
 type E = { id: string; amount_cents: number; basis: string; status: string; created_at: string; title: string };
 
-export default async function Earnings({ searchParams }: { searchParams: Promise<{ setup?: string }> }) {
+export default async function Earnings({ searchParams }: { searchParams: Promise<{ setup?: string; error?: string }> }) {
   const sp = await searchParams;
   const me = await requireRole("coach");
   const data = await asUser(me.id, async (q) => {
@@ -30,6 +30,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
     <>
       <Title sub={employee ? "You're paid through payroll. Sessions you check in are sent to payroll each week." : "Paid every Friday to your bank."}>My earnings</Title>
 
+      {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
       {sp.setup === "done" ? <Notice tone="good">Thanks. Stripe is checking your details; payouts start once it confirms.</Notice> : null}
       {sp.setup === "unavailable" ? <Notice>Payout setup isn&apos;t switched on yet. The program owner needs to connect Stripe.</Notice> : null}
 

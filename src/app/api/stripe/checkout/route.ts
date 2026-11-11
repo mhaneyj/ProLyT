@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { currentUserId } from "@/lib/auth";
 import { asService, asUser } from "@/lib/db";
 import { feePercent, priceWithFee } from "@/lib/fees";
-import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 
 // Starts a monthly membership checkout for one athlete the signed-in parent registered.
 async function start(request: NextRequest, athleteId: string | null) {
@@ -54,11 +54,11 @@ async function start(request: NextRequest, athleteId: string | null) {
   return NextResponse.redirect(session.url!, 303);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = payRoute(async (request: NextRequest) => {
   return start(request, request.nextUrl.searchParams.get("athlete_id"));
-}
+}, "/family");
 
-export async function POST(request: NextRequest) {
+export const POST = payRoute(async (request: NextRequest) => {
   const form = await request.formData();
   return start(request, String(form.get("athlete_id") ?? "") || null);
-}
+}, "/family");

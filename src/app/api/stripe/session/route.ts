@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
-import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 import { track } from "@/lib/track";
 import { PLATFORM_FEE_BPS, feePercent } from "@/lib/fees";
 
@@ -9,7 +9,7 @@ import { PLATFORM_FEE_BPS, feePercent } from "@/lib/fees";
 const descriptor = (name: string) => name.replace(/[^A-Za-z0-9 ]/g, "").replace(/\s+/g, " ").trim().slice(0, 22) || "ProLyt";
 
 // Pay for a paid session (a 1-on-1, a camp) and book it. Stripe's confirmation does the booking.
-export async function POST(request: NextRequest) {
+export const POST = payRoute(async (request: NextRequest) => {
   const base = siteUrl(request.nextUrl.origin);
   const me = await getMe();
   if (!me) return NextResponse.redirect(`${base}/login?next=/schedule`, 303);
@@ -43,4 +43,4 @@ export async function POST(request: NextRequest) {
   });
   await track("session_checkout", { userId: me.id, orgId: p.org_id });
   return NextResponse.redirect(checkout.url!, 303);
-}
+});

@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asService } from "@/lib/db";
-import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 import { CLUB_MONTHLY_CENTS, CLUB_YEARLY_CENTS } from "@/lib/plans";
 import { track } from "@/lib/track";
 
 // The owner subscribes their program to Club (billed by ProLyt), or opens Stripe's billing page to manage it.
-export async function POST(request: NextRequest) {
+export const POST = payRoute(async (request: NextRequest) => {
   const base = siteUrl(request.nextUrl.origin);
   const back = `${base}/owner/billing`;
   const me = await getMe();
@@ -40,4 +40,4 @@ export async function POST(request: NextRequest) {
   });
   await track("club_checkout", { userId: me.id, orgId });
   return NextResponse.redirect(session.url!, 303);
-}
+});

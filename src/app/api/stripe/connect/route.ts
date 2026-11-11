@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { asService } from "@/lib/db";
-import { stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
+import { payRoute, stripe, stripeConfigured, siteUrl } from "@/lib/stripe";
 
 // Sends a contractor coach to Stripe's hosted payout setup (bank + tax info).
 // ProLyt never sees or stores bank details.
@@ -84,5 +84,5 @@ async function trainer(uid: string, email: string | null, base: string) {
   return NextResponse.redirect(link.url, 303);
 }
 
-export const GET = handle;
-export const POST = handle;
+export const GET = payRoute(handle);
+export const POST = payRoute(handle);
