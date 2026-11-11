@@ -1323,4 +1323,29 @@ describe("training plans", () => {
     await expect(as(db, OWNER, () => db.query("delete from plans where id=$1", [id]))).rejects.toThrow(/Turn it off instead/);
     await as(db, OWNER, () => db.query("update plans set active=false where id=$1", [id]));
   });
+  it("plan usage: counts the week's group sessions; blocks only when the program says so; staff-only views", async () => {
+    // Put Jordan on a 1-a-week plan. Three free group sessions in one week, three weeks out.
+    const lab = (await as(db, OWNER, () => db.query<{ id: string }>("insert into plans (org_id, name, price_cents, sessions_per_week) values ($1,'Usage Lab',9000,1) returning id", [ORG]))).rows[0].id;
+    await as(db, PARENT_A, () => db.query("select choose_plan($1,$2)", [jordan, lab]));
+    const mk = (title: string, day: number) => db.query<{ id: string }>(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id)
+      values ($1,'group','speed',$2, ((week_start(now()) + 21 + $3::int)::timestamp at time zone 'America/Los_Angeles') + interval '17 hours',
+        ((week_start(now()) + 21 + $3::int)::timestamp at time zone 'America/Los_Angeles') + interval '18 hours', $4) returning id`, [ORG, title, day, COACH]).then((r) => r.rows[0].id);
+    const a = await mk("Usage A", 2), b = await mk("Usage B", 3), c = await mk("Usage C", 4);
+    await as(db, PARENT_A, () => db.query("select book_session($1,$2)", [a, jordan]));
+    await as(db, PARENT_A, () => db.query("select book_session($1,$2)", [b, jordan])); // allowed by default: an extra
+    await expect(as(db, PARENT_A, () => db.query("select set_plan_limit($1,'block')", [ORG]))).rejects.toThrow(/owner/);
+    await expect(as(db, COACH, () => db.query("select set_plan_limit($1,'block')", [ORG]))).rejects.toThrow(/owner/);
+    await as(db, OWNER, () => db.query("select set_plan_limit($1,'block')", [ORG]));
+    await expect(as(db, PARENT_A, () => db.query("select book_session($1,$2)", [c, jordan]))).rejects.toThrow(/Usage Lab plan includes 1 session a week/);
+    // The coach can still add them.
+    await as(db, COACH, () => db.query("insert into session_athletes (session_id, athlete_id) values ($1,$2)", [c, jordan]));
+    const use = (await as(db, PARENT_A, () => db.query<{ athlete_id: string; plan: string; per_week: number; booked: number; plan_limit: string }>(
+      "select athlete_id, plan, per_week, booked, plan_limit from family_plan_usage() where week = week_start(now()) + 21"))).rows;
+    expect(use).toEqual([{ athlete_id: jordan, plan: "Usage Lab", per_week: 1, booked: 3, plan_limit: "block" }]);
+    expect((await as(db, PARENT_B, () => db.query("select * from family_plan_usage() where athlete_id = $1", [jordan]))).rows).toEqual([]);
+    expect((await as(db, OWNER, () => db.query("select * from program_plan_usage($1) where athlete_id = $1::uuid or athlete_id = $2", [ORG, jordan]))).rows).toHaveLength(1);
+    expect((await as(db, PARENT_A, () => db.query("select * from program_plan_usage($1)", [ORG]))).rows).toEqual([]);
+    await expect(as(db, PARENT_A, () => db.query("select plan_sessions_booked($1,$2,now())", [jordan, ORG]))).rejects.toThrow(/permission/);
+    await as(db, OWNER, () => db.query("select set_plan_limit($1,'allow')", [ORG]));
+  });
 });

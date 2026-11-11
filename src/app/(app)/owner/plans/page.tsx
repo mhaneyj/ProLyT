@@ -3,7 +3,7 @@ import { requirePerm } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
 import { Card, Notice, Pill, Title } from "@/components/ui";
-import { deletePlan, savePlan, setPlanActive } from "./actions";
+import { deletePlan, savePlan, setPlanActive, setPlanLimit } from "./actions";
 
 export const metadata = { title: "Training plans" };
 
@@ -36,10 +36,11 @@ function PlanForm({ p }: { p?: Plan }) {
 export default async function Plans({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   const sp = await searchParams;
   const me = await requirePerm("billing.manage");
-  const plans = await asUser(me.id, (q) => q<Plan>(`
+  const [plans, limit] = await asUser(me.id, async (q) => [await q<Plan>(`
     select p.id, p.name, p.price_cents, p.sessions_per_week, p.description, p.includes, p.featured, p.active,
       (select count(*)::int from memberships m where m.plan_id = p.id and m.status in ('active', 'pending', 'past_due')) families
-    from plans p where p.org_id = $1 order by p.active desc, p.sort, p.price_cents`, [me.orgId]));
+    from plans p where p.org_id = $1 order by p.active desc, p.sort, p.price_cents`, [me.orgId]),
+    (await q<{ plan_limit: "allow" | "block" }>("select plan_limit from orgs where id = $1", [me.orgId]))[0]?.plan_limit ?? "allow"] as const);
   return (
     <>
       <Link href="/owner/settings" className="min-h-11 py-3 text-sm text-muted hover:text-cream">← Settings</Link>
@@ -71,6 +72,26 @@ export default async function Plans({ searchParams }: { searchParams: Promise<{ 
           </div>
         </Card>
       ))}
+
+      {plans.length ? (
+        <Link href="/owner/plans/usage" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line bg-panel px-4 hover:border-gold">
+          <span><span className="block font-semibold">Plan usage</span><span className="block text-[12px] text-muted">Who&apos;s using their sessions, who&apos;s over, who hasn&apos;t been in</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
+
+      <Card className="flex flex-col gap-2">
+        <div className="font-semibold">When a family has booked all their plan&apos;s sessions for the week</div>
+        <form action={setPlanLimit} className="flex flex-col gap-2">
+          {([["allow", "Let them book extras", "Marked as an extra session so you can charge or talk to them."], ["block", "Stop them booking", "They see they're out for the week. You can still add them yourself."]] as const).map(([v, l, d]) => (
+            <label key={v} className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3 text-sm has-[:checked]:border-gold">
+              <input type="radio" name="mode" value={v} defaultChecked={limit === v} className="mt-0.5 size-5 accent-[var(--color-gold)]" />
+              <span><span className="block font-semibold">{l}</span><span className="block text-[12px] text-muted">{d}</span></span>
+            </label>
+          ))}
+          <button className="min-h-11 rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Save</button>
+        </form>
+      </Card>
 
       <Card accent>
         <div className="mb-2 font-cond text-[15px] font-extrabold uppercase tracking-[2px]">Add a plan</div>

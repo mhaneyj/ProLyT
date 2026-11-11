@@ -71,3 +71,15 @@ export async function deletePlan(form: FormData) {
   revalidatePath("/owner/plans");
   back("ok", "Plan deleted.");
 }
+
+export async function setPlanLimit(form: FormData) {
+  const me = await requirePerm("billing.manage");
+  const mode = form.get("mode") === "block" ? "block" : "allow";
+  try {
+    await asUser(me.id, (q) => q("select set_plan_limit($1, $2)", [me.orgId, mode]));
+  } catch (e) {
+    back("error", dbMessage(e));
+  }
+  revalidatePath("/owner/plans");
+  back("ok", mode === "block" ? "Families can't book past their plan. You can still add them yourself." : "Families can book extra sessions past their plan.");
+}
