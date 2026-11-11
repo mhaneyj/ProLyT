@@ -18,6 +18,8 @@ export const FEATURES = [
   ["recruiting", "Recruiting profile links"],
   ["payments", "Online payments"],
   ["messaging", "Team messaging"],
+  ["age_checks", "Age verification"],
+  ["coach_pages", "Coach pages"],
 ] as const;
 export type Features = Record<(typeof FEATURES)[number][0], boolean>;
 

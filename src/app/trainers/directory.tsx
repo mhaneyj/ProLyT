@@ -21,6 +21,7 @@ export async function Directory({ s, q, coaches }: { s?: string; q?: string; coa
     from trainer_profiles t left join orgs o on o.id = t.org_id
     where t.listed and ($1::text is null or $1 = any(t.specialties))
       and ($3::boolean = false or t.org_id is not null) and ($4::text is null or o.slug = $4)
+      and (t.org_id is null or has_feature(t.org_id, 'coach_pages'))
       and ($2 = '' or t.display_name ilike '%' || $2 || '%' or t.city ilike '%' || $2 || '%' or t.headline ilike '%' || $2 || '%')
     order by t.verified_at is not null desc, next_at nulls last, t.created_at limit 60`, [spec, text, coaches, programSlug]));
   const me = await getMe();

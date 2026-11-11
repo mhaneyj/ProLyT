@@ -181,8 +181,12 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
           <label className="text-xs text-soft">Registration closes<input name="closes" type="date" defaultValue={e.closes ?? ""} className={`${input} mt-1`} /></label>
           <label className="text-xs text-soft">Details for coaches and families (schedule, fees, parking…)
             <textarea name="details" rows={4} defaultValue={e.details ?? ""} className="mt-1 w-full rounded-md border border-[#333] bg-[#111] p-2.5 text-[14px] text-cream" /></label>
-          <label className="flex min-h-11 items-start gap-2 text-sm"><input type="checkbox" name="require_age_check" defaultChecked={e.require_age_check} className="mt-0.5 size-5 flex-none accent-[var(--color-gold)]" />
-            <span>Require an age check (birth certificate, passport or ID). Families upload once; athletes already verified on ProLyt skip it.</span></label>
+          {me.features.age_checks || e.require_age_check ? (
+            <label className="flex min-h-11 items-start gap-2 text-sm"><input type="checkbox" name="require_age_check" defaultChecked={e.require_age_check} className="mt-0.5 size-5 flex-none accent-[var(--color-gold)]" />
+              <span>Require an age check (birth certificate, passport or ID). Families upload once; athletes already verified on ProLyt skip it.</span></label>
+          ) : (
+            <p className="text-[13px] text-soft">Age verification (families upload a birth certificate once; you approve) is part of <Link href="/owner/billing" className="font-semibold text-gold">Club</Link>.</p>
+          )}
           <label className="text-xs text-soft">Waiver
             <textarea name="waiver" rows={6} defaultValue={e.waiver_text ?? ""} className="mt-1 w-full rounded-md border border-[#333] bg-[#111] p-2.5 text-[14px] text-cream" /></label>
           <button className="min-h-11 rounded-md bg-gold text-sm font-bold text-on-gold">Save</button>

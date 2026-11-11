@@ -49,6 +49,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       {sp.ok ? <Notice tone="good">{sp.ok}</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
+      {can(me, "billing.manage") ? (
+        <Link href="/owner/billing" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
+          <span><span className="block font-semibold">Plan and billing</span><span className="block text-[12px] text-muted">Starter or Club, and what each includes</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
       {d.payouts ? (
         <Card>
           <section id="payouts" className="flex scroll-mt-4 flex-col gap-3">

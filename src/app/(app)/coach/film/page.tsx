@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { homeFor, requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
@@ -38,7 +39,8 @@ export default async function TeamFilm({ searchParams }: { searchParams: Promise
           <span className="grid size-8 place-items-center rounded-full bg-gold text-on-gold"><Icon name="plus" size={18} /></span>
           Add team film
         </summary>
-        <div className="px-4 pb-4"><FilmForm team={me.orgId} canUpload={blobConfigured && me.features.film_uploads} /></div>
+        <div className="px-4 pb-4"><FilmForm team={me.orgId} canUpload={blobConfigured && me.features.film_uploads} />
+          {!me.features.film_uploads ? <p className="mt-2 text-[12px] text-muted">Hudl and YouTube links work on every plan. Uploading video is part of <Link href="/owner/billing" className="font-semibold text-gold">Club</Link>.</p> : null}</div>
       </details>
       {film.length === 0 ? <Empty title="No team film yet">Paste a Hudl or YouTube link to your game film.</Empty> : null}
       {film.map((f) => (

@@ -95,7 +95,8 @@ export async function setProgramStatus(form: FormData) {
 
 export async function setProgramFeatures(form: FormData) {
   const org = String(form.get("org"));
-  const features = Object.fromEntries(FEATURES.map(([k]) => [k, form.get(k) === "on"]));
+  // Each feature: "plan" clears the override (the plan decides), "on"/"off" forces it.
+  const features = Object.fromEntries(FEATURES.map(([k]) => { const v = form.get(k); return [k, v === "on" ? true : v === "off" ? false : null]; }));
   await adminRun(`/admin/programs/${org}`, "Features saved.", "select admin_set_program($1, null, $2::jsonb)", [org, JSON.stringify(features)]);
 }
 
@@ -154,4 +155,12 @@ export async function createInvite(form: FormData) {
 export async function revokeInvite(form: FormData) {
   const org = String(form.get("org"));
   await adminRun(`/admin/programs/${org}`, "Invite link turned off.", "select revoke_invite_link($1)", [String(form.get("id"))]);
+}
+
+export async function compClub(form: FormData) {
+  const org = String(form.get("org"));
+  const raw = String(form.get("until") ?? "");
+  const until = form.get("end") ? null : /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+  await adminRun(`/admin/programs/${org}`, until ? `Club comped through ${until}.` : "Comp ended. The program is on its paid plan (or Starter).",
+    "select admin_comp_club($1, $2::date)", [org, until]);
 }

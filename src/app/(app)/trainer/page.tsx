@@ -61,6 +61,14 @@ export default async function Trainer({ searchParams }: { searchParams: Promise<
     </form>
   );
 
+  if (!MARKETPLACE && d.programs.length && !me.features.coach_pages && !t?.listed) return (
+    <>
+      <Title>Coach page</Title>
+      <p className="text-soft">Public coach pages, with your photo, what you teach and your open 1-on-1 times, are part of the Club plan.</p>
+      {me.perms.includes("billing.manage") ? <Link href="/owner/billing" className="flex min-h-12 items-center justify-center rounded-md bg-gold font-bold text-on-gold">See Club</Link>
+        : <p className="text-sm text-muted">Ask your program&apos;s owner about Club.</p>}
+    </>
+  );
   if (!t && !MARKETPLACE && !d.programs.length) return (
     <>
       <Title>Coach page</Title>

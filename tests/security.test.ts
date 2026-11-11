@@ -499,7 +499,8 @@ describe("platform permissions", () => {
     expect((await as(db, COACH, () => db.query<{ ok: boolean }>("select is_staff($1) ok", [ORG]))).rows[0].ok).toBe(false);
     await as(db, BOSS, () => db.query("select admin_set_program($1,'active','{\"voice\": false}')", [ORG]));
     expect((await as(db, COACH, () => db.query<{ ok: boolean }>("select is_staff($1) ok", [ORG]))).rows[0].ok).toBe(true);
-    expect((await db.query("select features->>'voice' v, features->>'booking' b from orgs where id=$1", [ORG])).rows[0]).toEqual({ v: "false", b: "true" });
+    expect((await db.query("select org_features(id)->>'voice' v, org_features(id)->>'booking' b from orgs where id=$1", [ORG])).rows[0]).toEqual({ v: "false", b: "true" });
+    await as(db, BOSS, () => db.query("select admin_set_program($1,null,'{\"voice\": null}')", [ORG]));
   });
   it("only admins see everyone, change admins or turn accounts off", async () => {
     expect((await as(db, BOSS, () => db.query("select * from admin_people('limited', 10)"))).rows).toHaveLength(1);
@@ -1183,5 +1184,40 @@ describe("program payouts", () => {
     expect((await db.query<{ amount_cents: number; platform_fee_cents: number }>("select amount_cents, platform_fee_cents from payments where session_payment_id=$1", [sp.payment_id])).rows[0])
       .toEqual({ amount_cents: 10200, platform_fee_cents: 200 });
     await as(db, OWNER, () => db.query("select set_fee_paid_by($1,'program')", [ORG]));
+  });
+});
+
+describe("program plans", () => {
+  const PADMIN = "10000000-0000-0000-0000-0000000000a6";
+  it("comp and paid plans turn Club on; overrides win; owners see their plan", async () => {
+    await addUser(db, PADMIN, "plans-admin@prolyt.test");
+    await db.query("insert into platform_admins values ($1) on conflict do nothing", [PADMIN]);
+    const feat = async () => (await db.query<{ p: string; f: Record<string, boolean> }>("select effective_plan($1) p, org_features($1) f", [ORG])).rows[0];
+    // Seeded programs start on a trial comp, so Club is on.
+    expect((await feat()).p).toBe("club");
+    await expect(as(db, OWNER, () => db.query("select admin_comp_club($1, null)", [ORG]))).rejects.toThrow(/admins only/);
+    await as(db, PADMIN, () => db.query("select admin_comp_club($1, null)", [ORG]));
+    let f = await feat();
+    expect(f.p).toBe("starter");
+    expect(f.f).toMatchObject({ booking: true, payments: true, film_uploads: false, age_checks: false, coach_pages: false });
+    // Starter can't switch on age checks.
+    const ev = (await as(db, OWNER, () => db.query<{ id: string }>("insert into events (org_id, name, starts_on) values ($1,'Plan test',current_date + 40) returning id", [ORG]))).rows[0].id;
+    await expect(as(db, OWNER, () => db.query("update events set require_age_check = true where id=$1", [ev]))).rejects.toThrow(/Club plan/);
+    // Override on, then clear it with null.
+    await as(db, PADMIN, () => db.query(`select admin_set_program($1, null, '{"age_checks": true}'::jsonb)`, [ORG]));
+    expect((await feat()).f.age_checks).toBe(true);
+    await as(db, OWNER, () => db.query("update events set require_age_check = true where id=$1", [ev]));
+    await as(db, PADMIN, () => db.query(`select admin_set_program($1, null, '{"age_checks": null}'::jsonb)`, [ORG]));
+    expect((await db.query<{ features: object }>("select features from orgs where id=$1", [ORG])).rows[0].features).not.toHaveProperty("age_checks");
+    // A paid subscription turns Club on; canceled goes back to Starter.
+    await db.query("update orgs set plan='club', plan_status='active' where id=$1", [ORG]);
+    expect((await feat()).p).toBe("club");
+    expect((await as(db, COACH, () => db.query<{ p: unknown }>("select program_plan($1) p", [ORG]))).rows[0].p).toBeNull();
+    expect((await as(db, OWNER, () => db.query<{ p: { plan: string } }>("select program_plan($1) p", [ORG]))).rows[0].p).toMatchObject({ plan: "club" });
+    await db.query("update orgs set plan_status='canceled' where id=$1", [ORG]);
+    expect((await feat()).p).toBe("starter");
+    // Restore for the rest of the suite.
+    await db.query("update orgs set plan='starter', plan_status=null, club_comped_until = current_date + 30 where id=$1", [ORG]);
+    await db.query("delete from events where id=$1", [ev]);
   });
 });

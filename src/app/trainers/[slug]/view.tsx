@@ -24,7 +24,7 @@ async function load(slug: string) {
   return asService(async (q) => {
     const [t] = await q<T & { org_id: string | null; org_slug: string | null; custom_domain: string | null }>(`select t.user_id, t.slug, t.display_name, t.headline, t.bio, t.city, t.specialties, t.verified_at is not null verified,
       t.photo_data is not null has_photo, o.name program, t.org_id, o.slug org_slug, o.custom_domain from trainer_profiles t left join orgs o on o.id = t.org_id
-      where t.slug = $1 and t.listed and ($2 or t.org_id is not null)`, [slug, MARKETPLACE]);
+      where t.slug = $1 and t.listed and ($2 or t.org_id is not null) and (t.org_id is null or has_feature(t.org_id, 'coach_pages'))`, [slug, MARKETPLACE]);
     if (!t) return null;
     // The coach's open 1-on-1 times on their program's schedule.
     const sessions = t.org_id ? await q<P>(`select s.id, s.title, s.starts_at, s.ends_at, s.location, s.price_cents,

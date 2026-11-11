@@ -31,7 +31,7 @@ export type Me = {
   features: Features;
 };
 
-const ALL_ON: Features = { booking: true, film_uploads: true, voice: true, recruiting: true, payments: true, messaging: true };
+const ALL_ON: Features = { booking: true, film_uploads: true, voice: true, recruiting: true, payments: true, messaging: true, age_checks: true, coach_pages: true };
 
 export const currentUserId = cache(async (): Promise<string | null> => {
   const jar = await cookies();
@@ -66,7 +66,7 @@ export const getMe = cache(async (): Promise<Me | null> => {
     const orgInfo = async (orgId: string | null) => {
       if (!orgId) return { perms: [] as Perm[], paused: false, features: ALL_ON };
       const [o] = await q<{ status: string; features: Partial<Features>; perms: Perm[] }>(
-        "select status, features, my_perms($1) perms from orgs where id = $1", [orgId]);
+        "select status, org_features(id) features, my_perms($1) perms from orgs where id = $1", [orgId]);
       return { perms: o?.perms ?? [], paused: o?.status === "paused", features: { ...ALL_ON, ...(o?.features ?? {}) } };
     };
     const programs = [...new Map(rows.map((r) => [r.org_id, { id: r.org_id, name: r.name, slug: r.slug }])).values()];

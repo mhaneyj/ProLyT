@@ -9,12 +9,13 @@ import { Card, Notice, Pill, SectionLabel } from "@/components/ui";
 import { PermFields } from "@/components/perm-editor";
 import { DomainForm, InviteOwnerForm } from "../../form";
 import { CopyLink } from "@/app/(app)/athlete/[id]/share-card";
-import { createInvite, revokeInvite, saveStaffPerms, setMember, setProgramFeatures, setProgramStatus } from "../../actions";
+import { compClub, createInvite, revokeInvite, saveStaffPerms, setMember, setProgramFeatures, setProgramStatus } from "../../actions";
 import { AdminTabs } from "../../tabs";
 
 export const metadata = { title: "Program · ProLyt admin" };
 
-type Org = { id: string; name: string; slug: string; custom_domain: string | null; status: string; features: Record<string, boolean> };
+type Org = { id: string; name: string; slug: string; custom_domain: string | null; status: string; features: Record<string, boolean>;
+  plan: string; paid_plan: string; plan_status: string | null; plan_interval: string | null; comped_until: string | null; effective: Record<string, boolean>; defaults: Record<string, boolean> };
 type Staff = { user_id: string; email: string; full_name: string | null; role: "owner" | "coach"; permissions: string[]; custom: boolean };
 type Inv = { id: string; role: string; label: string | null; expires_at: string; max_uses: number | null; uses: number; revoked_at: string | null };
 
@@ -26,7 +27,8 @@ export default async function AdminProgram({ params, searchParams }: { params: P
   const me = await requirePlatformAdmin();
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const d = await asUser(me.id, async (q) => {
-    const [o] = await q<Org>("select id, name, slug, custom_domain, status, features from orgs where id = $1", [id]);
+    const [o] = await q<Org>(`select id, name, slug, custom_domain, status, features, effective_plan(id) plan, plan paid_plan, plan_status, plan_interval,
+      to_char(club_comped_until, 'YYYY-MM-DD') comped_until, org_features(id) effective, plan_features(effective_plan(id)) defaults from orgs where id = $1`, [id]);
     if (!o) return null;
     return {
       o,
@@ -54,15 +56,39 @@ export default async function AdminProgram({ params, searchParams }: { params: P
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
 
       <Card>
+        <SectionLabel>Plan</SectionLabel>
+        <div className="mt-1 flex items-center gap-2">
+          <span className="text-lg font-bold">{o.plan === "club" ? "Club" : "Starter"}</span>
+          {o.paid_plan === "club" && o.plan_status ? <Pill tone={o.plan_status === "past_due" ? "warn" : "good"}>Paid · {o.plan_status.replace("_", " ")}{o.plan_interval ? ` · ${o.plan_interval}ly` : ""}</Pill> : null}
+          {o.comped_until && new Date(o.comped_until + "T23:59:59") >= new Date() ? <Pill>Comped through {shortDate(o.comped_until)}</Pill> : null}
+        </div>
+        <form action={compClub} className="mt-3 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="org" value={o.id} />
+          <label className="flex flex-col text-sm">Comp Club through
+            <input type="date" name="until" defaultValue={o.comped_until ?? ""} className="mt-1 min-h-11 rounded-md border border-line bg-transparent px-3" /></label>
+          <button className={`${btn} border-2 border-[#3a3a3a] hover:border-gold`}>Save comp</button>
+          {o.comped_until ? <button name="end" value="1" className={`${btn} text-muted`}>End comp</button> : null}
+        </form>
+      </Card>
+
+      <Card>
         <SectionLabel>Features</SectionLabel>
+        <p className="mt-1 text-[13px] text-muted">The plan decides each feature unless you force it on or off for this program.</p>
         <form action={setProgramFeatures} className="mt-2 flex flex-col">
           <input type="hidden" name="org" value={o.id} />
-          {FEATURES.map(([k, label]) => (
-            <label key={k} className="flex min-h-11 items-center justify-between gap-3 text-sm">
-              {label}
-              <input type="checkbox" name={k} defaultChecked={o.features?.[k] !== false} className="size-5 accent-[var(--color-gold)]" />
-            </label>
-          ))}
+          {FEATURES.map(([k, label]) => {
+            const set = k in (o.features ?? {}) ? (o.features[k] ? "on" : "off") : "plan";
+            return (
+              <label key={k} className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                <span>{label} <span className={o.effective?.[k] ? "text-good" : "text-muted"}>· {o.effective?.[k] ? "on" : "off"}</span></span>
+                <select name={k} defaultValue={set} className="min-h-10 rounded-md border border-line bg-transparent px-2 text-sm">
+                  <option value="plan">Plan ({o.defaults?.[k] ? "on" : "off"})</option>
+                  <option value="on">Force on</option>
+                  <option value="off">Force off</option>
+                </select>
+              </label>
+            );
+          })}
           <button className={`${btn} mt-2 border-2 border-[#3a3a3a] hover:border-gold`}>Save features</button>
         </form>
       </Card>
