@@ -8,12 +8,21 @@ import { Card, Notice, Pill, Title } from "@/components/ui";
 
 export const metadata = { title: "ProLyt+" };
 
-type P = { plus: boolean; status: string | null; interval: string | null; renews_at: string | null; comped_until: string | null; has_customer: boolean; athletes: number };
+type P = { plus: boolean; for_sale: boolean; status: string | null; interval: string | null; renews_at: string | null; comped_until: string | null; has_customer: boolean; athletes: number };
 
 export default async function Plus({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   const sp = await searchParams;
   const me = await requireMe();
   const [{ p }] = await asUser(me.id, (q) => q<{ p: P }>("select my_plus() p"));
+  if (!p.for_sale && !p.has_customer) return (
+    <>
+      <Link href="/account" className="min-h-11 py-3 text-sm text-muted hover:text-cream">← Account</Link>
+      <Title sub="While ProLyt launches, everything is on for every family, free.">Everything&apos;s included</Title>
+      <Card className="flex flex-col gap-2">
+        {PLUS_LINES.map((l) => <div key={l.label} className="text-sm"><span className="text-good">✓</span> {l.label}<span className="block pl-4 text-[12px] text-muted">{l.detail}</span></div>)}
+      </Card>
+    </>
+  );
   const paying = Boolean(p.status && p.status !== "canceled");
   const comped = !paying && p.plus;
   const date = (d: string) => new Date(d.length === 10 ? `${d}T12:00:00` : d).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "long", day: "numeric", year: "numeric" });

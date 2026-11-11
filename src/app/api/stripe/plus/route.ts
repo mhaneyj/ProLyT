@@ -13,6 +13,8 @@ export const POST = payRoute(async (request: NextRequest) => {
   if (!me) return NextResponse.redirect(`${base}/login?next=/plus`, 303);
   if (!stripeConfigured) return NextResponse.redirect(`${back}?error=${encodeURIComponent("ProLyt+ isn't switched on yet. Check back soon.")}`, 303);
   const form = await request.formData();
+  const [sale] = await asService((q) => q<{ free: boolean }>("select plus_free_for_all() free"));
+  if (sale?.free && form.get("manage") !== "1") return NextResponse.redirect(back, 303);
   const [f] = await asService((q) => q<{ customer: string | null; sub: string | null; status: string | null; tried: boolean }>(
     "select customer_id customer, subscription_id sub, status, subscription_id is not null tried from family_plans where user_id = $1", [me.id]));
   let customer = f?.customer ?? null;

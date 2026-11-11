@@ -1224,6 +1224,11 @@ describe("program plans", () => {
 
 describe("ProLyt+ for families", () => {
   const h = (c: string) => c.repeat(64);
+  it("during launch everyone has Plus features", async () => {
+    expect((await as(db, PARENT_B, () => db.query<{ p: { plus: boolean; for_sale: boolean } }>("select my_plus() p"))).rows[0].p).toMatchObject({ plus: true, for_sale: false });
+    await expect(as(db, PARENT_A, () => db.query("update app_settings set value='false'"))).rejects.toThrow(/permission denied/);
+    await db.query("update app_settings set value = 'false' where key = 'plus_free_for_all'");
+  });
   it("Plus covers the family's athletes; insights and view alerts are Plus-only and never leak", async () => {
     await as(db, PARENT_A, () => db.query("select create_profile_share($1,$2)", [jordan, h("9")]));
     const open = () => as(db, null, () => db.query("select public_profile($1)", [h("9")]));
@@ -1256,5 +1261,6 @@ describe("ProLyt+ for families", () => {
     await db.query("update family_plans set status='canceled' where user_id=$1", [PARENT_A]);
     expect((await as(db, PARENT_A, () => db.query<{ ok: boolean }>("select athlete_plus($1) ok", [jordan]))).rows[0].ok).toBe(false);
     await db.query("delete from family_plans where user_id=$1", [PARENT_A]);
+    await db.query("update app_settings set value = 'true' where key = 'plus_free_for_all'");
   });
 });

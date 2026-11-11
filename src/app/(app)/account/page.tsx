@@ -40,6 +40,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
     `select password_hash is not null has_pw, password_changed_at::text changed, (select count(*)::int from auth.passkeys where user_id = $1) passkeys
      from auth.users where id = $1`, [me.id]));
   const [p] = await asUser(me.id, (q) => q<{ full_name: string }>("select full_name from profiles where id = $1", [me.id]));
+  const [{ sale: plusForSale }] = await asUser(me.id, (q) => q<{ sale: boolean }>("select not plus_free_for_all() sale"));
   const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
   return (
     <>
@@ -69,7 +70,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
         </form>
       </Card>
 
-      {me.isParent || me.athleteId ? (
+      {(me.isParent || me.athleteId) && plusForSale ? (
         <Link href="/plus" className="flex min-h-14 items-center justify-between rounded-[14px] border border-gold/60 bg-gold/5 px-4">
           <span><span className="block font-semibold">ProLyt+</span><span className="block text-[12px] text-muted">Recruiting alerts and insights, video uploads</span></span>
           <span className="text-gold">→</span>

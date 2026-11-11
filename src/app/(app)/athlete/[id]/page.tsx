@@ -386,7 +386,7 @@ function ViewInsights({ i }: { i: Insights | null }) {
       <div className="flex h-10 items-end gap-[2px]" role="img" aria-label={`Opens per day for the last 30 days, ${i.last_30} in total`}>
         {i.days.map((d) => <span key={d.day} title={`${d.day}: ${d.n}`} className={`flex-1 rounded-sm ${d.n ? "bg-gold" : "bg-line"}`} style={{ height: `${Math.max(8, (d.n / max) * 100)}%` }} />)}
       </div>
-      <p className="text-[11px] text-muted">ProLyt+ alerts you when it&apos;s opened. We never know or show who opened it.</p>
+      <p className="text-[11px] text-muted">You get a notification when it&apos;s opened (turn on notifications in Account). We never know or show who opened it.</p>
     </div>
   );
 }

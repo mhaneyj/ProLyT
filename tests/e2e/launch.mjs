@@ -922,10 +922,11 @@ let coachLink = "";
     check("Finish payment stays on the program's address and explains", pg.url().includes("gamefit-loomis.") && await seen(pg.getByText(/payments aren't switched on|Payment didn't start/)), pg.url());
   }
   // ── 22. ProLyt+: families find it from Account; the free tier is clear.
+  // During launch Plus isn't sold: no upsell, everything included.
   await pg.goto(url("gamefit-loomis", "/account"));
-  await pg.getByRole("link", { name: /ProLyt\+/ }).click();
-  await pg.waitForURL(/\/plus/);
-  check("ProLyt+ page shows plans and what's free", await seen(pg.getByRole("heading", { name: "ProLyt+" })) && await seen(pg.getByText("Alerts when a coach opens the profile")) && await seen(pg.getByText("$5.99")));
+  check("no ProLyt+ upsell during launch", (await pg.getByRole("link", { name: /ProLyt\+/ }).count()) === 0);
+  await pg.goto(url("gamefit-loomis", "/plus"));
+  check("everything is included during launch", await seen(pg.getByText("Alerts when a coach opens the profile")) && (await pg.getByText("$5.99").count()) === 0);
   await pctx.close();
 }
 
