@@ -7,6 +7,7 @@ import { archiveTeam, coachInviteLink, coachPerms, createTeam, removeCoach, turn
 import { asUser } from "@/lib/db";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { BrandingForm, CoachPayForm, InviteForm } from "./forms";
+import { isProgramAdmin } from "@/lib/perms";
 
 export const metadata = { title: "Program settings" };
 
@@ -59,7 +60,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                 <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-3">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{c.full_name || c.email}</span>
-                    <span className="block truncate text-xs text-muted">{pay?.pay_type === "employee" ? "Employee · payroll" : pay?.payouts_enabled ? "Contractor · payouts on" : "Contractor · payout setup not finished"} · {c.custom ? "custom permissions" : "standard permissions"}</span>
+                    <span className="block truncate text-xs text-muted">{pay?.pay_type === "employee" ? "Employee · payroll" : pay?.payouts_enabled ? "Contractor · payouts on" : "Contractor · payout setup not finished"} · {isProgramAdmin(c.permissions) ? "program admin" : c.custom ? "custom permissions" : "standard permissions"}</span>
                   </span>
                   {pay?.coach_verified ? <Pill tone="good">Checked ✓</Pill> : <Pill tone="warn">Check pending</Pill>}
                 </summary>
@@ -68,6 +69,11 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                     <input type="hidden" name="user" value={c.user_id} />
                     <PermFields value={c.permissions} custom={c.custom} role="coach" idPrefix={`c-${c.user_id}`} allowed={me.perms} />
                     <button className="min-h-11 rounded-md bg-gold text-sm font-bold text-on-gold">Save permissions</button>
+                  </form>
+                  <form action={coachPerms}>
+                    <input type="hidden" name="user" value={c.user_id} /><input type="hidden" name="preset" value={isProgramAdmin(c.permissions) ? "coach" : "admin"} />
+                    <button className="min-h-11 w-full rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">{isProgramAdmin(c.permissions) ? "Make a regular coach" : "Make program admin"}</button>
+                    <p className="mt-1 text-[11px] text-muted">Program admins run all teams, rosters, sessions and coaches. They don&apos;t see payments or change branding.</p>
                   </form>
                   <form action={removeCoach} className="text-right">
                     <input type="hidden" name="user" value={c.user_id} />
@@ -133,7 +139,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       {can(me, "roster.manage") ? (
         <Card>
           <SectionLabel>Teams</SectionLabel>
-          <p className="mb-2 mt-1 text-xs text-muted">Teams show on each athlete&apos;s career. Set an athlete&apos;s team from their profile.</p>
+          <p className="mb-2 mt-1 text-xs text-muted">Teams show on each athlete&apos;s career. <Link href="/rosters" className="font-semibold text-gold">Manage rosters →</Link></p>
           <ul className="mb-3 divide-y divide-line">
             {d.teams.map((t) => (
               <li key={t.id} className="flex min-h-12 items-center justify-between gap-2">

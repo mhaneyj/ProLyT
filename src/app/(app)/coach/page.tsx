@@ -103,6 +103,7 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
         {[
           me.features.messaging ? ["/messages/new", "Message"] : null,
           me.perms.includes("film.manage") ? ["/coach/film", "Team film"] : null,
+          me.perms.includes("roster.manage") ? ["/rosters", "Rosters"] : null,
           ["/host", "Events"],
           ["/trainer", "My coach page"],
           me.roles.includes("owner") && me.roles.includes("coach") ? ["/coach/earnings", "Earnings"] : null,

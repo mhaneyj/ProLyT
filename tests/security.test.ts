@@ -1064,6 +1064,9 @@ describe("tournament entries linked to program teams", () => {
     const [row] = (await db.query<{ name: string; org_id: string; team_id: string }>("select name, org_id, team_id from event_teams where id=$1", [entry])).rows;
     expect(row).toEqual({ name: "Game-Fit 14U", org_id: ORG, team_id: team });
     await expect(as(db, OWNER, () => db.query("select register_team($1,'Second copy',null,$2,$3)", [div, "u".repeat(64), team]))).rejects.toThrow(/already entered/);
+    // Joining the program's tournament team adds it to the athlete's career
+    await as(db, PARENT_A, () => db.query("select join_team($1,$2,'Pat Sample')", ["t".repeat(64), jordan]));
+    expect((await db.query("select 1 from stints where athlete_id=$1 and team_id=$2 and org_id=$3 and ended_on is null", [jordan, team, ORG])).rows).toHaveLength(1);
     await expect(as(db, PARENT_A, () => db.query("select register_team($1,'Steal',null,$2,$3)", [div, "w".repeat(64), team]))).rejects.toThrow(/your own program/);
     await db.query("update events set status='live' where id=$1", [ev]);
     expect((await as(db, OWNER, () => db.query<{ entry: string; team: string }>("select entry, team from program_tournaments($1)", [ORG]))).rows.map((r) => r.team)).toContain("Game-Fit 14U");
@@ -1128,5 +1131,39 @@ describe("trainers for hire", () => {
   });
   it("ProLyt staff verify background checks", async () => {
     await expect(as(db, TR, () => db.query("select admin_verify_trainer($1,true)", [TR]))).rejects.toThrow(/ProLyt staff/);
+  });
+});
+
+describe("program operations", () => {
+  it("paid sessions: parents start a card payment; the webhook books it once; spots are held", async () => {
+    const s = (await db.query<{ id: string }>(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id, price_cents, capacity)
+      values ($1,'one_on_one','1on1','1-on-1 · Pass sets', now() + interval '2 days', now() + interval '2 days 1 hour', $2, 10000, 1) returning id`, [ORG, COACH])).rows[0].id;
+    await expect(as(db, PARENT_B, () => db.query("select * from start_session_payment($1,$2)", [s, jordan]))).rejects.toThrow(/Only a parent/);
+    const [p] = (await as(db, PARENT_A, () => db.query<{ payment_id: string; amount_cents: number }>("select * from start_session_payment($1,$2)", [s, jordan]))).rows;
+    expect(p.amount_cents).toBe(10000);
+    expect((await as(db, PARENT_A, () => db.query<{ n: number }>("select spots_left_held($1) n", [s]))).rows[0].n).toBe(0); // held while paying
+    const again = (await as(db, PARENT_A, () => db.query<{ payment_id: string }>("select * from start_session_payment($1,$2)", [s, jordan]))).rows[0];
+    expect(again.payment_id).toBe(p.payment_id); // coming back reuses the hold
+    await expect(as(db, PARENT_A, () => db.query("select complete_session_payment($1,'cs_x')", [p.payment_id]))).rejects.toThrow(/permission denied/);
+    expect((await db.query<{ r: boolean }>("select complete_session_payment($1,'cs_test') r", [p.payment_id])).rows[0].r).toBe(true);
+    expect((await db.query<{ r: boolean }>("select complete_session_payment($1,'cs_test') r", [p.payment_id])).rows[0].r).toBe(false); // retries are safe
+    expect((await db.query("select 1 from session_athletes where session_id=$1 and athlete_id=$2", [s, jordan])).rows).toHaveLength(1);
+    expect((await db.query<{ n: number }>("select count(*)::int n from payments where session_payment_id=$1", [p.payment_id])).rows[0].n).toBe(1);
+    await expect(as(db, PARENT_A, () => db.query("select * from start_session_payment($1,$2)", [s, jordan]))).rejects.toThrow(/Already booked/);
+  });
+  it("rosters: staff with roster rights put program athletes on teams; careers follow", async () => {
+    const team = (await db.query<{ id: string }>("insert into teams (org_id, name, level) values ($1,'7v7 15U','club') returning id", [ORG])).rows[0].id;
+    await expect(as(db, PARENT_A, () => db.query("select set_team_member($1,$2,true)", [team, jordan]))).rejects.toThrow(/can't manage/);
+    await as(db, OWNER, () => db.query("select set_team_member($1,$2,true)", [team, jordan]));
+    await as(db, OWNER, () => db.query("select set_team_member($1,$2,true)", [team, jordan])); // twice is fine
+    expect((await db.query<{ n: number }>("select count(*)::int n from stints where athlete_id=$1 and team_id=$2 and ended_on is null", [jordan, team])).rows[0].n).toBe(1);
+    expect((await as(db, OWNER, () => db.query<{ name: string }>("select name from team_rosters($1) where team_id=$2 and athlete_id is not null", [ORG, team]))).rows.map((r) => r.name)).toEqual(["Jordan Sample"]);
+    expect((await as(db, PARENT_A, () => db.query("select * from team_rosters($1)", [ORG]))).rows).toHaveLength(0);
+    await as(db, OWNER, () => db.query("select set_team_member($1,$2,false)", [team, jordan]));
+    expect((await db.query("select 1 from stints where athlete_id=$1 and team_id=$2 and ended_on is null", [jordan, team])).rows).toHaveLength(0);
+  });
+  it("families see their programs' upcoming events", async () => {
+    const ev = (await as(db, OWNER, () => db.query<{ id: string }>("insert into events (org_id, name, starts_on, status) values ($1,'Family Night 7v7',current_date + 14,'open') returning id", [ORG]))).rows[0].id;
+    expect((await as(db, PARENT_A, () => db.query<{ event_id: string }>("select event_id from my_program_events()"))).rows.map((r) => r.event_id)).toContain(ev);
   });
 });

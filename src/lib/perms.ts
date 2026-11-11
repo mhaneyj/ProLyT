@@ -26,8 +26,14 @@ export const ROLE_DEFAULTS: Record<"owner" | "coach", Perm[]> = {
   coach: ["sessions.post", "roster.manage", "results.log", "medical.view", "film.manage"],
 };
 
+/** Program admin: runs the program day to day (all teams, rosters, sessions, staff) without money or branding. */
+export const PROGRAM_ADMIN: Perm[] = ["sessions.post", "sessions.manage_all", "roster.manage", "results.log", "medical.view", "film.manage", "staff.manage"];
+export const isProgramAdmin = (perms: string[] | null) => Boolean(perms && PROGRAM_ADMIN.every((p) => perms.includes(p)));
+
 /** Reads permission checkboxes back from a form: null = role defaults. */
 export function readPerms(form: FormData): string[] | null {
+  if (form.get("preset") === "admin") return [...PROGRAM_ADMIN];
+  if (form.get("preset") === "coach") return null;
   if (form.get("defaults") === "on") return null;
   return form.getAll("perm").map(String);
 }

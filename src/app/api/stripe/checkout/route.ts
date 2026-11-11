@@ -8,7 +8,8 @@ async function start(request: NextRequest, athleteId: string | null) {
   const base = siteUrl(request.nextUrl.origin);
   const uid = await currentUserId();
   if (!uid) return NextResponse.redirect(`${base}/login`, 303);
-  if (!stripeConfigured || !athleteId) return NextResponse.redirect(`${base}/family`, 303);
+  if (!athleteId) return NextResponse.redirect(`${base}/family`, 303);
+  if (!stripeConfigured) return NextResponse.redirect(`${base}/family?error=${encodeURIComponent("Online payments aren't switched on yet. Your coach will tell you how to pay.")}`, 303);
 
   const m = await asUser(uid, async (q) => {
     const [row] = await q<{ membership_id: string; org_id: string; program: string; plan: string; price_cents: number; first_name: string; email: string | null }>(

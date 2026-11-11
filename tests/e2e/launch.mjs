@@ -885,6 +885,37 @@ let coachLink = "";
   await pub3.close();
 }
 
+// ── 21. Program operations: program admin, team rosters, family events, paid 1-on-1s
+{
+  const o = await signIn("gamefit-loomis", "josh.personal@gmail.test", "/login?next=/owner/settings");
+  await o.page.goto(url("gamefit-loomis", "/owner/settings"));
+  const staffRow = o.page.locator("details").filter({ hasText: /lem|Lem/ }).first();
+  await staffRow.locator("summary").click();
+  await staffRow.getByRole("button", { name: "Make program admin" }).click();
+  await o.page.waitForLoadState("networkidle");
+  check("owner makes a coach program admin", await seen(o.page.getByText(/program admin/).first()));
+  await o.page.getByLabel("Team name").fill("Game-Fit 14U");
+  await o.page.getByRole("button", { name: "Add team" }).click();
+  await o.page.goto(url("gamefit-loomis", "/rosters"));
+  check("rosters page lists the program's teams", await seen(o.page.getByText("Game-Fit 14U").first()));
+  await o.page.getByLabel("Add a player to Game-Fit 14U").selectOption({ index: 1 });
+  await o.page.getByRole("button", { name: "Add", exact: true }).first().click();
+  await o.page.waitForLoadState("networkidle");
+  check("admin puts a player on a team", (await o.page.getByRole("button", { name: /Take .* off Game-Fit 14U/ }).count()) >= 1);
+  check("no client errors (rosters)", o.errors.length === 0, o.errors.join("; "));
+  await o.ctx.close();
+
+  const pctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pg = await pctx.newPage();
+  await pg.goto(url("gamefit-loomis", "/login?next=/family"));
+  await pg.getByLabel("Email").fill("parent@family.test");
+  await pg.getByLabel("Password").fill("Loomis-Mom-77");
+  await pg.getByRole("button", { name: "Sign in", exact: true }).click();
+  await pg.waitForURL(/\/family/, { timeout: 15000 });
+  check("family home shows their program's events", await seen(pg.getByRole("heading", { name: "Events" })) && await seen(pg.getByText("Loomis 7v7 Classic").first()));
+  await pctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

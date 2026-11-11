@@ -3,6 +3,7 @@ import { asUser } from "@/lib/db";
 import { TZ, money, time } from "@/lib/domain/format";
 import { Card, Empty, Notice, Pill, Title } from "@/components/ui";
 import { book, cancel } from "./actions";
+import { stripeConfigured } from "@/lib/stripe";
 
 export const metadata = { title: "Schedule" };
 
@@ -12,13 +13,14 @@ type S = {
 };
 type Kid = { id: string; first_name: string; org_id: string };
 
-export default async function Schedule({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function Schedule({ searchParams }: { searchParams: Promise<{ error?: string; paid?: string }> }) {
+  const { error, paid: justPaid } = await searchParams;
   const me = await requireMe();
+  const payOnline = stripeConfigured && me.features.payments;
   const isFamily = me.roles.includes("guardian") && !me.roles.includes("coach") && !me.roles.includes("owner");
   const { sessions, kids } = await asUser(me.id, async (q) => {
     const sessions = await q<S>(`
-      select s.id, s.org_id, s.title, s.starts_at, s.ends_at, s.location, p.full_name coach, s.price_cents, spots_left(s.id) spots,
+      select s.id, s.org_id, s.title, s.starts_at, s.ends_at, s.location, p.full_name coach, s.price_cents, coalesce(spots_left_held(s.id), spots_left(s.id)) spots,
         coalesce((select array_agg(sa.athlete_id::text) from session_athletes sa
                   join guardians g on g.athlete_id = sa.athlete_id and g.user_id = $1 where sa.session_id = s.id), '{}') booked
       from sessions s left join profiles p on p.id = s.coach_id
@@ -41,6 +43,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
   return (
     <>
       <Title sub={isFamily ? (me.features.booking ? "Tap Book to save a spot. Next 3 weeks." : "Next 3 weeks. Your coach books sessions for you.") : "All sessions, next 3 weeks."}>Schedule</Title>
+      {justPaid ? <Notice tone="good">Paid. The booking shows here as soon as the payment clears (a few seconds).</Notice> : null}
       {error ? <Notice tone="bad">{error}</Notice> : null}
       {sessions.length === 0 ? <Empty title="Nothing scheduled">New sessions show up here as soon as coaches post them.</Empty> : null}
       {[...byDay].map(([day, list]) => (
@@ -70,7 +73,14 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                   <div className="flex flex-col gap-2">
                     {myKids.map((k) => {
                       const booked = s.booked.includes(k.id);
-                      if (paid && !booked) return <p key={k.id} className="text-xs text-muted">Paid session · ask your coach to book {k.first_name}.</p>;
+                      if (paid && !booked) return payOnline ? (
+                        <form key={k.id} action="/api/stripe/session" method="post" className="flex items-center justify-between gap-3">
+                          <input type="hidden" name="session" value={s.id} /><input type="hidden" name="athlete" value={k.id} />
+                          <span className="text-sm text-soft">{k.first_name}</span>
+                          <button disabled={s.spots === 0} aria-label={`Pay and book ${k.first_name}`}
+                            className="min-h-11 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold disabled:opacity-40">Pay {money(s.price_cents!)} &amp; book</button>
+                        </form>
+                      ) : <p key={k.id} className="text-xs text-muted">Paid session · ask your coach to book {k.first_name}.</p>;
                       if (paid) return <div key={k.id} className="flex items-center justify-between gap-3"><Pill tone="good">{k.first_name} is booked ✓</Pill><span className="text-xs text-muted">Contact coach to cancel</span></div>;
                       return (
                         <form key={k.id} action={booked ? cancel : book} className="flex items-center justify-between gap-3">

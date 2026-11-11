@@ -10,6 +10,10 @@ export function stripe(): Stripe {
   return client;
 }
 
-export function siteUrl(fallback?: string | null) {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? fallback ?? "http://localhost:3000").replace(/\/$/, "");
+/**
+ * Where to send people back to: the address they're on (a program's own domain or prolyt.app), so they stay signed in.
+ * NEXT_PUBLIC_SITE_URL is only a fallback when there's no request.
+ */
+export function siteUrl(requestOrigin?: string | null) {
+  return (requestOrigin ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 }

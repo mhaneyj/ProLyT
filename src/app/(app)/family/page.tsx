@@ -61,6 +61,8 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
   });
   const { a, results, note } = d;
   const trainings = await asUser(me.id, (q) => q<Training>("select * from my_trainer_bookings()"));
+  const events = await asUser(me.id, (q) => q<{ event_id: string; name: string; starts_on: string; location: string | null; status: string; host: string; registered: string[] }>(
+    "select event_id, name, starts_on::text, location, status, host, registered from my_program_events()"));
   const passes = await asUser(me.id, (q) => q<PassRow>("select pass_code, first_name, event, event_id, starts_on::text, checked_in_at from my_event_passes()"));
 
   // Three headline numbers: best official result, with change since the first one.
@@ -156,6 +158,21 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         </form>
       ) : null}
 
+      {events.length ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Events</h2>
+          {events.map((e) => (
+            <Link key={e.event_id} href={`/e/${e.event_id}`} className="flex items-center justify-between gap-3 rounded-[14px] border border-line bg-panel p-3.5 hover:border-gold">
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold uppercase tracking-[2px] text-gold">{e.status === "live" ? "● Live now" : new Date(`${e.starts_on}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
+                <span className="block font-semibold">{e.name}</span>
+                <span className="block truncate text-[12px] text-muted">{[e.host, e.location].filter(Boolean).join(" · ")}</span>
+              </span>
+              <span className="flex-none text-right text-[12px]">{e.registered.length ? <span className="text-good">✓ {e.registered.join(", ")}</span> : <span className="font-semibold text-gold">{e.status === "live" ? "Scores →" : "Details →"}</span>}</span>
+            </Link>
+          ))}
+        </section>
+      ) : null}
       <Link href="/coaches" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
         <span><span className="block font-semibold">Our coaches</span><span className="block text-[12px] text-muted">Who they are, what they teach, and open 1-on-1 times.</span></span>
         <span aria-hidden="true" className="text-gold">→</span>
