@@ -1,4 +1,5 @@
 "use server";
+import { refCode } from "@/lib/track";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { FEATURES, readPerms } from "@/lib/perms";
@@ -144,7 +145,7 @@ export async function createInvite(form: FormData) {
   const h = await headers();
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
   const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
-  const link = `${programOrigin({ slug, custom_domain: custom }, { proto, host })}/join/${token}`;
+  const link = `${programOrigin({ slug, custom_domain: custom }, { proto, host })}/join/${token}?r=${await refCode(me.id)}`;
   revalidatePath(`/admin/programs/${org}`);
   // Shown once; only a hash is stored.
   redirect(`/admin/programs/${org}?link=${encodeURIComponent(link)}#invites`);

@@ -5,6 +5,7 @@ import { asUser } from "@/lib/db";
 import { ageOn, dayTime } from "@/lib/domain/format";
 import { METRICS, SHOWCASE_ORDER, type Source } from "@/lib/domain/metrics";
 import { StatShowcase, type Rank } from "@/components/stat-showcase";
+import { refCode } from "@/lib/track";
 import { NoteCard, ProfileCircle } from "@/components/athlete";
 import { Icon } from "@/components/icons";
 import { Player } from "@/components/player";
@@ -256,7 +257,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         const h = await headers();
         const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
         const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
-        const fresh = sp.shared && /^[\w-]{20,40}$/.test(sp.shared) ? `${proto}://${host}/p/${sp.shared}` : null;
+        const fresh = sp.shared && /^[\w-]{20,40}$/.test(sp.shared) ? `${proto}://${host}/p/${sp.shared}?r=${await refCode(me.id)}` : null;
         const canShare = a.guardian || (a.self && !minor);
         return (
           <section id="recruiting" className="flex scroll-mt-4 flex-col gap-2 rounded-[14px] border border-line p-4">

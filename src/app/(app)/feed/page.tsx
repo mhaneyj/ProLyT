@@ -5,6 +5,7 @@ import { loadFeed, postingAs } from "@/lib/social";
 import { PostCard } from "@/components/post-card";
 import { Empty, LinkButton, Notice } from "@/components/ui";
 import { Composer } from "./composer";
+import { refCode } from "@/lib/track";
 
 export const metadata = { title: "Feed" };
 
@@ -14,6 +15,7 @@ export default async function Feed({ searchParams }: { searchParams: Promise<{ t
   const scope = sp.tab === "all" ? "all" : "following";
   const before = sp.before && !Number.isNaN(Date.parse(sp.before)) ? sp.before : null;
   const [posts, as] = await Promise.all([loadFeed(me.id, { scope, before }), postingAs(me)]);
+  const ref = await refCode(me.id);
   const back = `/feed${scope === "all" ? "?tab=all" : ""}`;
   return (
     <>
@@ -35,7 +37,7 @@ export default async function Feed({ searchParams }: { searchParams: Promise<{ t
         scope === "following"
           ? <Empty title="Your feed is quiet">Follow athletes and programs to see their PRs, highlights and news here.<div className="mt-3"><LinkButton href="/discover">Find athletes</LinkButton></div></Empty>
           : <Empty title="Nothing yet">Be the first to post.</Empty>
-      ) : posts.map((p) => <PostCard key={p.id} p={p} back={back} />)}
+      ) : posts.map((p) => <PostCard key={p.id} p={p} back={back} refCode={ref} />)}
       {posts.length === 30 ? (
         <Link href={`/feed?${scope === "all" ? "tab=all&" : ""}before=${encodeURIComponent(posts[posts.length - 1].created_at)}`}
           className="min-h-12 rounded-md border border-line py-3 text-center text-sm font-semibold hover:border-gold">Older posts</Link>

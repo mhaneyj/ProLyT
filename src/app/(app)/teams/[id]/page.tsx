@@ -5,6 +5,7 @@ import { asUser } from "@/lib/db";
 import { ruleText, type Division } from "@/lib/domain/events";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { CopyLink } from "@/components/copy-link";
+import { refCode } from "@/lib/track";
 import { newTeamLink, overridePlayer, removePlayer } from "../../host/actions";
 
 export const metadata = { title: "Team" };
@@ -38,7 +39,7 @@ export default async function Team({ params, searchParams }: { params: Promise<{
       {sp.link ? <Notice tone="good">New link made. The old link no longer works.</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
       <Card accent className="flex flex-col gap-2">
-        <CopyLink path={`/join-team/${link}`} label="Team sign-up link for families" text={`Sign up for ${t.team} at ${t.event}`} />
+        <CopyLink path={`/join-team/${link}`} label="Team sign-up link for families" refCode={await refCode(me.id)} text={`Sign up for ${t.team} at ${t.event}`} />
         <form action={newTeamLink}><input type="hidden" name="team" value={t.id} />
           <button className="min-h-10 text-[12px] text-muted hover:text-cream">Link shared somewhere it shouldn&apos;t be? Make a new one</button></form>
       </Card>

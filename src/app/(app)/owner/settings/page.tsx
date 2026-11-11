@@ -80,7 +80,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           {d.team.length === 0 ? <p className="text-sm text-muted">No coaches yet. Make an invite link and text it to them.</p> : null}
         </div>
 
-        {(() => { const link = sp.link && /^https?:\/\/[^\s]+\/join\/[\w-]+$/.test(sp.link) ? sp.link : null; return link ? (
+        {(() => { const link = sp.link && /^https?:\/\/[^\s?]+\/join\/[\w-]+(\?r=[a-z0-9]{8})?$/.test(sp.link) ? sp.link : null; return link ? (
           <div className="flex flex-col gap-2 rounded-lg border border-gold/60 bg-gold/5 p-3">
             <div className="text-sm font-semibold">Invite link ready. Text it to your coach. It&apos;s only shown once.</div>
             <CopyLink url={link} label="Invite link" title="Join our coaching staff" />

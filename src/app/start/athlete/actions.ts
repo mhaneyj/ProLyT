@@ -5,6 +5,7 @@ import { requireMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
 import { sendAthleteLink } from "@/lib/athlete-links";
 import { revalidatePath } from "next/cache";
+import { track } from "@/lib/track";
 
 export type StartState = { error?: string; values?: Record<string, string> };
 
@@ -54,5 +55,6 @@ export async function startAthlete(_: StartState, form: FormData): Promise<Start
     }
   }
   revalidatePath("/", "layout");
+  await track("athlete_added", { userId: me.id, props: { via: "self_signup" } });
   redirect(`/athlete/${id}?welcome=1${sent}`);
 }

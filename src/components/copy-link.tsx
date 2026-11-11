@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 
 /** A link with Copy and (on phones) Share buttons. `path` is turned into a full URL on this address. */
-export function CopyLink({ path, label, text }: { path: string; label: string; text?: string }) {
+export function CopyLink({ path, label, text, refCode }: { path: string; label: string; text?: string; refCode?: string }) {
+  if (refCode) path = `${path}${path.includes("?") ? "&" : "?"}r=${refCode}`;
   const [url, setUrl] = useState(path);
   const [done, setDone] = useState(false);
   const [canShare, setCanShare] = useState(false);

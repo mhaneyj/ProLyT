@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
 import { PRESETS, type Division } from "@/lib/domain/events";
+import { track } from "@/lib/track";
 
 const isId = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
 const back = (path: string, key: string, msg: string) => redirect(`${path}${path.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(msg)}`);
@@ -40,6 +41,7 @@ export async function createEvent(form: FormData) {
   } catch (e) {
     back("/host/new", "error", /row-level security/.test(dbMessage(e)) ? "Only program owners and coaches can host events." : dbMessage(e));
   }
+  await track("event_created", { userId: me.id, orgId: me.orgId, props: { event: id!, preset: d.preset } });
   redirect(`/host/events/${id!}?created=1`);
 }
 
@@ -114,6 +116,7 @@ export async function setEventStatus(form: FormData) {
   const ev = form.get("event"), status = String(form.get("status"));
   if (!isId(ev) || !["draft", "open", "closed", "live", "done", "cancelled"].includes(status)) return;
   await asUser(me.id, (q) => q("update events set status = $2 where id = $1", [ev, status]));
+  await track("event_status", { userId: me.id, props: { event: ev, status } });
   revalidatePath(`/host/events/${ev}`);
 }
 
@@ -146,6 +149,7 @@ export async function registerTeam(form: FormData) {
   } catch (e) {
     back(`/register-team/${ev}`, "error", dbMessage(e));
   }
+  await track("team_registered", { userId: me.id, props: { event: ev, team: team! } });
   redirect(`/teams/${team!}?new=1`);
 }
 
@@ -188,6 +192,7 @@ export async function joinTeam(form: FormData) {
   } catch (e) {
     back(`/join-team/${token}`, "error", dbMessage(e));
   }
+  await track("team_joined", { userId: me.id, props: { athlete: String(athlete) } });
   redirect(`/join-team/${token}?joined=${athlete}`);
 }
 
@@ -204,5 +209,6 @@ export async function addAthleteForTeam(form: FormData) {
   } catch (e) {
     back(`/join-team/${token}`, "error", dbMessage(e));
   }
+  await track("athlete_added", { userId: me.id, props: { via: "team_link" } });
   redirect(`/join-team/${token}?added=1`);
 }

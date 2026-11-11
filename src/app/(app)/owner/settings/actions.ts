@@ -1,4 +1,5 @@
 "use server";
+import { refCode } from "@/lib/track";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { requirePerm } from "@/lib/auth";
@@ -116,7 +117,7 @@ export async function coachInviteLink(form: FormData) {
   const h = await headers();
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
   const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
-  redirect(`/owner/settings?link=${encodeURIComponent(`${programOrigin({ slug, custom_domain: custom }, { proto, host })}/join/${token}`)}#staff`);
+  redirect(`/owner/settings?link=${encodeURIComponent(`${programOrigin({ slug, custom_domain: custom }, { proto, host })}/join/${token}?r=${await refCode(me.id)}`)}#staff`);
 }
 
 export async function coachPerms(form: FormData) {

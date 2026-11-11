@@ -5,6 +5,7 @@ import { asUser } from "@/lib/db";
 import { ruleText, type Division } from "@/lib/domain/events";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { CopyLink } from "@/components/copy-link";
+import { refCode } from "@/lib/track";
 import { deleteDivision, saveDivision, saveEventDetails, setEventStatus } from "../../actions";
 
 export const metadata = { title: "Event" };
@@ -39,6 +40,7 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
   });
   if (!data) notFound();
   const { e, divisions, teams } = data;
+  const ref = await refCode(me.id);
   const h = `/e/${e.id}`;
   const input = "min-h-11 w-full rounded-md border border-[#333] bg-[#111] px-2.5 text-[15px] text-cream";
   const players = teams.reduce((a, t) => a + t.players, 0);
@@ -90,7 +92,7 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
             {n.help ? <p className="mt-1 text-[12px] text-muted">{n.help}</p> : null}
           </form>
         ))}
-        {e.status !== "draft" ? <CopyLink path={h} label="Event link for coaches" /> : <p className="text-[12px] text-muted">Your event link appears once registration is open.</p>}
+        {e.status !== "draft" ? <CopyLink path={h} label="Event link for coaches" refCode={ref} /> : <p className="text-[12px] text-muted">Your event link appears once registration is open.</p>}
       </Card>
 
       <div className="grid grid-cols-3 gap-2 text-center">

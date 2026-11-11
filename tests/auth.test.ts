@@ -204,3 +204,15 @@ describe("double taps", () => {
     await expect(verifyCode(q, "double@example.com", code, [], true)).rejects.toThrow(/expired/);
   });
 });
+
+describe("attribution", () => {
+  it("labels where a new account came from", async () => {
+    const { channelFor } = await import("../src/lib/domain/attribution");
+    expect(channelFor("/join-team/abc", true)).toBe("team_link");
+    expect(channelFor("/e/123", true)).toBe("event_link");
+    expect(channelFor("/p/tok", false)).toBe("recruiting_link");
+    expect(channelFor("/join/tok", true)).toBe("invite");
+    expect(channelFor("/", true)).toBe("share");
+    expect(channelFor(null, false)).toBe("direct");
+  });
+});

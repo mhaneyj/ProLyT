@@ -9,10 +9,10 @@ export const metadata = { title: "Join a team" };
 type Prev = { team_id: string; team: string; division: string; event_id: string; event: string; starts_on: string; location: string | null; host: string; waiver_text: string | null; roster: number; roster_max: number; open: boolean };
 type Kid = { id: string; name: string; ok: boolean; reason: string | null; on_team: string | null };
 
-export default async function JoinTeam({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string; joined?: string }> }) {
+export default async function JoinTeam({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string; joined?: string; r?: string }> }) {
   const [{ token }, sp] = await Promise.all([params, searchParams]);
   if (!/^[0-9a-f]{64}$/.test(token)) notFound();
-  const me = await meOrSignIn(`/join-team/${token}`);
+  const me = await meOrSignIn(`/join-team/${token}`, sp.r);
   const data = await asUser(me.id, async (q) => {
     const [t] = await q<Prev>(`select team_id, team, division, event_id, event, starts_on::text, location, host, waiver_text, roster, roster_max, open
       from join_team_preview($1)`, [token]);

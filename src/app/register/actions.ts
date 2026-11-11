@@ -1,4 +1,5 @@
 "use server";
+import { track } from "@/lib/track";
 import { cookies } from "next/headers";
 import { KID_COOKIE } from "@/lib/kid";
 import { redirect } from "next/navigation";
@@ -73,6 +74,7 @@ async function register(form: FormData): Promise<RegisterState | void> {
   if (stripeConfigured && me.features.payments && d.plan) redirect(`/api/stripe/checkout?athlete_id=${athleteId}`);
   // Show the new athlete on home, with a welcome
   (await cookies()).set(KID_COOKIE, athleteId, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
+  await track("athlete_added", { userId: me.id, orgId: me.orgId, props: { via: "program" } });
   redirect("/family?welcome=1");
 }
 

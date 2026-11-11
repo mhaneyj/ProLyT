@@ -28,13 +28,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 // The event's public page: what coaches and families see from the link the host shares.
-export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ r?: string }> }) {
+  const [{ id }, { r }] = await Promise.all([params, searchParams]);
   const d = await load(id);
   if (!d) notFound();
   const { e, divisions } = d;
   const when = new Date(`${e.starts_on}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-  const register = `/register-team/${e.id}`;
+  const register = `/register-team/${e.id}${r && /^[a-z0-9]{8}$/.test(r) ? `?r=${r}` : ""}`;
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
       <div className="flex flex-col gap-2 rounded-[14px] border border-line p-5" style={{ background: "linear-gradient(160deg, color-mix(in srgb, var(--color-gold) 40%, #0b0b0b), #0b0b0b 70%)" }}>

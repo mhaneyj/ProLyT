@@ -876,3 +876,13 @@ describe("events: a family with no program joins from a team link", () => {
     await expect(as(db, NEWDAD, () => db.query("select add_my_athlete('X','Y','2024-01-01',null,null,null,'New Dad')"))).rejects.toThrow(/real birth date/);
   });
 });
+
+describe("measurement stays private", () => {
+  it("app users can't read or write the activity log, signups or referral codes", async () => {
+    for (const t of ["activity", "signups", "ref_codes"]) {
+      await expect(as(db, PARENT_A, () => db.query(`select * from ${t} limit 1`))).rejects.toThrow(/permission denied/);
+    }
+    await expect(as(db, PARENT_A, () => db.query("insert into activity (event) values ('fake_event')"))).rejects.toThrow(/permission denied/);
+    await expect(as(db, COACH, () => db.query("select admin_growth(30)"))).rejects.toThrow(/ProLyt staff/);
+  });
+});

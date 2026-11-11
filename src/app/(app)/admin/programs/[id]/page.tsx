@@ -37,7 +37,7 @@ export default async function AdminProgram({ params, searchParams }: { params: P
   if (!d) notFound();
   const { o, staff, invites } = d;
   const live = invites.filter((i) => !i.revoked_at && new Date(i.expires_at) > new Date() && (i.max_uses === null || i.uses < i.max_uses));
-  const link = sp.link && /^https?:\/\/[^\s]+\/join\/[\w-]+$/.test(sp.link) ? sp.link : null;
+  const link = sp.link && /^https?:\/\/[^\s?]+\/join\/[\w-]+(\?r=[a-z0-9]{8})?$/.test(sp.link) ? sp.link : null;
 
   return (
     <>

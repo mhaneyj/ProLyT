@@ -55,7 +55,7 @@ function Media({ p }: { p: FeedPost }) {
   );
 }
 
-export function PostCard({ p, back, full = false }: { p: FeedPost; back: string; full?: boolean }) {
+export function PostCard({ p, back, full = false, refCode }: { p: FeedPost; back: string; full?: boolean; refCode?: string }) {
   const first = (p.athlete_name ?? "").split(" ")[0];
   return (
     <article className="flex flex-col gap-3 rounded-[14px] border border-line bg-panel p-3.5">
@@ -112,7 +112,7 @@ export function PostCard({ p, back, full = false }: { p: FeedPost; back: string;
             <Icon name="chat" size={18} /> {p.comments ? <span className="tabular">{p.comments}</span> : p.can_comment ? "Comment" : null}
           </Link>
         ) : null}
-        {p.mine ? <ShareButton postId={p.id} media={p.media ?? []}
+        {p.mine ? <ShareButton postId={p.id} media={p.media ?? []} refCode={refCode}
           text={[p.body, p.kind === "pr" && p.metric && p.value != null ? `New PR: ${metricLabel(p.metric)} ${formatValue(p.metric, Number(p.value))}` : null, "#ProLyt"].filter(Boolean).join("\n")} /> : null}
       </div>
     </article>

@@ -6,7 +6,7 @@ import { Icon } from "./icons";
  * Opens the phone's share sheet with the post's photos/video (or a Story-sized graphic),
  * so it goes straight to Instagram, TikTok, Facebook, Messages… Desktop: download instead.
  */
-export function ShareButton({ postId, media, text }: { postId: string; media: { id: string; kind: "photo" | "video" }[]; text: string }) {
+export function ShareButton({ postId, media, text, refCode }: { postId: string; media: { id: string; kind: "photo" | "video" }[]; text: string; refCode?: string }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "error">("idle");
   async function files() {
     const list = media.length ? media.map((m) => ({ url: `/api/media/${m.id}`, name: m.kind === "video" ? "prolyt-clip.mp4" : `prolyt-${m.id.slice(0, 6)}.jpg` }))
@@ -20,10 +20,13 @@ export function ShareButton({ postId, media, text }: { postId: string; media: { 
   }
   async function share() {
     setState("busy");
+    const link = `${window.location.origin}/${refCode ? `?r=${refCode}` : ""}`;
+    const caption = `${text}\n${link}`;
+    navigator.sendBeacon?.("/api/track", JSON.stringify({ event: "shared", props: { kind: media.length ? media[0].kind : "card" } }));
     try {
       const fs = await files();
       if (navigator.canShare?.({ files: fs })) {
-        await navigator.share({ files: fs, text });
+        await navigator.share({ files: fs, text: caption });
         setState("idle");
         return;
       }
@@ -32,7 +35,7 @@ export function ShareButton({ postId, media, text }: { postId: string; media: { 
         a.href = URL.createObjectURL(f); a.download = f.name; a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       }
-      await navigator.clipboard?.writeText(text).catch(() => undefined);
+      await navigator.clipboard?.writeText(caption).catch(() => undefined);
       setState("saved");
     } catch (e) {
       setState(e instanceof Error && e.name === "AbortError" ? "idle" : "error");

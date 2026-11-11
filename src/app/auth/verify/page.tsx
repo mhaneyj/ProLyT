@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { asService } from "@/lib/db";
 import { BadCode, consumeLink, SESSION_DAYS } from "@/lib/session";
+import { recordSignIn } from "@/lib/track";
 import { sessionCookieName } from "@/lib/auth";
 import { brandBySlug, currentOrgSlug } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
@@ -17,7 +18,7 @@ async function finish(form: FormData) {
   "use server";
   const token = String(form.get("token") ?? "");
   const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
-  let result: { session: string } | null = null;
+  let result: { session: string; userId: string } | null = null;
   try {
     result = await asService((q) => consumeLink(q, token, admins));
   } catch (e) {
@@ -32,6 +33,7 @@ async function finish(form: FormData) {
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
+  await recordSignIn(result.userId, "link");
   // Only same-site paths, never another site
   const next = String(form.get("next") ?? "");
   redirect(/^\/[a-z0-9/_-]*$/i.test(next) && !next.startsWith("//") ? next : "/home");

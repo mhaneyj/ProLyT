@@ -70,7 +70,7 @@ let ownerLink = "";
   await page.getByRole("button", { name: "Create invite link" }).click();
   await page.waitForURL(/link=/);
   ownerLink = await page.getByLabel("Invite link").inputValue();
-  check("admin gets an owner invite link", /\/join\/[\w-]{20,}$/.test(ownerLink), ownerLink);
+  check("admin gets an owner invite link", /\/join\/[\w-]{20,}(\?r=[a-z0-9]{8})?$/.test(ownerLink), ownerLink);
   await page.screenshot({ path: `${OUT}/l01-admin-program.png`, fullPage: true });
   // A used code can't sign in again
   const other = await browser.newContext();
@@ -598,12 +598,12 @@ let coachLink = "";
     return c.page.getByLabel("Team sign-up link for families").inputValue();
   };
   const link14 = await register("Rocklin Raptors 14U", "14U");
-  check("coach registers a team and gets a family sign-up link", /\/join-team\/[0-9a-f]{64}$/.test(link14), link14);
+  check("coach registers a team and gets a family sign-up link", /\/join-team\/[0-9a-f]{64}(\?r=[a-z0-9]{8})?$/.test(link14), link14);
   const link15 = await register("Rocklin Raptors 15U", "15U");
   await c.ctx.close();
 
   // Avery's parent (signed out) opens the 14U link → signs in → back on the link; Avery (15 on Jan 1) is blocked from 14U
-  const toPath = (l) => (l.startsWith("/") ? l : new URL(l).pathname);
+  const toPath = (l) => new URL(l, "http://x").pathname;
   const path14 = toPath(link14), path15 = toPath(link15);
   const p = await (async () => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -627,9 +627,21 @@ let coachLink = "";
   check("no client errors (family join)", p.errors.length === 0, p.errors.join("; "));
   await p.ctx.close();
 
-  // A brand-new family (no program) adds their athlete right from the link
-  const n = await signIn("gamefit-loomis", "new.family@example.test", `/login?next=${encodeURIComponent(path15)}`);
-  await n.page.waitForURL(/join-team/);
+  // A brand-new family (no program, signed out) opens the coach's link, which carries the coach's referral code
+  check("team link carries the coach's referral code", /[?&]r=[a-z0-9]{8}$/.test(link15), link15);
+  const n = await (async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(url("gamefit-loomis", link15.startsWith("/") ? link15 : new URL(link15).pathname + new URL(link15).search));
+    await page.waitForURL(/\/login/);
+    const before = logLines();
+    await page.getByLabel("Email").fill("new.family@example.test");
+    await page.getByRole("button", { name: /Email me a code/ }).click();
+    await seen(page.getByText("Enter your code"));
+    await page.getByLabel("Code").fill(await logged("code", "new.family@example.test", before - 1));
+    await page.waitForURL(/join-team/, { timeout: 15000 });
+    return { ctx, page, errors };
+  })();
   await n.page.getByLabel("First name").fill("Drew");
   await n.page.getByLabel("Last name").fill("Newcomer");
   await n.page.getByLabel("Birth date").fill(`${nextYear - 15}-06-01`);
@@ -650,6 +662,16 @@ let coachLink = "";
   check("host sees birthdates for age checks", await seen(h.page.getByText(/Born [A-Z][a-z]{2} \d/).first()));
   check("team page is titled with the team name", await seen(h.page.getByRole("heading", { name: /Rocklin Raptors 15U/ })));
   await h.ctx.close();
+
+  // ProLyt staff see where the new family came from
+  const a = await signIn("", "marcus@prolyt.test", "/login?next=/admin/growth");
+  await a.page.goto(url("", "/admin/growth"));
+  const channel = a.page.locator("div.flex.items-center.gap-3").filter({ hasText: "Team sign-up links" });
+  check("Growth dashboard credits the team link", await seen(channel) && /1 ·/.test(await channel.textContent()));
+  check("Growth dashboard credits the coach who shared it", await seen(a.page.getByText("coach", { exact: true })));
+  check("Growth dashboard counts teams joined", Number((await a.page.locator("li").filter({ hasText: "Athletes joined teams" }).textContent()).replace(/\D/g, "")) >= 2);
+  check("no client errors (growth)", a.errors.length === 0, a.errors.join("; "));
+  await a.ctx.close();
 }
 
 await browser.close();

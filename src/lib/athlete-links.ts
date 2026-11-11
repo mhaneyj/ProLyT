@@ -1,4 +1,5 @@
 import "server-only";
+import { refCode } from "./track";
 import { headers } from "next/headers";
 import { asUser } from "./db";
 import { sendAthleteLinkEmail } from "./email";
@@ -11,5 +12,5 @@ export async function sendAthleteLink(userId: string, fromName: string | null, a
   const h = await headers();
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
   const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
-  await sendAthleteLinkEmail(email.trim().toLowerCase(), `${proto}://${host}/link/${token}`, kind, athlete.first_name, fromName);
+  await sendAthleteLinkEmail(email.trim().toLowerCase(), `${proto}://${host}/link/${token}?r=${await refCode(userId)}`, kind, athlete.first_name, fromName);
 }

@@ -8,10 +8,10 @@ import { registerTeam } from "@/app/(app)/host/actions";
 
 export const metadata = { title: "Register a team" };
 
-export default async function RegisterTeam({ params, searchParams }: { params: Promise<{ eventId: string }>; searchParams: Promise<{ error?: string }> }) {
-  const [{ eventId }, { error }] = await Promise.all([params, searchParams]);
+export default async function RegisterTeam({ params, searchParams }: { params: Promise<{ eventId: string }>; searchParams: Promise<{ error?: string; r?: string }> }) {
+  const [{ eventId }, { error, r }] = await Promise.all([params, searchParams]);
   if (!/^[0-9a-f-]{36}$/.test(eventId)) notFound();
-  const me = await meOrSignIn(`/register-team/${eventId}`);
+  const me = await meOrSignIn(`/register-team/${eventId}`, r);
   const data = await asUser(me.id, async (q) => {
     const [e] = await q<{ id: string; name: string; starts_on: string; open: boolean }>(`select id, name, starts_on::text,
       status = 'open' and (registration_closes_at is null or now() <= registration_closes_at) open from events where id = $1`, [eventId]);

@@ -11,6 +11,7 @@ import { themeVars } from "@/lib/domain/brand";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 import { CodeInput, PasskeySignIn, SubmitButton } from "@/components/passkey";
 import { getMe } from "@/lib/auth";
+import { recordSignIn } from "@/lib/track";
 import { googleConfigured } from "@/lib/sign-in";
 
 export const metadata = { title: "Sign in" };
@@ -58,7 +59,7 @@ async function checkCode(form: FormData) {
   // The email comes from the form (prefilled), so switching tabs or apps can't lose it
   const email = String(form.get("email") ?? jar.get(EMAIL_COOKIE)?.value ?? "");
   const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
-  let result: { session: string } | null = null;
+  let result: { session: string; userId: string } | null = null;
   try {
     // The email cookie marks the browser that asked for this code (it's what makes a double tap safe to accept).
     const sameBrowser = jar.get(EMAIL_COOKIE)?.value === email.trim().toLowerCase();
@@ -73,6 +74,7 @@ async function checkCode(form: FormData) {
     httpOnly: true, secure: proto === "https", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
   jar.delete(EMAIL_COOKIE);
+  await recordSignIn(result.userId, "code");
   redirect(next || "/home");
 }
 
@@ -84,9 +86,9 @@ async function passwordSignIn(form: FormData) {
   const pw = String(form.get("password") ?? "");
   if (!pw) return sendCode(form); // no password typed: send a code instead
   const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").filter(Boolean);
-  let session: string;
+  let session: string, userId: string;
   try {
-    session = (await asService((q) => signInWithPassword(q, email, pw, admins))).session;
+    ({ session, userId } = await asService((q) => signInWithPassword(q, email, pw, admins)));
   } catch (e) {
     redirect(withNext(`/login?error=${encodeURIComponent(e instanceof BadCode ? e.message : "Something went wrong. Try again.")}`, next));
   }
@@ -94,6 +96,7 @@ async function passwordSignIn(form: FormData) {
   (await cookies()).set(sessionCookieName(proto === "https"), session, {
     httpOnly: true, secure: proto === "https", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
+  await recordSignIn(userId!, "password");
   redirect(next || "/home");
 }
 

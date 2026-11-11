@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getMe } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
+import { track } from "@/lib/track";
 
 const isId = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
 const MAX_PHOTO = 2_000_000;
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       return p.id;
     });
     revalidatePath("/feed");
+    await track("post_created", { userId: me.id, props: { photos: bufs.length, video: Boolean(video), as: kind } });
     return NextResponse.json({ id: postId });
   } catch (e) {
     return NextResponse.json({ error: dbMessage(e) }, { status: 400 });
