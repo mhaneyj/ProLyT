@@ -125,3 +125,15 @@ describe("showcase", () => {
     expect(s.rest.map((f) => f.metric)).toEqual(["40yd"]);
   });
 });
+
+describe("event divisions", () => {
+  it("describes rules in plain English and builds presets", async () => {
+    const { PRESETS, ruleText } = await import("../src/lib/domain/events");
+    const age = PRESETS.age7v7.build("2027-03-06");
+    expect(age.map((d) => d.name)).toEqual(["8U", "10U", "12U", "14U", "15U", "High School"]);
+    expect(ruleText(age[3])).toBe("14 or younger on Jan 1, 2027 · Up to 30 players");
+    expect(ruleText(age[5])).toBe("High school · No seniors · Up to 30 players");
+    expect(ruleText(PRESETS.ageOrGrade.build("2027-03-06")[1])).toBe("12 or younger on Jan 1, 2027, or 6th grade or lower · Up to 30 players");
+    expect(ruleText(PRESETS.girls.build("2027-03-06")[0])).toContain("Girls");
+  });
+});

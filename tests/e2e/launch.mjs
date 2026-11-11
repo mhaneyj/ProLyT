@@ -565,6 +565,93 @@ let coachLink = "";
   await p.ctx.close();
 }
 
+// ── 17. Event hosting: Josh hosts a 7v7, an outside coach registers a team, families join with eligibility checks
+{
+  const nextYear = new Date().getFullYear() + 1;
+  const h = await signIn("gamefit-loomis", "josh.personal@gmail.test", "/login?next=/host/new");
+  await h.page.waitForURL(/\/host\/new/);
+  await h.page.getByLabel("Event name").fill("Loomis 7v7 Classic");
+  await h.page.getByLabel("Starts").fill(`${nextYear}-03-06`);
+  await h.page.getByLabel("Where").fill("Del Oro High School, Loomis");
+  await h.page.getByRole("button", { name: "Create event" }).click();
+  await h.page.waitForURL(/\/host\/events\/[0-9a-f-]{36}/);
+  const eventId = h.page.url().match(/events\/([0-9a-f-]{36})/)[1];
+  check("host creates an event with the 7v7 age divisions", await seen(h.page.getByText(`14 or younger on Jan 1, ${nextYear}`)) && await seen(h.page.getByText("High school · No seniors · Up to 30 players")));
+  await h.page.getByRole("button", { name: "Open registration" }).click();
+  check("host opens registration and gets a shareable link", await seen(h.page.getByLabel("Event link for coaches")));
+  check("no client errors (host)", h.errors.length === 0, h.errors.join("; "));
+
+  // A coach from another program finds the event from the link (signed out), signs up, registers two teams
+  const pub = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pp = await pub.newPage();
+  await pp.goto(url("gamefit-loomis", `/e/${eventId}`));
+  check("public event page shows divisions without signing in", await seen(pp.getByText("Loomis 7v7 Classic")) && await seen(pp.getByText("15U")));
+  await pub.close();
+  const c = await signIn("gamefit-loomis", "coach@rocklin.test", `/login?next=/register-team/${eventId}`);
+  await c.page.waitForURL(/register-team/);
+  const register = async (name, division) => {
+    await c.page.goto(url("gamefit-loomis", `/register-team/${eventId}`));
+    await c.page.getByLabel("Team name").fill(name);
+    await c.page.getByRole("radio", { name: new RegExp(`^${division}\\b`) }).check();
+    await c.page.getByRole("button", { name: "Register team" }).click();
+    await c.page.waitForURL(/\/teams\/[0-9a-f-]{36}/);
+    return c.page.getByLabel("Team sign-up link for families").inputValue();
+  };
+  const link14 = await register("Rocklin Raptors 14U", "14U");
+  check("coach registers a team and gets a family sign-up link", /\/join-team\/[0-9a-f]{64}$/.test(link14), link14);
+  const link15 = await register("Rocklin Raptors 15U", "15U");
+  await c.ctx.close();
+
+  // Avery's parent (signed out) opens the 14U link → signs in → back on the link; Avery (15 on Jan 1) is blocked from 14U
+  const toPath = (l) => (l.startsWith("/") ? l : new URL(l).pathname);
+  const path14 = toPath(link14), path15 = toPath(link15);
+  const p = await (async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(url("gamefit-loomis", path14));
+    await page.waitForURL(/\/login/);
+    await page.getByLabel("Email").fill("parent@family.test");
+    await page.getByLabel("Password").fill("Loomis-Mom-77");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.waitForURL((u) => u.pathname.startsWith("/join-team/"), { timeout: 15000 });
+    return { ctx, page, errors };
+  })();
+  check("signing in from a team link comes back to the link", p.page.url().includes(path14));
+  check("ineligible athlete is shown why", await seen(p.page.getByText(/Must be 14 or younger/)));
+  check("join page shows the event date", (await p.page.getByText("Invalid Date").count()) === 0 && await seen(p.page.getByText(/Mar 6/)));
+  await p.page.goto(url("gamefit-loomis", path15));
+  await p.page.getByRole("checkbox").check();
+  await p.page.getByLabel("Type your full name to sign").fill("Pat Morgan");
+  await p.page.getByRole("button", { name: "Add to roster" }).click();
+  check("parent signs the waiver and Avery joins 15U", await seen(p.page.getByText(/is on the roster and the waiver is signed/)));
+  check("no client errors (family join)", p.errors.length === 0, p.errors.join("; "));
+  await p.ctx.close();
+
+  // A brand-new family (no program) adds their athlete right from the link
+  const n = await signIn("gamefit-loomis", "new.family@example.test", `/login?next=${encodeURIComponent(path15)}`);
+  await n.page.waitForURL(/join-team/);
+  await n.page.getByLabel("First name").fill("Drew");
+  await n.page.getByLabel("Last name").fill("Newcomer");
+  await n.page.getByLabel("Birth date").fill(`${nextYear - 15}-06-01`);
+  await n.page.getByLabel("Graduation year").fill(String(nextYear + 3));
+  await n.page.getByLabel(/Your full name/).fill("Sam Newcomer");
+  await n.page.getByRole("button", { name: "Add athlete" }).click();
+  await n.page.waitForURL(/added=1/);
+  await n.page.getByRole("checkbox").check();
+  await n.page.getByLabel("Type your full name to sign").fill("Sam Newcomer");
+  await n.page.getByRole("button", { name: "Add to roster" }).click();
+  check("new family adds their athlete and joins from the link", await seen(n.page.getByText(/Drew Newcomer is on the roster/)));
+  await n.ctx.close();
+
+  // Host sees the teams, rosters and birthdates
+  await h.page.goto(url("gamefit-loomis", `/host/events/${eventId}`));
+  check("host dashboard counts teams and players", (await h.page.getByText("Rocklin Raptors 15U").count()) > 0 && /2\/30/.test(await h.page.getByRole("link", { name: /Rocklin Raptors 15U/ }).textContent()));
+  await h.page.getByRole("link", { name: /Rocklin Raptors 15U/ }).click();
+  check("host sees birthdates for age checks", await seen(h.page.getByText(/Born [A-Z][a-z]{2} \d/).first()));
+  check("team page is titled with the team name", await seen(h.page.getByRole("heading", { name: /Rocklin Raptors 15U/ })));
+  await h.ctx.close();
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

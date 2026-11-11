@@ -24,7 +24,7 @@ export default async function EditProfile({ params }: { params: Promise<{ id: st
       <ProfileForm v={{
         athlete: id, position: a.position ?? "", grad_year: a.grad_year ? String(a.grad_year) : "", sport: a.sport, hometown: a.hometown ?? "",
         school: a.school ?? "", bio: a.bio ?? "", highlight_url: a.highlight_url ?? "", gpa: a.gpa ? String(a.gpa) : "",
-        intended_major: a.intended_major ?? "", show_academics: a.show_academics, theme_color: a.theme_color ?? "#F8C40A",
+        intended_major: a.intended_major ?? "", show_academics: a.show_academics, theme_color: a.theme_color ?? "#F8C40A", gender: a.gender ?? "",
         height: val("height_in"), weight: val("weight_lb"), wingspan: val("wingspan_in"),
         featured: a.featured_metrics ?? [], has: body.map((b) => b.metric),
       }} />

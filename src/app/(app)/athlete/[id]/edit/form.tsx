@@ -10,7 +10,7 @@ const THEMES = [["#F8C40A", "Gold"], ["#E03A3E", "Red"], ["#2F80ED", "Blue"], ["
 
 export type ProfileValues = {
   athlete: string; position: string; grad_year: string; sport: string; hometown: string; school: string; bio: string;
-  highlight_url: string; gpa: string; intended_major: string; show_academics: boolean; theme_color: string; height: string; weight: string; wingspan: string; featured: string[]; has: string[];
+  highlight_url: string; gpa: string; intended_major: string; show_academics: boolean; theme_color: string; gender: string; height: string; weight: string; wingspan: string; featured: string[]; has: string[];
 };
 
 export function ProfileForm({ v }: { v: ProfileValues }) {
@@ -25,6 +25,9 @@ export function ProfileForm({ v }: { v: ProfileValues }) {
           <div><label htmlFor="sport" className={label}>Sport</label><select id="sport" name="sport" defaultValue={sport} className={input}>{SPORTS.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div><label htmlFor="position" className={label}>Position</label><input id="position" name="position" defaultValue={v.position} className={input} /></div>
         </div>
+        <div><label htmlFor="gender" className={label}>Plays in</label>
+          <select id="gender" name="gender" defaultValue={v.gender} className={input}><option value="">Not set</option><option value="male">Boys / open divisions</option><option value="female">Girls divisions</option></select>
+          <p className="mt-1 text-xs text-muted">Used only to check tournament division rules.</p></div>
         <div className="grid grid-cols-3 gap-3">
           <div><label htmlFor="grad_year" className={label}>Class of</label><input id="grad_year" name="grad_year" inputMode="numeric" defaultValue={v.grad_year} className={input} /></div>
           <div><label htmlFor="height" className={label}>Height (in)</label><input id="height" name="height" inputMode="decimal" defaultValue={v.height} placeholder="72" className={input} /></div>

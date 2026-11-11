@@ -37,7 +37,7 @@ export default async function Owner() {
 
   return (
     <>
-      <div className="flex items-end justify-between gap-3"><Title sub="Last 30 days.">Dashboard</Title><Link href="/owner/settings" className="min-h-11 pb-1 text-sm font-semibold">Settings</Link></div>
+      <div className="flex items-end justify-between gap-3"><Title sub="Last 30 days.">Dashboard</Title><span className="flex gap-4"><Link href="/host" className="min-h-11 pb-1 text-sm font-semibold">Events</Link><Link href="/owner/settings" className="min-h-11 pb-1 text-sm font-semibold">Settings</Link></span></div>
       <Card>
         <div className="flex items-baseline justify-between text-sm"><span className="text-muted">Revenue</span>
           {change !== null ? <span className={change >= 0 ? "font-bold text-good" : "font-bold text-warn"}>{change >= 0 ? "+" : ""}{change}% vs prior 30 days</span> : null}

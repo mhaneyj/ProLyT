@@ -102,6 +102,7 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
       <div className="grid grid-cols-2 gap-2">
         {me.features.messaging ? <LinkButton href="/messages/new" kind="ghost">Message</LinkButton> : null}
         {me.perms.includes("film.manage") ? <LinkButton href="/coach/film" kind="ghost">Team film</LinkButton> : null}
+        <LinkButton href="/host" kind="ghost">Events</LinkButton>
         {me.roles.includes("owner") && me.roles.includes("coach") ? <LinkButton href="/coach/earnings" kind="ghost">Earnings</LinkButton> : null}
       </div>
     </>

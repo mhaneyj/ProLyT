@@ -249,10 +249,10 @@ export async function saveProfile(_: ProfileState, form: FormData): Promise<Prof
   try {
     await asUser(me.id, async (q) => {
       const rows = await q(`update athletes set position = $2, grad_year = $3, sport = $4, hometown = $5, school = $6, bio = $7,
-          highlight_url = $8, gpa = $9, intended_major = $10, show_academics = $11, theme_color = $12, featured_metrics = $13
+          highlight_url = $8, gpa = $9, intended_major = $10, show_academics = $11, theme_color = $12, featured_metrics = $13, gender = $14
         where id = $1 and is_family(id) returning id`,
         [athlete, empty(d.position), empty(d.grad_year), d.sport.toLowerCase(), empty(d.hometown), empty(d.school), empty(d.bio),
-          empty(d.highlight_url), empty(d.gpa), empty(d.intended_major), form.get("show_academics") === "on", d.theme_color ?? null, featured]);
+          empty(d.highlight_url), empty(d.gpa), empty(d.intended_major), form.get("show_academics") === "on", d.theme_color ?? null, featured, ["male", "female"].includes(String(form.get("gender"))) ? String(form.get("gender")) : null]);
       if (!rows.length) throw new Error("Only the athlete or a parent can edit this profile");
       // Height and weight typed here are self-reported; a coach's measurement outranks them.
       for (const [metric, v] of [["height_in", d.height], ["weight_lb", d.weight], ["wingspan_in", d.wingspan]] as const) {

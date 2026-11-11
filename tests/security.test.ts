@@ -776,3 +776,103 @@ describe("stat comparisons", () => {
     expect((await ranks(kids[6])).find((r) => r.metric === "40yd")).toBeUndefined(); // 18 left + self < 20
   });
 });
+
+describe("events: divisions, eligibility, team registration", () => {
+  const RIVAL = "10000000-0000-0000-0000-00000000e0a1";      // a coach from another program
+  const RIVAL_PARENT = "10000000-0000-0000-0000-00000000e0a2";
+  let ev: string, u14: string, hs: string, either12: string, girls14: string, team: string, kid13: string, kid15: string, senior: string, girl: string;
+  const today = new Date().toISOString().slice(0, 10); // "age as of" today keeps the test independent of the calendar
+  const isoDaysAgo = (y: number, extraDays = 0) => { const d = new Date(); d.setFullYear(d.getFullYear() - y); d.setDate(d.getDate() - extraDays); return d.toISOString().slice(0, 10); };
+  // Graduating class for someone in grade g in the current school year
+  const classOf = (g: number) => { const now = new Date(); const sy = now.getFullYear() + (now.getMonth() >= 7 ? 1 : 0); return sy + (12 - g); };
+  beforeAll(async () => {
+    await addUser(db, RIVAL, "rival@example.com");
+    await addUser(db, RIVAL_PARENT, "rivalparent@example.com");
+    const mk = (first: string, birth: string, grad: number, gender: string | null) => as(db, RIVAL_PARENT, () => db.query<{ id: string }>(
+      `select register_athlete($1,$2,'Ev',$3,$4,'WR',null,null,'Pat Rival',false,false,'Pat Rival','555-0199') id`, [ORG, first, birth, grad])).then(async (r) => {
+        await db.query("update athletes set gender = $2 where id = $1", [r.rows[0].id, gender]); return r.rows[0].id; });
+    kid13 = await mk("Thirteen", isoDaysAgo(13, 10), classOf(8), "male");
+    kid15 = await mk("Fifteen", isoDaysAgo(15, 10), classOf(10), "male");
+    senior = await mk("Senior", isoDaysAgo(17, 10), classOf(12), "male");
+    girl = await mk("Girl", isoDaysAgo(13, 10), classOf(8), "female");
+  });
+  it("owners create events and divisions; families can't; drafts are hidden", async () => {
+    ev = (await as(db, OWNER, () => db.query<{ id: string }>(
+      "insert into events (org_id, name, starts_on, waiver_text) values ($1,'Loomis 7v7 Classic',current_date + 30,'I release the host…') returning id", [ORG]))).rows[0].id;
+    await expect(as(db, PARENT_A, () => db.query("insert into events (org_id, name, starts_on) values ($1,'Fake',current_date)", [ORG]))).rejects.toThrow();
+    expect((await as(db, RIVAL, () => db.query("select id from events where id=$1", [ev]))).rows).toHaveLength(0);
+    const div = (name: string, cols: string, vals: unknown[]) => as(db, OWNER, () => db.query<{ id: string }>(`insert into divisions (event_id, name, ${cols}) values ($1,$2,${vals.map((_, i) => "$" + (i + 3)).join(",")}) returning id`, [ev, name, ...vals]));
+    u14 = (await div("14U", "basis, max_age, age_cutoff", ["age", 14, today])).rows[0].id;
+    hs = (await div("High School", "basis, max_grade, no_seniors", ["grade", 12, true])).rows[0].id;
+    either12 = (await div("12U", "basis, max_age, age_cutoff, max_grade", ["either", 12, today, 6])).rows[0].id;
+    girls14 = (await div("Girls 14U", "basis, max_age, age_cutoff, gender", ["age", 14, today, "girls"])).rows[0].id;
+    await as(db, OWNER, () => db.query("update events set status='open' where id=$1", [ev]));
+    expect((await as(db, RIVAL, () => db.query("select id from events where id=$1", [ev]))).rows).toHaveLength(1);
+  });
+  it("the eligibility engine: age cutoffs, grades, either, no seniors, girls", async () => {
+    const el = async (d: string, a: string) => (await as(db, RIVAL, () => db.query<{ ok: boolean; reason: string | null }>("select ok, reason from eligibility($1,$2)", [d, a]))).rows[0];
+    expect((await el(u14, kid13)).ok).toBe(true);
+    expect(await el(u14, kid15)).toMatchObject({ ok: false, reason: expect.stringMatching(/14 or younger/) });
+    expect((await el(hs, kid15)).ok).toBe(true);
+    expect(await el(hs, senior)).toMatchObject({ ok: false, reason: expect.stringMatching(/Seniors/) });
+    expect(await el(either12, kid13)).toMatchObject({ ok: false, reason: expect.stringMatching(/12 or younger.*6 grade/) });
+    expect((await el(girls14, girl)).ok).toBe(true);
+    expect(await el(girls14, kid13)).toMatchObject({ ok: false, reason: expect.stringMatching(/girls/) });
+  });
+  it("a coach registers a team; families join by link with a signed waiver; ineligible kids are refused", async () => {
+    team = (await as(db, RIVAL, () => db.query<{ id: string }>("select register_team($1,'Rocklin Raptors',null,$2) id", [u14, "e".repeat(64)]))).rows[0].id;
+    await expect(as(db, RIVAL, () => db.query("select register_team($1,'Rocklin Raptors',null,$2)", [u14, "f".repeat(64)]))).rejects.toThrow(/already a team/);
+    const prev = (await as(db, RIVAL_PARENT, () => db.query<{ team: string; open: boolean }>("select team, open from join_team_preview($1)", ["e".repeat(64)]))).rows[0];
+    expect(prev).toMatchObject({ team: "Rocklin Raptors", open: true });
+    await expect(as(db, RIVAL_PARENT, () => db.query("select join_team($1,$2,'')", ["e".repeat(64), kid13]))).rejects.toThrow(/Type your full name/);
+    await as(db, RIVAL_PARENT, () => db.query("select join_team($1,$2,'Pat Rival')", ["e".repeat(64), kid13]));
+    await expect(as(db, RIVAL_PARENT, () => db.query("select join_team($1,$2,'Pat Rival')", ["e".repeat(64), kid15]))).rejects.toThrow(/Not eligible for 14U/);
+    await expect(as(db, PARENT_B, () => db.query("select join_team($1,$2,'X Y')", ["e".repeat(64), kid15]))).rejects.toThrow(/Only a parent/);
+    await expect(as(db, RIVAL_PARENT, () => db.query("select join_team($1,$2,'Pat Rival')", ["e".repeat(64), kid13]))).rejects.toThrow(/already on a team/);
+    expect((await db.query("select kind from consents where athlete_id=$1 and kind='event_waiver'", [kid13])).rows).toHaveLength(1);
+  });
+  it("coaches see their roster without birthdates; the host sees birthdates; other parents see nothing", async () => {
+    const coachView = (await as(db, RIVAL, () => db.query<{ name: string; birth_date: string | null; eligible: boolean }>("select name, birth_date, eligible from team_roster($1)", [team]))).rows;
+    expect(coachView).toEqual([{ name: "Thirteen Ev", birth_date: null, eligible: true }]);
+    expect((await as(db, OWNER, () => db.query<{ birth_date: string | null }>("select birth_date from team_roster($1)", [team]))).rows[0].birth_date).not.toBeNull();
+    expect((await as(db, PARENT_B, () => db.query("select * from team_roster($1)", [team]))).rows).toHaveLength(0);
+    expect((await as(db, PARENT_B, () => db.query("select * from event_roster where team_id=$1", [team]))).rows).toHaveLength(0);
+  });
+  it("rule changes re-check rosters; the host can override with a reason", async () => {
+    await as(db, OWNER, () => db.query("update divisions set max_age = 12 where id=$1", [u14]));
+    const summary = async () => (await as(db, OWNER, () => db.query<{ problems: number }>("select problems from event_teams_summary($1) where team_id=$2", [ev, team]))).rows[0].problems;
+    expect(await summary()).toBe(1);
+    await expect(as(db, RIVAL, () => db.query("select host_override($1,$2,'ok')", [team, kid13]))).rejects.toThrow(/Only the event host/);
+    await as(db, OWNER, () => db.query("select host_override($1,$2,'Played up all season, approved by director')", [team, kid13]));
+    expect(await summary()).toBe(0);
+  });
+  it("registration closes", async () => {
+    await as(db, OWNER, () => db.query("update events set status='closed' where id=$1", [ev]));
+    await expect(as(db, RIVAL, () => db.query("select register_team($1,'Late Team',null,$2)", [hs, "g".repeat(64)]))).rejects.toThrow(/isn't open/);
+  });
+});
+
+describe("events: join links stay private", () => {
+  it("only the coach and host can read a team's join link", async () => {
+    const PARENT_ONLY = "10000000-0000-0000-0000-000000000004";
+    await expect(as(db, PARENT_ONLY, () => db.query("select join_token from event_teams limit 1"))).rejects.toThrow(/permission denied/);
+    await expect(as(db, null, () => db.query("select join_token from event_teams limit 1"))).rejects.toThrow(/permission denied/);
+    const [t] = (await db.query<{ id: string; coach_id: string }>("select id, coach_id from event_teams limit 1")).rows;
+    expect((await as(db, t.coach_id, () => db.query<{ l: string }>("select team_link($1) l", [t.id]))).rows[0].l).toHaveLength(64);
+    await expect(as(db, PARENT_ONLY, () => db.query("select team_link($1)", [t.id]))).rejects.toThrow(/Only the team's coach/);
+  });
+});
+
+describe("events: a family with no program joins from a team link", () => {
+  it("adds their athlete as guardian and joins", async () => {
+    const NEWDAD = "10000000-0000-0000-0000-00000000e0b1";
+    await addUser(db, NEWDAD, "newdad@example.com");
+    const d = new Date(); d.setFullYear(d.getFullYear() - 11);
+    const kid = (await as(db, NEWDAD, () => db.query<{ id: string }>("select add_my_athlete('Little','Dad',$1,null,'RB','male','New Dad') id", [d.toISOString().slice(0, 10)]))).rows[0].id;
+    expect((await as(db, NEWDAD, () => db.query<{ g: boolean }>("select is_guardian($1) g", [kid]))).rows[0].g).toBe(true);
+    expect((await db.query("select 1 from consents where athlete_id=$1 and kind='parental_verification'", [kid])).rows).toHaveLength(1);
+    // Under 13: never on the network even though parent-approved
+    expect((await db.query<{ l: boolean }>("select athlete_listed($1) l", [kid])).rows[0].l).toBe(false);
+    await expect(as(db, NEWDAD, () => db.query("select add_my_athlete('X','Y','2024-01-01',null,null,null,'New Dad')"))).rejects.toThrow(/real birth date/);
+  });
+});
