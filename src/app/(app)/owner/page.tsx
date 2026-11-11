@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
 import { Card, Empty, SectionLabel, Stat, Title } from "@/components/ui";
+import { EventHistory, type EventRow } from "@/components/event-history";
 
 export const metadata = { title: "Dashboard" };
 
@@ -31,7 +32,9 @@ export default async function Owner() {
     const mix = await q<{ name: string; n: number; cents: number }>(`
       select p.name, count(*)::int n, sum(p.price_cents)::int cents from memberships m join plans p on p.id = m.plan_id
       where p.org_id = $1 and m.status in ('active','past_due') group by p.name, p.price_cents order by p.price_cents`, [me.orgId]);
-    return { k, alerts, mix };
+    const tournaments = (await q<EventRow & { entry: string }>("select event_id, event, starts_on::text, host, entry, team, division, place, w, l, t from program_tournaments($1)", [me.orgId]))
+      .map((r) => ({ ...r, team: r.team && r.team !== r.entry ? `${r.entry} (${r.team})` : r.entry }));
+    return { k, alerts, mix, tournaments };
   });
   const change = d.k.last ? Math.round(((d.k.revenue - d.k.last) / d.k.last) * 100) : null;
 
@@ -60,6 +63,7 @@ export default async function Owner() {
         </Card>
       ))}
       {d.k.held ? <p className="text-xs text-muted">{money(d.k.held)} in coach pay is waiting on payout setup.</p> : null}
+      <EventHistory rows={d.tournaments} />
     </>
   );
 }

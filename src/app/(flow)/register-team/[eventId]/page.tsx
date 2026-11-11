@@ -21,10 +21,12 @@ export default async function RegisterTeam({ params, searchParams }: { params: P
       from divisions d where d.event_id = $1 order by d.sort, d.name`, [eventId]);
     const programs = await q<{ id: string; name: string }>(`select o.id, o.name from org_members m join orgs o on o.id = m.org_id
       where m.user_id = auth.uid() and m.role in ('owner', 'coach') and o.status = 'active' order by o.name`);
-    return { e, divisions, programs };
+    const teams = programs.length ? await q<{ id: string; name: string; org_id: string }>(
+      "select id, name, org_id from teams where org_id = any($1::uuid[]) and active order by name", [programs.map((p) => p.id)]) : [];
+    return { e, divisions, programs, teams };
   });
   if (!data) notFound();
-  const { e, divisions, programs } = data;
+  const { e, divisions, programs, teams } = data;
   const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
   return (
     <>
@@ -34,7 +36,21 @@ export default async function RegisterTeam({ params, searchParams }: { params: P
       {!e.open ? <Notice tone="bad">Registration isn&apos;t open for this event.</Notice> : (
         <form action={registerTeam} className="flex flex-col gap-4">
           <input type="hidden" name="event" value={e.id} />
-          <div><label htmlFor="name" className="mb-1 block text-sm font-semibold">Team name</label><input id="name" name="name" required minLength={2} maxLength={80} placeholder="Loomis Linemen 14U" className={input} /></div>
+          {programs.length ? (
+            <div><label htmlFor="entry" className="mb-1 block text-sm font-semibold">Which team?</label>
+              <select id="entry" name="entry" defaultValue={teams[0] ? `team:${teams[0].id}` : `org:${programs[0].id}`} className={input}>
+                {programs.map((p) => (
+                  <optgroup key={p.id} label={p.name}>
+                    {teams.filter((t) => t.org_id === p.id).map((t) => <option key={t.id} value={`team:${t.id}`}>{t.name}</option>)}
+                    <option value={`org:${p.id}`}>Another {p.name} team</option>
+                  </optgroup>
+                ))}
+                <option value="">Independent team (no program)</option>
+              </select>
+              <p className="mt-1 text-[12px] text-muted">Picking one of your teams keeps its tournament record on your program.</p></div>
+          ) : null}
+          <div><label htmlFor="name" className="mb-1 block text-sm font-semibold">Team name {programs.length ? <span className="font-normal text-muted">(as it shows on the bracket)</span> : null}</label>
+            <input id="name" name="name" required={!teams.length} minLength={2} maxLength={80} placeholder={teams[0] ? `${teams[0].name} (leave blank to use it)` : "Loomis Linemen 14U"} className={input} /></div>
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-semibold">Division</legend>
             {divisions.map((d, i) => (
@@ -44,10 +60,6 @@ export default async function RegisterTeam({ params, searchParams }: { params: P
               </label>
             ))}
           </fieldset>
-          {programs.length ? (
-            <div><label htmlFor="org" className="mb-1 block text-sm font-semibold">Program</label>
-              <select id="org" name="org" className={input}><option value="">Independent team</option>{programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-          ) : null}
           <Button type="submit">Register team</Button>
         </form>
       )}

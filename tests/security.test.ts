@@ -1054,3 +1054,19 @@ describe("phone notifications", () => {
     expect((await as(db, PARENT_B, () => db.query("delete from push_subscriptions"))).affectedRows).toBe(0);
   });
 });
+
+describe("tournament entries linked to program teams", () => {
+  it("staff enter their own teams once; results roll up to the program", async () => {
+    const ev = (await as(db, OWNER, () => db.query<{ id: string }>("insert into events (org_id, name, starts_on, status) values ($1,'Team Link Cup',current_date + 10,'open') returning id", [ORG]))).rows[0].id;
+    const div = (await as(db, OWNER, () => db.query<{ id: string }>("insert into divisions (event_id, name, basis, max_grade) values ($1,'HS','grade',12) returning id", [ev]))).rows[0].id;
+    const team = (await db.query<{ id: string }>("insert into teams (org_id, name) values ($1,'Game-Fit 14U') returning id", [ORG])).rows[0].id;
+    const entry = (await as(db, OWNER, () => db.query<{ id: string }>("select register_team($1,'',null,$2,$3) id", [div, "t".repeat(64), team]))).rows[0].id;
+    const [row] = (await db.query<{ name: string; org_id: string; team_id: string }>("select name, org_id, team_id from event_teams where id=$1", [entry])).rows;
+    expect(row).toEqual({ name: "Game-Fit 14U", org_id: ORG, team_id: team });
+    await expect(as(db, OWNER, () => db.query("select register_team($1,'Second copy',null,$2,$3)", [div, "u".repeat(64), team]))).rejects.toThrow(/already entered/);
+    await expect(as(db, PARENT_A, () => db.query("select register_team($1,'Steal',null,$2,$3)", [div, "w".repeat(64), team]))).rejects.toThrow(/your own program/);
+    await db.query("update events set status='live' where id=$1", [ev]);
+    expect((await as(db, OWNER, () => db.query<{ entry: string; team: string }>("select entry, team from program_tournaments($1)", [ORG]))).rows.map((r) => r.team)).toContain("Game-Fit 14U");
+    expect((await as(db, PARENT_A, () => db.query("select * from program_tournaments($1)", [ORG]))).rows).toHaveLength(0);
+  });
+});

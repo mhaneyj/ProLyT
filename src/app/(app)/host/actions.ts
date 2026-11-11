@@ -138,13 +138,18 @@ export async function saveEventDetails(form: FormData) {
 // ───── Teams ─────
 export async function registerTeam(form: FormData) {
   const me = await requireMe();
-  const ev = String(form.get("event") ?? ""), division = form.get("division"), org = form.get("org");
+  const ev = String(form.get("event") ?? ""), division = form.get("division");
+  // "org:<id>" = a new entry for that program; "team:<id>" = one of the program's own teams; "" = independent.
+  const pick = String(form.get("entry") ?? form.get("org") ?? "");
+  const org = pick.startsWith("org:") ? pick.slice(4) : isId(pick) ? pick : null;
+  const progTeam = pick.startsWith("team:") ? pick.slice(5) : null;
   const name = String(form.get("name") ?? "").trim();
   if (!isId(ev)) redirect("/home");
   if (!isId(division)) back(`/register-team/${ev}`, "error", "Pick a division");
+  if (!progTeam && name.length < 2) back(`/register-team/${ev}`, "error", "Name the team");
   let team: string;
   try {
-    const [r] = await asUser(me.id, async (q) => q<{ id: string }>("select register_team($1, $2, $3, $4) id", [division, name, isId(org) ? org : null, await newJoinToken()]));
+    const [r] = await asUser(me.id, async (q) => q<{ id: string }>("select register_team($1, $2, $3, $4, $5) id", [division, name, isId(org) ? org : null, await newJoinToken(), isId(progTeam) ? progTeam : null]));
     team = r.id;
   } catch (e) {
     back(`/register-team/${ev}`, "error", dbMessage(e));
