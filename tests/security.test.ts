@@ -1296,3 +1296,17 @@ describe("player ratings", () => {
     expect((await as(db, PARENT_B, () => db.query("select * from coach_ratings"))).rows).toHaveLength(0);
   });
 });
+
+describe("autographs", () => {
+  it("only the athlete's family signs; bad paths are refused; coaches can see it on the card", async () => {
+    const sig = "M10 100 L40 80 L70 120 L100 90 L140 110";
+    await expect(as(db, PARENT_B, () => db.query("select set_autograph($1,$2)", [jordan, sig]))).rejects.toThrow(/Only the athlete or a parent/);
+    await expect(as(db, PARENT_A, () => db.query("select set_autograph($1,$2)", [jordan, "<script>alert(1)</script> M1 1 L2 2"]))).rejects.toThrow(/didn't come through/);
+    await expect(as(db, PARENT_A, () => db.query("update athletes set autograph_path=$2 where id=$1", [jordan, "<b>x</b>"]))).rejects.toThrow();
+    await as(db, PARENT_A, () => db.query("select set_autograph($1,$2)", [jordan, sig]));
+    expect((await as(db, COACH, () => db.query<{ autograph: string }>("select autograph from card_identity($1)", [jordan]))).rows[0].autograph).toBe(sig);
+    expect((await as(db, PARENT_B, () => db.query("select * from card_identity($1)", [jordan]))).rows).toHaveLength(0);
+    await as(db, PARENT_A, () => db.query("select set_autograph($1,null)", [jordan]));
+    expect((await db.query<{ autograph_path: string | null }>("select autograph_path from athletes where id=$1", [jordan])).rows[0].autograph_path).toBeNull();
+  });
+});

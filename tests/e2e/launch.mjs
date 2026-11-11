@@ -926,7 +926,7 @@ let coachLink = "";
   await pg.goto(url("gamefit-loomis", kidHref.split("/").slice(0, 3).join("/")));
   await pg.getByRole("link", { name: /Player Card/ }).click();
   await pg.waitForURL(/\/cards/);
-  check("family sees the Player Card and their event card collection", await seen(pg.getByRole("img", { name: /ProLyt card/ })) && await seen(pg.getByText("Event cards", { exact: true })));
+  check("family sees the Player Card and their event card collection", await seen(pg.getByRole("button", { name: /Chrome card/ })) && await seen(pg.getByText("Event cards", { exact: true })));
   const png = await pg.evaluate((u) => fetch(u).then((r) => ({ s: r.status, t: r.headers.get("content-type") })), pg.url().replace(/\/athlete\/([^/]+)\/cards.*/, "/api/card/$1"));
   check("family saves the card as an image", png.s === 200 && png.t === "image/png", JSON.stringify(png));
   await pg.goto(url("gamefit-loomis", "/family"));

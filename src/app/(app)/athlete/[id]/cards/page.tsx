@@ -4,10 +4,11 @@ import { loadPlayerCard, cardAttrs, cardDate } from "@/lib/cards";
 import { ATTRS } from "@/lib/domain/rating";
 import { METRICS, formatValue, metricLabel } from "@/lib/domain/metrics";
 import { ageOn } from "@/lib/domain/format";
-import { PlayerCard } from "@/components/player-card";
+import { CardBack, PlayerCard } from "@/components/player-card";
+import { AutographPad, FlipCard } from "@/components/autograph-pad";
 import { Card, Notice, SectionLabel, Title } from "@/components/ui";
 import { loadAthlete } from "../header";
-import { askParent, rateAthlete } from "./actions";
+import { askParent, rateAthlete, saveAutograph } from "./actions";
 
 export const metadata = { title: "Player Card" };
 
@@ -38,15 +39,50 @@ export default async function Cards({ params, searchParams }: { params: Promise<
       {sp.ok === "asked" ? <Notice tone="good">Sent. Your parent got a notification to unlock your full card.</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
 
-      <div className="flex justify-center">
-        <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
-          attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} />
+      <div className="flex flex-col items-center gap-2">
+        <FlipCard label={`${a.first_name}'s Chrome card`}
+          front={<PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
+            attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} number={v.jersey} firstCard />}
+          back={<CardBack first={a.first_name} last={a.last_name} ovr={rating.ovr} number={v.jersey} position={a.position} grad={a.grad_year} team={v.team}
+            attrs={attrs} flex={null} tests={v.tests} tally={`${v.cards.filter((c) => c.tier === "champion").length} · ${v.cards.filter((c) => c.tier === "mvp").length} · ${v.cards.length + 1}`} />} />
+        <p className="text-[12px] text-muted">Tap the card to flip it.</p>
       </div>
       {a.family ? (
         <a href={`/api/card/${a.id}`} download className="flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] hover:border-gold">
           Save card to share
         </a>
       ) : null}
+
+      <section className="flex flex-col gap-2">
+        <SectionLabel>Signed card</SectionLabel>
+        {v.autograph ? (
+          <div className="relative flex justify-center">
+            <div className={`w-full max-w-[360px] ${plus ? "" : "pointer-events-none blur-[3px]"}`}>
+              <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr} attrs={null}
+                tier="signed" series="ProLyt" team={v.team} number={v.jersey} autograph={v.autograph} />
+            </div>
+            {!plus ? (
+              <Link href={`/plus?for=${a.id}`} className="absolute inset-x-6 top-1/2 flex min-h-12 -translate-y-1/2 items-center justify-center rounded-md bg-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">
+                Unlock the Signed card with ProLyt+
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+        {a.family ? (
+          v.autograph ? (
+            <details className="rounded-[14px] border border-line p-3">
+              <summary className="cursor-pointer text-sm font-semibold">Sign again</summary>
+              <div className="mt-2"><AutographPad first={a.first_name} save={saveAutograph.bind(null, a.id)} /></div>
+            </details>
+          ) : (
+            <Card className="flex flex-col gap-2">
+              <div className="font-semibold">{a.self ? "Sign your card" : `Have ${a.first_name} sign the card`}</div>
+              <p className="text-[13px] text-muted">The autograph goes on the Signed card and on every event card {a.first_name} collects.</p>
+              <AutographPad first={a.first_name} save={saveAutograph.bind(null, a.id)} />
+            </Card>
+          )
+        ) : null}
+      </section>
 
       {rating.ovr === null ? (
         <Card className="flex flex-col gap-1.5">
@@ -111,7 +147,10 @@ export default async function Cards({ params, searchParams }: { params: Promise<
             {cards.map((c) => (
               <Link key={c.award_id} href={`/e/${c.event_id}`} className="flex flex-col gap-1" aria-label={`${c.series} ${c.tier} card`}>
                 <PlayerCard size="sm" first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
-                  attrs={null} tier={c.tier} color={c.color} accent={c.accent} series={c.series} footer={c.tagline || cardDate(c.starts_on)} sponsor={c.sponsor} />
+                  attrs={null} tier={c.tier} color={c.color} accent={c.accent} series={c.series} team={v.team} number={v.jersey}
+                  footer={c.tier === "attendee" ? cardDate(c.starts_on) : c.series} sponsor={c.sponsor}
+                  autograph={c.tier === "attendee" ? v.autograph : null} inscription={c.tier === "attendee" && v.autograph ? `${c.series.split(" ").slice(0, 2).join(" ")} '${c.starts_on.slice(2, 4)}` : null}
+                  serial={c.tier === "mvp" ? "1/1" : null} />
                 <span className="truncate text-center text-[11px] text-muted">{c.tier === "attendee" ? `1 of ${c.total_awarded}` : c.tier === "champion" ? "Champion" : "MVP"}</span>
               </Link>
             ))}

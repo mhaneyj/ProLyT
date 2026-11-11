@@ -50,3 +50,16 @@ export async function askParent(form: FormData) {
   }).then(() => undefined));
   back(id, "ok", "asked");
 }
+
+/** Save (or clear) the athlete's autograph. Returns an error message for the pad to show. */
+export async function saveAutograph(athlete: string, path: string | null): Promise<{ error?: string } | void> {
+  const me = await requireMe();
+  if (!isId(athlete)) return { error: "Unknown athlete" };
+  try {
+    await asUser(me.id, (q) => q("select set_autograph($1, $2)", [athlete, path]));
+  } catch (e) {
+    return { error: dbMessage(e) };
+  }
+  await track("autograph_saved", { userId: me.id, props: { athlete, cleared: !path } });
+  revalidatePath(`/athlete/${athlete}/cards`);
+}

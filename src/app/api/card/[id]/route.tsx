@@ -48,45 +48,36 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const base = trench ? "#16181b" : "#0b0b0b";
   const pos = (a.position ?? "ATH").split(/[\/,]/)[0].trim().slice(0, 4).toUpperCase();
 
+  const first = a.first_name.toUpperCase(), last = a.last_name.toUpperCase();
+  const tag = `${pos}${v.team ? ` · ${v.team.toUpperCase()}` : ""}`.slice(0, 30);
+  const ink = "linear-gradient(180deg, #ffffff 0%, #c7ccd6 45%, #7b8191 52%, #f3f5f9 70%, #aeb3bf 100%)";
+  void gold; void base; void attrs; void trench;
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#050505", fontFamily: "Barlow Condensed" }}>
-        <div style={{ width: 860, height: 1204, display: "flex", flexDirection: "column", position: "relative", borderRadius: 48, overflow: "hidden",
-          background: `linear-gradient(160deg, #26231a 0%, ${base} 55%, #000 100%)`, border: `3px solid ${v.plus ? gold : "#3a3a3a"}`, color: "#f2efe6" }}>
-          <div style={{ position: "absolute", inset: 24, borderRadius: 32, border: `2px solid ${gold}99`, display: "flex" }} />
-          {/* Photo */}
-          <div style={{ position: "absolute", left: 0, right: 0, top: 150, height: 640, display: "flex", justifyContent: "center", alignItems: "flex-end" }}>
-            {photo
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={photo} alt="" width={640} height={640} style={{ width: 640, height: 640, objectFit: "cover", borderTopLeftRadius: 320, borderTopRightRadius: 320 }} />
-              : <div style={{ width: 460, height: 460, borderRadius: 230, background: `${gold}2e`, color: gold, fontFamily: "Anton", fontSize: 220, display: "flex", alignItems: "center", justifyContent: "center" }}>{`${a.first_name[0] ?? ""}${a.last_name[0] ?? ""}`.toUpperCase()}</div>}
-          </div>
-          {/* Rating */}
-          <div style={{ position: "absolute", left: 64, top: 56, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ display: "flex", fontFamily: "Anton", fontSize: 150, lineHeight: 1, color: gold }}>{v.rating.ovr ?? "--"}</div>
-            <div style={{ display: "flex", fontSize: 46, fontWeight: 800, letterSpacing: 4 }}>{pos}</div>
-          </div>
-          <div style={{ position: "absolute", right: 64, top: 70, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", fontSize: 36, fontWeight: 800, letterSpacing: 6, color: gold }}>PROLYT</div>
-            {trench ? <div style={{ display: "flex", fontSize: 28, fontWeight: 800, letterSpacing: 4, opacity: 0.85 }}>IN THE TRENCHES</div> : null}
-          </div>
-          {/* Name and attributes */}
-          <div style={{ position: "absolute", left: 0, right: 0, bottom: 56, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 60px" }}>
-            <div style={{ display: "flex", fontSize: 40, fontWeight: 800, letterSpacing: 6, opacity: 0.8 }}>{a.first_name.toUpperCase()}</div>
-            <div style={{ display: "flex", fontFamily: "Anton", fontSize: 104, lineHeight: 1.05, letterSpacing: 1 }}>{a.last_name.toUpperCase().slice(0, 14)}</div>
-            <div style={{ display: "flex", width: 520, height: 3, background: `${gold}aa`, margin: "26px 0" }} />
-            {attrs ? (
-              <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
-                {attrs.map((x) => (
-                  <div key={x.short} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 110 }}>
-                    <div style={{ display: "flex", fontFamily: "Anton", fontSize: 58 }}>{x.value ?? "–"}</div>
-                    <div style={{ display: "flex", fontSize: 26, fontWeight: 800, letterSpacing: 2, opacity: 0.7 }}>{x.short}</div>
-                  </div>
-                ))}
+        <div style={{ display: "flex", width: 900, height: 1260, padding: 31, borderRadius: 36, background: "linear-gradient(135deg, #f8f8fb, #8d93a1 18%, #ffffff 32%, #6f7584 48%, #e9ebf1 62%, #9aa0ad 78%, #ffffff)" }}>
+          <div style={{ display: "flex", width: "100%", height: "100%", padding: 4, borderRadius: 12, background: "linear-gradient(90deg, #ff2fa0, #35d4ff, #ffe14a, #39ff9f, #ff2fa0)" }}>
+            <div style={{ display: "flex", position: "relative", width: "100%", height: "100%", borderRadius: 9, overflow: "hidden", background: "radial-gradient(circle at 50% 35%, #1d2a4a, #07080d 70%)", color: "#ffffff" }}>
+              {photo
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={photo} alt="" width={830} height={1190} style={{ position: "absolute", left: 0, top: 0, width: 830, height: 1190, objectFit: "cover", objectPosition: "top" }} />
+                : <div style={{ display: "flex", position: "absolute", left: 0, right: 0, top: 260, justifyContent: "center", fontFamily: "Anton", fontSize: 300, color: "rgba(255,255,255,0.18)" }}>{`${a.first_name[0] ?? ""}${a.last_name[0] ?? ""}`.toUpperCase()}</div>}
+              <div style={{ display: "flex", position: "absolute", left: 0, right: 0, top: 0, bottom: 0, background: "linear-gradient(120deg, rgba(255,0,170,0) 10%, rgba(255,0,170,0.22) 22%, rgba(0,220,255,0.22) 30%, rgba(255,240,0,0.16) 38%, rgba(0,0,0,0) 50%)" }} />
+              <div style={{ display: "flex", position: "absolute", left: 0, right: 0, bottom: 0, height: 520, background: "linear-gradient(180deg, rgba(7,8,13,0), rgba(7,8,13,0.95) 68%)" }} />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", position: "absolute", right: 40, top: 36, fontSize: 30, fontWeight: 800, letterSpacing: 8 }}>
+                <span>PROLYT · CHROME</span><span style={{ fontSize: 24, letterSpacing: 7, color: "#ffe14a" }}>1ST CARD</span>
               </div>
-            ) : <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 4, opacity: 0.7 }}>VERIFIED BY PROLYT</div>}
-            <div style={{ display: "flex", width: "100%", justifyContent: "space-between", marginTop: 26, fontSize: 26, fontWeight: 700, letterSpacing: 3, opacity: 0.7 }}>
-              <span>{a.grad_year ? `CLASS OF ${a.grad_year}` : ""}</span><span>PROLYT.APP</span>
+              <div style={{ display: "flex", flexDirection: "column", position: "absolute", left: 40, right: 40, bottom: 44 }}>
+                <span style={{ fontSize: 48, fontWeight: 800, letterSpacing: 14, color: "#dfe6f3" }}>{first}</span>
+                <span style={{ fontFamily: "Anton", fontSize: last.length > 9 ? 124 : 156, lineHeight: 1, letterSpacing: 2, backgroundImage: ink, backgroundClip: "text", color: "transparent" }}>{last.slice(0, 14)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 10 }}>
+                  <span style={{ padding: "6px 18px", backgroundImage: "linear-gradient(90deg, #ff2fa0, #35d4ff)", color: "#07080d", fontSize: 34, fontWeight: 800, letterSpacing: 6 }}>{tag}</span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                    <span style={{ fontFamily: "Anton", fontSize: 84, lineHeight: 1, backgroundImage: "linear-gradient(90deg, #ff2fa0, #35d4ff)", backgroundClip: "text", color: "transparent" }}>{v.rating.ovr ?? "--"}</span>
+                    <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 6, color: "#dfe6f3" }}>OVR</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
