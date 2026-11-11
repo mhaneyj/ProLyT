@@ -84,7 +84,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
     { done: a.booked_ever > 0, label: `Book ${a.first_name}'s first session`, href: "/schedule" },
     ...(blobConfigured ? [{ done: a.has_photo, label: `Add a photo of ${a.first_name}`, href: `/athlete/${a.id}#photo` }] : []),
     { done: a.film > 0, label: "Add a clip to the film room", href: `/athlete/${a.id}/film` },
-    ...(a.programs ? [{ done: packaged, label: "Choose a training package", href: `/family/choose/${a.id}` }] : [{ done: false, label: `Finish ${a.first_name}'s profile`, href: `/athlete/${a.id}/edit` }]),
+    ...(a.programs ? [{ done: packaged, label: "Pick a training plan", href: `/family/choose/${a.id}` }] : [{ done: false, label: `Finish ${a.first_name}'s profile`, href: `/athlete/${a.id}/edit` }]),
   ];
 
   return (

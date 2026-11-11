@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { currentUserId } from "@/lib/auth";
-import { asService, asUser } from "@/lib/db";
+import { asService, asUser, dbMessage } from "@/lib/db";
 import { feePercent, priceWithFee } from "@/lib/fees";
 import { payRoute, requestBase, stripe, stripeConfigured } from "@/lib/stripe";
 
@@ -60,5 +60,19 @@ export const GET = payRoute(async (request: NextRequest) => {
 
 export const POST = payRoute(async (request: NextRequest) => {
   const form = await request.formData();
-  return start(request, String(form.get("athlete_id") ?? "") || null);
+  const athlete = String(form.get("athlete_id") ?? "") || null;
+  const plan = String(form.get("plan_id") ?? "");
+  // Coming from the training page: save the pick first (so it sticks even if payment isn't on yet), then pay.
+  if (athlete && /^[0-9a-f-]{36}$/.test(plan)) {
+    const base = requestBase(request);
+    const uid = await currentUserId();
+    if (!uid) return NextResponse.redirect(`${base}/login`, 303);
+    try {
+      await asUser(uid, (q) => q("select choose_plan($1, $2)", [athlete, plan]));
+    } catch (e) {
+      return NextResponse.redirect(`${base}/family/choose/${athlete}?error=${encodeURIComponent(dbMessage(e))}`, 303);
+    }
+    if (!stripeConfigured) return NextResponse.redirect(`${base}/family?chosen=1`, 303);
+  }
+  return start(request, athlete);
 }, "/family");
