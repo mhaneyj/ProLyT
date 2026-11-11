@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { homeFor, requireMe } from "@/lib/auth";
-import { signOut } from "@/app/sign-out";
 import { isDemo } from "@/lib/db";
 import { brandById } from "@/lib/org";
 import { themeVars } from "@/lib/domain/brand";
@@ -10,6 +9,7 @@ import { familyKids } from "@/lib/kid";
 import { unreadCount } from "@/lib/messages";
 import { hasPasskeyHere } from "@/lib/passkeys";
 import { PasskeyNudge } from "@/components/passkey";
+import { NameNudge } from "@/components/name-nudge";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -69,15 +69,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <ProLytMark className="text-2xl" />
             )}
           </Link>
-          <span className="flex flex-none items-center text-xs text-muted">
-            <Link href="/account" className="min-h-11 px-1 py-3.5 hover:text-cream">{me.name}</Link>
-            <span aria-hidden="true">·</span>
-            <form action={signOut}><button className="min-h-11 px-1 hover:text-cream">Sign out</button></form>
-          </span>
+          <Link href="/account" aria-label={`Account and sign out: ${me.name ?? "you"}`}
+            className="flex size-11 flex-none items-center justify-center rounded-full border border-line bg-panel font-cond text-[14px] font-extrabold uppercase tracking-[1px] text-soft hover:border-gold hover:text-cream">
+            {(me.name ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("") || "?"}
+          </Link>
         </header>
         {isDemo ? <div className="mx-5 mt-2 rounded bg-gold/10 px-3 py-1 text-center text-[11px] text-gold">Demo mode · sample data</div> : null}
         <main className="flex flex-1 flex-col gap-4 px-5 pb-36 pt-4">
-          {!isDemo && !(await hasPasskeyHere(me.id)) ? <PasskeyNudge /> : null}
+          {!me.name || me.name === me.email || me.name === "Member" ? <NameNudge /> : !isDemo && !(await hasPasskeyHere(me.id)) ? <PasskeyNudge /> : null}
           {children}
           {brand ? <div className="mt-6 text-center"><PoweredBy /></div> : null}
         </main>

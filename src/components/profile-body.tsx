@@ -31,7 +31,7 @@ export function ProfileBody({ p, photo, children }: { p: ProfileData; photo?: st
           <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-cream/80">{p.programs.map((x) => x.name).join(" · ") || "Athlete"}</div>
           <h1 className="mt-1 font-display text-[44px] uppercase leading-none">{p.first_name} {p.last_name}</h1>
           <div className="mt-2 text-soft">{[sport, p.position, p.grad_year ? `Class of ${p.grad_year}` : null, p.hometown].filter(Boolean).join(" · ")}</div>
-          <div className="mt-1 text-xs text-muted">{p.attended} training session{Number(p.attended) === 1 ? "" : "s"} attended</div>
+          {Number(p.attended) > 0 ? <div className="mt-1 text-xs text-muted">{p.attended} training session{Number(p.attended) === 1 ? "" : "s"} attended</div> : null}
           {children}
         </div>
       </div>

@@ -113,7 +113,7 @@ export function PostCard({ p, back, full = false, refCode }: { p: FeedPost; back
           </button>
         </form>
         {!full ? (
-          <Link href={`/post/${p.id}`} className="flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-bold text-soft hover:text-cream">
+          <Link href={`/post/${p.id}`} aria-label={p.comments ? `${p.comments} comment${p.comments === 1 ? "" : "s"}` : "Comments"} className="flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-bold text-soft hover:text-cream">
             <Icon name="chat" size={18} /> {p.comments ? <span className="tabular">{p.comments}</span> : p.can_comment ? "Comment" : null}
           </Link>
         ) : null}

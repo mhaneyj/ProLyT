@@ -126,7 +126,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
           <span className="text-[13px] text-muted">Membership</span>
           <span className="font-semibold">
             {a.plan ? `${a.plan} · ${money(a.price_cents ?? 0)}/mo` : "Free access"}
-            {a.current_period_end && a.status === "active" ? ` · renews ${new Date(a.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+            {a.current_period_end && a.status === "active" ? ` · renews ${new Date(a.current_period_end).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric" })}` : ""}
           </span>
         </span>
         {a.status === "active" ? <Pill tone="good">Active</Pill> : a.status === "past_due" ? <Pill tone="warn">Payment due</Pill> : a.status === "pending" ? <Pill tone="gold">Picked</Pill> : <span className="text-sm font-semibold text-gold">Choose →</span>}

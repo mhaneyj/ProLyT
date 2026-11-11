@@ -25,7 +25,7 @@ export default async function Owner() {
       from memberships m join athletes a on a.id = m.athlete_id join plans p on p.id = m.plan_id
       where p.org_id = $1 and m.status = 'past_due'
       union all
-      select pr.full_name || ' · payout setup not finished', 'Their pending pay is held until they finish'
+      select coalesce(nullif(pr.full_name, ''), 'A coach') || ' · payout setup not finished', 'Their pending pay is held until they finish'
       from org_members om join profiles pr on pr.id = om.user_id
       where om.org_id = $1 and om.role = 'coach' and om.pay_type = 'contractor' and not om.payouts_enabled`, [me.orgId]);
     const mix = await q<{ name: string; n: number; cents: number }>(`
@@ -50,7 +50,7 @@ export default async function Owner() {
       <div className="grid grid-cols-3 gap-2">
         <Stat label="Athletes" value={d.k.athletes} />
         <Stat label="Active" value={d.k.active} tone="good" />
-        <Stat label="Logged" value={`${d.k.logged}%`} />
+        <Stat label="Attendance taken" value={`${d.k.logged}%`} />
       </div>
       <SectionLabel>Needs attention</SectionLabel>
       {d.alerts.length === 0 ? <Empty title="All clear" /> : d.alerts.map((a, i) => (

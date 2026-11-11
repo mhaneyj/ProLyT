@@ -63,7 +63,8 @@ export default async function Schedule({ params, searchParams }: { params: Promi
         </form>
       </section>
 
-      {divisions.map((d) => {
+      {divisions.some((d) => d.teams === 0) ? <p className="text-[13px] text-muted">No teams yet in {divisions.filter((d) => d.teams === 0).map((d) => d.name).join(", ")}.</p> : null}
+      {divisions.filter((d) => d.teams > 0).map((d) => {
         const gs = games.filter((g) => g.division_id === d.id);
         return (
           <section key={d.id} id={`d-${d.id}`} className="flex scroll-mt-4 flex-col gap-2">
