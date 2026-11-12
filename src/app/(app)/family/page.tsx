@@ -14,6 +14,7 @@ import { cardAttrs, loadPlayerCard } from "@/lib/cards";
 import { CardBack, PlayerCard } from "@/components/player-card";
 import { FlipCard } from "@/components/autograph-pad";
 import { rankLine } from "@/components/ranks";
+import { Challenges } from "@/components/challenges";
 import { ATTRS } from "@/lib/domain/rating";
 type Training = { booking_id: string; starts_at: string; minutes: number; location: string | null; title: string; trainer: string; trainer_slug: string; athlete: string; status: string; paid: boolean; pay_online: boolean; price_cents: number };
 
@@ -151,6 +152,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
       ) : null}
 
       {upNext}
+      {card ? <Challenges items={card.challenges} ranks={card.ranks} athleteId={a.id} first={a.first_name} /> : null}
       {a.programs && !packaged ? (
         <Link href={`/family/choose/${a.id}`} className="flex min-h-12 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
           <span className="text-sm"><span className="font-semibold">Pick a training plan</span> <span className="text-muted">· free access until you do</span></span>

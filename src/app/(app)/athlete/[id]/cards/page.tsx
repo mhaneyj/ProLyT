@@ -8,6 +8,7 @@ import { CardBack, PlayerCard } from "@/components/player-card";
 import { AutographPad, FlipCard } from "@/components/autograph-pad";
 import { Card, Notice, SectionLabel, Title } from "@/components/ui";
 import { Ranks } from "@/components/ranks";
+import { Challenges } from "@/components/challenges";
 import { loadAthlete } from "../header";
 import { askParent, rateAthlete, saveAutograph } from "./actions";
 
@@ -54,6 +55,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
         </a>
       ) : null}
 
+      <Challenges items={v.challenges} ranks={v.ranks} athleteId={a.id} first={a.first_name} />
       <Ranks ranks={v.ranks} plus={plus} athleteId={a.id} first={a.first_name} />
 
       <section id="sign" className="flex scroll-mt-4 flex-col gap-2">

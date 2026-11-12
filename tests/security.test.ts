@@ -1397,5 +1397,42 @@ describe("ranks", () => {
     expect(Object.keys(rows[0])).not.toContain("first_name");
     expect((await as(db, PARENT_B, () => db.query("select * from athlete_ranks($1)", [jordan]))).rows).toEqual([]);
   });
+
+  it("weekly challenges: made automatically from the athlete's data, checked off from real records only", async () => {
+    type C = { kind: string; metric: string | null; target: number | null; sessions: number | null; progress: number | null; status: string; done_total: number; streak: number };
+    const get = () => as(db, PARENT_A, () => db.query<C>("select kind, metric, target::float, sessions, progress, status, done_total, streak from weekly_challenges($1)", [jordan])).then((r) => r.rows);
+    // A group session later this week so there's something to attend.
+    const sess = (await db.query<{ id: string }>(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id)
+      values ($1,'group','speed','Challenge week', greatest(now() + interval '1 minute', (week_start(now())::timestamp at time zone 'America/Los_Angeles') + interval '6 days 20 hours'),
+      greatest(now() + interval '2 minutes', (week_start(now())::timestamp at time zone 'America/Los_Angeles') + interval '6 days 21 hours'), $2) returning id`, [ORG, COACH])).rows[0].id;
+    await db.query("update athletes set autograph_path = null where id = $1", [jordan]);
+    const c1 = await get();
+    expect(c1.map((c) => c.kind)).toEqual(["test", "attend", "sign"]);
+    const test = c1[0];
+    expect(test.status).toBe("open");
+    expect((await get()).length).toBe(3); // idempotent: same challenges on every load
+    // Another family sees nothing and makes nothing.
+    expect((await as(db, PARENT_B, () => db.query("select * from weekly_challenges($1)", [jordan]))).rows).toEqual([]);
+    expect((await as(db, PARENT_B, () => db.query("select * from challenges where athlete_id = $1", [jordan]))).rows).toEqual([]);
+    // Self-reported doesn't count; a coach-verified mark at the target does.
+    const lib = (await db.query<{ l: boolean }>("select lower_is_better l from metrics where key = $1", [test.metric])).rows[0].l;
+    const beat = lib ? test.target! - 0.01 : test.target! + 1;
+    await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,$2,$3,'s','self_reported')", [jordan, test.metric, beat]);
+    expect((await get())[0].status).toBe("open");
+    await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,$2,$3,'s','coach_logged')", [jordan, test.metric, beat]);
+    // Check-in for attendance, and signing the card.
+    await db.query("insert into attendance (session_id, athlete_id, status) values ($1,$2,'present')", [sess, jordan]);
+    await db.query("update athletes set autograph_path = 'M0 0 L10 10' where id = $1", [jordan]);
+    const c2 = await get();
+    expect(c2.find((c) => c.kind === "test")!.status).toBe("done");
+    expect(c2.find((c) => c.kind === "sign")!.status).toBe("done");
+    const att = c2.find((c) => c.kind === "attend")!;
+    expect(att.progress).toBeGreaterThanOrEqual(1);
+    expect(att.status).toBe(att.progress! >= att.sessions! ? "done" : "open");
+    expect(c2[0].streak).toBe(1);
+    expect(c2[0].done_total).toBeGreaterThanOrEqual(2);
+    // Families can't write challenges directly.
+    await expect(as(db, PARENT_A, () => db.query("update challenges set status = 'done' where athlete_id = $1", [jordan]))).rejects.toThrow(/permission/);
+  });
 });
 
