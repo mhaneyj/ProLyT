@@ -35,7 +35,7 @@ const BENCH: Record<string, { attr: Attr; lower: boolean; pts: [number, number, 
 export const RATED_METRICS = Object.keys(BENCH);
 
 /** How much each attribute counts toward OVR, by position. */
-const WEIGHTS: Record<string, Record<Attr, number>> = {
+export const WEIGHTS: Record<string, Record<Attr, number>> = {
   QB: { spd: 1, agi: 1, exp: 1, str: 0.5, tec: 2.5, iq: 3 },
   RB: { spd: 2.5, agi: 2.5, exp: 2, str: 1, tec: 1.5, iq: 1 },
   WR: { spd: 3, agi: 2.5, exp: 2, str: 0.5, tec: 2, iq: 1 },

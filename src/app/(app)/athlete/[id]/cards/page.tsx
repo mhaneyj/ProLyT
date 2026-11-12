@@ -55,6 +55,10 @@ export default async function Cards({ params, searchParams }: { params: Promise<
         </a>
       ) : null}
 
+      <Link href={`/athlete/${a.id}/train`} className="flex min-h-12 items-center justify-between rounded-[14px] border border-gold/60 bg-gold/[0.06] px-4 hover:border-gold">
+        <span className="text-sm"><span className="font-semibold">Train to move this card</span> <span className="text-muted">· ProLyt Trainer</span></span>
+        <span aria-hidden="true" className="text-gold">→</span>
+      </Link>
       <Challenges items={v.challenges} ranks={v.ranks} athleteId={a.id} first={a.first_name} />
       <Ranks ranks={v.ranks} plus={plus} athleteId={a.id} first={a.first_name} />
 

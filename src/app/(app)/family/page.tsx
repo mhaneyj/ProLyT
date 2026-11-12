@@ -15,6 +15,8 @@ import { CardBack, PlayerCard } from "@/components/player-card";
 import { FlipCard } from "@/components/autograph-pad";
 import { rankLine } from "@/components/ranks";
 import { Challenges } from "@/components/challenges";
+import { TrainingTile } from "@/components/training-tile";
+import { loadTraining } from "@/lib/training";
 import { ATTRS } from "@/lib/domain/rating";
 type Training = { booking_id: string; starts_at: string; minutes: number; location: string | null; title: string; trainer: string; trainer_slug: string; athlete: string; status: string; paid: boolean; pay_online: boolean; price_cents: number };
 
@@ -87,6 +89,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
 
   const packaged = a.status === "active" || a.status === "pending" || a.status === "past_due";
   const card = await loadPlayerCard(me.id, a.id);
+  const training = card ? await loadTraining(me.id, a.id, card, ageOn(a.birth_date) ?? 14) : null;
   const goal = card?.goal ?? null;
   const ovr = card?.rating.ovr ?? null;
   const photo = a.has_photo ? `/api/photo/${a.id}` : null;
@@ -152,6 +155,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
       ) : null}
 
       {upNext}
+      {training ? <TrainingTile t={training} athleteId={a.id} first={a.first_name} /> : null}
       {card ? <Challenges items={card.challenges} ranks={card.ranks} athleteId={a.id} first={a.first_name} /> : null}
       {a.programs && !packaged ? (
         <Link href={`/family/choose/${a.id}`} className="flex min-h-12 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">

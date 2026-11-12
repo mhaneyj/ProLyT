@@ -1376,6 +1376,25 @@ describe("training plans", () => {
   });
 });
 
+describe("ProLyt Trainer logs", () => {
+  it("athlete or parent marks workouts done for this week; others can't see or log", async () => {
+    await as(db, PARENT_A, () => db.query("select log_workout($1, 1, true, '{agi,exp}')", [jordan]));
+    await as(db, PARENT_A, () => db.query("select log_workout($1, 1, true)", [jordan])); // twice is fine
+    await as(db, PARENT_A, () => db.query("select log_workout($1, 3, true)", [jordan]));
+    let st = (await as(db, PARENT_A, () => db.query<{ done_total: number; this_week: number[]; streak: number }>("select * from training_status($1)", [jordan]))).rows[0];
+    expect(st).toEqual({ done_total: 2, this_week: [1, 3], streak: 1 });
+    await as(db, PARENT_A, () => db.query("select log_workout($1, 3, false)", [jordan]));
+    st = (await as(db, PARENT_A, () => db.query<{ done_total: number; this_week: number[]; streak: number }>("select * from training_status($1)", [jordan]))).rows[0];
+    expect(st.this_week).toEqual([1]);
+    await expect(as(db, PARENT_B, () => db.query("select log_workout($1, 2, true)", [jordan]))).rejects.toThrow(/athlete or a parent/);
+    await expect(as(db, COACH, () => db.query("select log_workout($1, 2, true)", [jordan]))).rejects.toThrow(/athlete or a parent/);
+    expect((await as(db, PARENT_B, () => db.query("select * from training_status($1)", [jordan]))).rows).toEqual([]);
+    expect((await as(db, PARENT_B, () => db.query("select * from training_logs where athlete_id = $1", [jordan]))).rows).toEqual([]);
+    expect((await as(db, COACH, () => db.query("select * from training_logs where athlete_id = $1", [jordan]))).rows).toHaveLength(1);
+    await expect(as(db, PARENT_A, () => db.query("insert into training_logs (athlete_id, week, workout) values ($1, current_date, 2)", [jordan]))).rejects.toThrow(/permission/);
+  });
+});
+
 describe("ranks", () => {
   it("shows an athlete only their own place in their age group, the top mark and the mark to pass; never a name; 3+ only", async () => {
     const peer = async (age: number, broad: number | null, cone: number | null) => {

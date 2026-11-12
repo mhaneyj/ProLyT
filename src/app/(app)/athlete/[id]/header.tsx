@@ -17,7 +17,7 @@ export type AthleteHead = {
 };
 
 /** Loads the athlete (row-level security decides who can) and, for parents, the kid switcher. */
-export async function loadAthlete(me: Me, id: string, sub: "" | "/film" | "/progress" | "/edit" | "/cards") {
+export async function loadAthlete(me: Me, id: string, sub: "" | "/film" | "/progress" | "/edit" | "/cards" | "/train") {
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const [a] = await asUser(me.id, (q) => q<AthleteHead>(`
     select a.id, a.first_name, a.last_name, a.position, a.grad_year, a.birth_date::text, a.sport, a.bio, a.hometown, a.gpa::float gpa,

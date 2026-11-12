@@ -130,6 +130,12 @@ export default async function AthleteProfile({ params, searchParams }: { params:
           <span aria-hidden="true" className="text-gold">→</span>
         </Link>
       ) : null}
+      {pc ? (
+        <Link href={`/athlete/${a.id}/train`} className="flex min-h-14 items-center justify-between rounded-[14px] border border-gold/60 bg-gold/[0.06] px-4 hover:border-gold">
+          <span><span className="block font-cond text-[12px] font-extrabold uppercase tracking-[2px] text-gold">ProLyt Trainer</span><span className="block text-sm font-semibold">This week&apos;s workouts</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
 
       <div className={`grid gap-2 ${a.family ? "grid-cols-4" : "grid-cols-3"}`}>
         {action(`/athlete/${a.id}/film`, "film", d.films ? `Film · ${d.films}` : "Film")}
