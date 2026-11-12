@@ -13,6 +13,7 @@ import { familyCancelBooking } from "@/app/trainers/actions";
 import { cardAttrs, loadPlayerCard } from "@/lib/cards";
 import { CardBack, PlayerCard } from "@/components/player-card";
 import { FlipCard } from "@/components/autograph-pad";
+import { rankLine } from "@/components/ranks";
 import { ATTRS } from "@/lib/domain/rating";
 type Training = { booking_id: string; starts_at: string; minutes: number; location: string | null; title: string; trainer: string; trainer_slug: string; athlete: string; status: string; paid: boolean; pay_online: boolean; price_cents: number };
 
@@ -140,6 +141,11 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
               back={<CardBack first={a.first_name} last={a.last_name} ovr={ovr} number={card.jersey} position={a.position} grad={a.grad_year} team={card.team}
                 attrs={cardAttrs(card)} tests={card.tests} tally={`${card.cards.filter((c) => c.tier === "champion").length} · ${card.cards.filter((c) => c.tier === "mvp").length} · ${card.cards.length + 1}`} />} />
           </div>
+          {card.ranks[0] ? (
+            <Link href={`/athlete/${a.id}/cards`} className="mt-1 flex items-center gap-2 rounded-full border border-gold/50 bg-gold/10 px-3.5 py-1.5 text-[13px] font-semibold">
+              <span className="font-display text-[17px] leading-none text-gold">#{card.ranks[0].rank}</span>{rankLine(card.ranks[0]).replace(/^#\d+ /, "")}
+            </Link>
+          ) : null}
           <Link href={`/athlete/${a.id}/cards`} className="text-[13px] font-semibold text-gold">{card.cards.length ? `${card.cards.length} event card${card.cards.length === 1 ? "" : "s"} collected · ` : ""}Open card →</Link>
         </div>
       ) : null}

@@ -1375,3 +1375,27 @@ describe("training plans", () => {
     await as(db, OWNER, () => db.query("select set_plan_limit($1,'allow')", [ORG]));
   });
 });
+
+describe("ranks", () => {
+  it("shows an athlete only their own place in their age group, the top mark and the mark to pass; never a name; 3+ only", async () => {
+    const peer = async (age: number, broad: number | null, cone: number | null) => {
+      const id = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ('Peer','X', current_date - make_interval(years => $1, days => 40)) returning id", [age])).rows[0].id;
+      await db.query("insert into program_athletes (org_id, athlete_id) values ($1,$2)", [ORG, id]);
+      if (broad !== null) await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'broad',$2,'in','coach_logged')", [id, broad]);
+      if (cone !== null) await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'three_cone',$2,'s','coach_logged')", [id, cone]);
+      return id;
+    };
+    await peer(15, 110, 7.1); await peer(16, 95, null); await peer(15, 90, null);
+    await peer(10, 140, null); // a younger athlete doesn't count against Jordan
+    const self = await peer(15, 130, null);
+    await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'broad',145,'in','self_reported')", [self]); // self-reported never counts
+    await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'broad',100,'in','coach_logged'), ($1,'three_cone',7.4,'s','coach_logged')", [jordan]);
+    const rows = (await as(db, PARENT_A, () => db.query<Record<string, unknown>>(
+      "select band, metric, value::float, rank, of_n, top_value::float top, next_value::float nxt from athlete_ranks($1) where org_id = $2", [jordan, ORG]))).rows;
+    expect(rows.find((r) => r.metric === "broad")).toEqual({ band: "HS", metric: "broad", value: 100, rank: 3, of_n: 5, top: 130, nxt: 110 });
+    expect(rows.find((r) => r.metric === "three_cone")).toBeUndefined(); // only 2 athletes tested
+    expect(Object.keys(rows[0])).not.toContain("first_name");
+    expect((await as(db, PARENT_B, () => db.query("select * from athlete_ranks($1)", [jordan]))).rows).toEqual([]);
+  });
+});
+

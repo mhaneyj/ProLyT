@@ -7,6 +7,7 @@ import { ageOn } from "@/lib/domain/format";
 import { CardBack, PlayerCard } from "@/components/player-card";
 import { AutographPad, FlipCard } from "@/components/autograph-pad";
 import { Card, Notice, SectionLabel, Title } from "@/components/ui";
+import { Ranks } from "@/components/ranks";
 import { loadAthlete } from "../header";
 import { askParent, rateAthlete, saveAutograph } from "./actions";
 
@@ -52,6 +53,8 @@ export default async function Cards({ params, searchParams }: { params: Promise<
           Save card to share
         </a>
       ) : null}
+
+      <Ranks ranks={v.ranks} plus={plus} athleteId={a.id} first={a.first_name} />
 
       <section id="sign" className="flex scroll-mt-4 flex-col gap-2">
         <SectionLabel>Signed card</SectionLabel>

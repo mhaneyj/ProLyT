@@ -10,6 +10,8 @@ export type Collected = {
   color: string; accent: string; sponsor: string | null; event_id: string; event_name: string; starts_on: string; host: string; total_awarded: number;
 };
 
+export type Rank = { org_name: string; band: string; metric: string; value: number; rank: number; of_n: number; top_value: number; next_value: number | null };
+
 export type PlayerCardView = {
   rating: Rating;
   goal: ReturnType<typeof nextGoal>;
@@ -22,6 +24,7 @@ export type PlayerCardView = {
   jersey: string | null;
   autograph: string | null;
   tests: { label: string; value: string; by: string }[];
+  ranks: Rank[];
 };
 
 /** Everything the Player Card screens need, as the signed-in person is allowed to see it. Null if they can't. */
@@ -33,11 +36,12 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
     const input = { age: row.d.age, position: row.d.position, tests: row.d.tests.map((t) => ({ metric: t.metric, value: Number(t.value) })), coach: row.d.coach };
     const cards = await q<Collected>("select award_id, tier, team_name, awarded_at, series, tagline, color, accent, sponsor, event_id, event_name, starts_on::text, host, total_awarded from athlete_cards($1)", [athleteId]);
     const [id] = await q<{ team: string | null; jersey: string | null; autograph: string | null }>("select team, jersey, autograph from card_identity($1)", [athleteId]);
+    const ranks = (await q<Rank>("select org_name, band, metric, value::float value, rank, of_n, top_value::float top_value, next_value::float next_value from athlete_ranks($1)", [athleteId]));
     // Best verified times for the back of the card, fastest first among the headline tests.
     const tests = input.tests.filter((t) => ["40yd", "pro_agility", "vertical", "10yd", "broad"].includes(t.metric)).slice(0, 2)
       .map((t) => ({ label: metricLabel(t.metric), value: formatValue(t.metric, t.value), by: "VERIFIED" }));
     return { rating: computeRating(input), goal: nextGoal(input), coach: row.d.coach, plus: row.plus, canRate: row.can_rate, cards, ratedAt: row.d.rated_at,
-      team: id?.team ?? null, jersey: id?.jersey ?? null, autograph: id?.autograph ?? null, tests };
+      team: id?.team ?? null, jersey: id?.jersey ?? null, autograph: id?.autograph ?? null, tests, ranks };
   });
 }
 

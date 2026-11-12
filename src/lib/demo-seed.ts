@@ -64,6 +64,14 @@ insert into athletes (id, first_name, last_name, birth_date, grad_year, position
   ('${A.eli}', 'Eli', 'Park', (current_date - interval '14 years 1 month')::date, 2030, 'DB', 'Sample High'),
   ('${A.noah}', 'Noah', 'Park', (current_date - interval '16 years 6 months')::date, 2028, 'DL', 'Sample High');
 
+-- Roster-only athletes so age-group ranks have a field to rank against.
+insert into athletes (first_name, last_name, birth_date, grad_year, position, school) values
+  ('Tyler', 'Reed', (current_date - interval '15 years 8 months')::date, 2029, 'RB', 'Sample High'),
+  ('Mason', 'Cole', (current_date - interval '16 years 1 month')::date, 2028, 'WR', 'Sample High'),
+  ('Owen', 'Diaz', (current_date - interval '15 years 1 month')::date, 2029, 'LB', 'Sample High'),
+  ('Caleb', 'Ford', (current_date - interval '16 years 9 months')::date, 2028, 'OL', 'Sample High'),
+  ('Luke', 'Grant', (current_date - interval '15 years 5 months')::date, 2029, 'TE', 'Sample High');
+
 insert into program_athletes (org_id, athlete_id) select '${ORG_ID}', id from athletes;
 
 insert into guardians (athlete_id, user_id, is_primary) values
@@ -106,6 +114,12 @@ insert into sessions (id, org_id, kind, program, title, starts_at, ends_at, loca
 select ('60000000-0000-0000-0000-0000000000' || lpad(w::text, 2, '0'))::uuid, '${ORG_ID}', 'group', 'trenches',
        'In The Trenches', ${at(0, 16)} - (w || ' weeks')::interval, ${at(0, 17.5)} - (w || ' weeks')::interval, 'Main field', '${LEM}', null
 from generate_series(1, 8) w;
+
+insert into results (athlete_id, metric, value, unit, source, logged_by, recorded_at)
+select a.id, v.metric, v.value, 's', 'coach_logged', '${LEM}', now() - interval '20 days'
+from (values ('Reed', '40yd', 4.88), ('Cole', '40yd', 5.06), ('Diaz', '40yd', 5.17), ('Ford', '40yd', 5.64), ('Grant', '40yd', 5.33),
+             ('Reed', 'pro_agility', 4.52), ('Cole', 'pro_agility', 4.71), ('Diaz', 'pro_agility', 4.84), ('Grant', 'pro_agility', 4.95))
+  v(last, metric, value) join athletes a on a.last_name = v.last;
 
 insert into results (athlete_id, metric, value, unit, source, logged_by, recorded_at) values
   ('${A.jordan}', '40yd', 5.42, 's', 'coach_logged', '${LEM}', now() - interval '56 days'),
