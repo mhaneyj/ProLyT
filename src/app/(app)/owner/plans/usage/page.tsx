@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePerm } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { Card, Notice, Pill, Title } from "@/components/ui";
+import { money } from "@/lib/domain/format";
 
 export const metadata = { title: "Plan usage" };
 
@@ -21,8 +22,11 @@ function flag(r: Row): { tone: "muted" | "good" | "gold" | "warn" | "bad"; text:
 
 export default async function Usage() {
   const me = await requirePerm("billing.manage");
-  const rows = await asUser(me.id, (q) => q<Row>(
-    "select athlete_id, name, plan, per_week, status::text, booked_this_week, attended_4w, last_attended::text from program_plan_usage($1)", [me.orgId]));
+  const [rows, extras] = await asUser(me.id, async (q) => [await q<Row>(
+    "select athlete_id, name, plan, per_week, status::text, booked_this_week, attended_4w, last_attended::text from program_plan_usage($1)", [me.orgId]),
+    await q<{ athlete_id: string; extras: number; cents: number }>("select athlete_id, extras, cents from program_extras($1)", [me.orgId])] as const);
+  const extraOf = (id: string) => extras.find((e) => e.athlete_id === id);
+  const extraCents = extras.reduce((t, e) => t + e.cents, 0);
   const flagged = rows.map((r) => ({ r, f: flag(r) }));
   const idle = flagged.filter((x) => x.f?.text.startsWith("Not in") || x.f?.text === "Hasn't come yet").length;
   const over = rows.filter((r) => r.per_week && r.booked_this_week > r.per_week).length;
@@ -42,6 +46,7 @@ export default async function Usage() {
               </Card>
             ))}
           </div>
+          {extraCents ? <p className="text-[13px] text-soft">Extra sessions brought in <span className="font-semibold text-gold">{money(extraCents)}</span> in the last 4 weeks.</p> : null}
           {idle ? <p className="text-[13px] text-soft">Families paying for sessions they don&apos;t use are the ones who cancel. A quick message from a coach usually brings them back.</p> : null}
           <div className="flex flex-col gap-2">
             {sorted.map(({ r, f }) => (
@@ -49,7 +54,7 @@ export default async function Usage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{r.name}</div>
                   <div className="text-[12px] text-muted">
-                    {r.plan} · {r.per_week ? `${r.booked_this_week} of ${r.per_week} this week` : `${r.booked_this_week} this week`} · {r.attended_4w} in 4 weeks
+                    {r.plan} · {r.per_week ? `${r.booked_this_week} of ${r.per_week} this week` : `${r.booked_this_week} this week`} · {r.attended_4w} in 4 weeks{extraOf(r.athlete_id) ? ` · ${extraOf(r.athlete_id)!.extras} paid extra${extraOf(r.athlete_id)!.extras === 1 ? "" : "s"}` : ""}
                   </div>
                 </div>
                 {f ? <Pill tone={f.tone}>{f.text}</Pill> : <Pill tone="good">On track</Pill>}

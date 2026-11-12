@@ -1348,4 +1348,30 @@ describe("training plans", () => {
     await expect(as(db, PARENT_A, () => db.query("select plan_sessions_booked($1,$2,now())", [jordan, ORG]))).rejects.toThrow(/permission/);
     await as(db, OWNER, () => db.query("select set_plan_limit($1,'allow')", [ORG]));
   });
+  it("paid extras: past the plan, the family pays the program's extra price and Stripe's confirmation books it", async () => {
+    const mk = (title: string, day: number) => db.query<{ id: string }>(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id)
+      values ($1,'group','speed',$2, ((week_start(now()) + 14 + $3::int)::timestamp at time zone 'America/Los_Angeles') + interval '17 hours',
+        ((week_start(now()) + 14 + $3::int)::timestamp at time zone 'America/Los_Angeles') + interval '18 hours', $4) returning id`, [ORG, title, day, COACH]).then((r) => r.rows[0].id);
+    const a = await mk("Extra A", 1), b = await mk("Extra B", 2);
+    await expect(as(db, OWNER, () => db.query("select set_plan_limit($1,'charge')", [ORG]))).rejects.toThrow(/Set a price/);
+    await expect(as(db, COACH, () => db.query("select set_plan_limit($1,'charge',2500)", [ORG]))).rejects.toThrow(/owner/);
+    await as(db, OWNER, () => db.query("select set_plan_limit($1,'charge',2500)", [ORG]));
+    // Jordan is on a 1-a-week plan: the first is included and free; paying for it is refused.
+    await expect(as(db, PARENT_A, () => db.query("select * from start_session_payment($1,$2,200)", [a, jordan]))).rejects.toThrow(/free/);
+    await as(db, PARENT_A, () => db.query("select book_session($1,$2)", [a, jordan]));
+    await expect(as(db, PARENT_A, () => db.query("select book_session($1,$2)", [b, jordan]))).rejects.toThrow(/pay \$25\.00 to book/);
+    await expect(as(db, PARENT_B, () => db.query("select * from start_session_payment($1,$2,200)", [b, jordan]))).rejects.toThrow(/parent or guardian/);
+    const [p] = (await as(db, PARENT_A, () => db.query<{ payment_id: string; amount_cents: number; fee_cents: number; title: string }>(
+      "select payment_id, amount_cents, fee_cents, title from start_session_payment($1,$2,200)", [b, jordan]))).rows;
+    expect(p).toMatchObject({ amount_cents: 2500, fee_cents: 50, title: "Extra B (extra session)" });
+    await expect(as(db, PARENT_A, () => db.query("select complete_session_payment($1,'cs_x')", [p.payment_id]))).rejects.toThrow(/permission/);
+    expect((await db.query<{ ok: boolean }>("select complete_session_payment($1,'cs_x') ok", [p.payment_id])).rows[0].ok).toBe(true);
+    expect((await db.query("select 1 from session_athletes where session_id=$1 and athlete_id=$2", [b, jordan])).rows).toHaveLength(1);
+    expect((await as(db, OWNER, () => db.query("select extras, cents from program_extras($1) where athlete_id=$2", [ORG, jordan]))).rows).toEqual([{ extras: 1, cents: 2500 }]);
+    expect((await as(db, PARENT_A, () => db.query("select * from program_extras($1)", [ORG]))).rows).toEqual([]);
+    const [u] = (await as(db, PARENT_A, () => db.query<{ extra_price_cents: number; booked: number }>(
+      "select extra_price_cents, booked from family_plan_usage() where athlete_id=$1 and week = week_start(now()) + 14", [jordan]))).rows;
+    expect(u).toEqual({ extra_price_cents: 2500, booked: 2 });
+    await as(db, OWNER, () => db.query("select set_plan_limit($1,'allow')", [ORG]));
+  });
 });

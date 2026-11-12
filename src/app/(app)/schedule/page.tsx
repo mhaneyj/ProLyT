@@ -11,7 +11,7 @@ type S = {
   id: string; org_id: string; title: string; starts_at: string; ends_at: string; location: string | null;
   coach: string | null; price_cents: number | null; spots: number | null; booked: string[]; kind: string; week: string;
 };
-type Use = { athlete_id: string; org_id: string; week: string; plan: string; per_week: number | null; booked: number; plan_limit: "allow" | "block" };
+type Use = { athlete_id: string; org_id: string; week: string; plan: string; per_week: number | null; booked: number; plan_limit: "allow" | "block" | "charge"; extra_price_cents: number | null };
 type Kid = { id: string; first_name: string; org_id: string };
 
 export default async function Schedule({ searchParams }: { searchParams: Promise<{ error?: string; paid?: string }> }) {
@@ -19,7 +19,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
   const me = await requireMe();
   const payOnline = stripeConfigured && me.features.payments;
   const isFamily = me.roles.includes("guardian") && !me.roles.includes("coach") && !me.roles.includes("owner");
-  const { sessions, kids, usage } = await asUser(me.id, async (q) => {
+  const { sessions, kids, usage, paidExtras } = await asUser(me.id, async (q) => {
     const sessions = await q<S>(`
       select s.id, s.org_id, s.title, s.starts_at, s.ends_at, s.location, p.full_name coach, s.price_cents, coalesce(spots_left_held(s.id), spots_left(s.id)) spots,
         s.kind::text kind, week_start(s.starts_at)::text week,
@@ -32,8 +32,9 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
       select a.id, a.first_name, pa.org_id from guardians g join athletes a on a.id = g.athlete_id
       join program_athletes pa on pa.athlete_id = a.id and pa.status = 'active'
       where g.user_id = $1 order by a.first_name`, [me.id]);
-    const usage = isFamily ? await q<Use>("select athlete_id, org_id, week::text, plan, per_week, booked, plan_limit from family_plan_usage()") : [];
-    return { sessions, kids, usage };
+    const usage = isFamily ? await q<Use>("select athlete_id, org_id, week::text, plan, per_week, booked, plan_limit, extra_price_cents from family_plan_usage()") : [];
+    const paidExtras = isFamily ? (await q<{ k: string }>("select session_id || ':' || athlete_id k from session_payments where extra and status = 'paid'")).map((r) => r.k) : [];
+    return { sessions, kids, usage, paidExtras };
   });
   const use = (athlete: string, org: string, week: string) => usage.find((u) => u.athlete_id === athlete && u.org_id === org && u.week === week);
   const thisWeek = usage.filter((u) => u.week === usage.map((x) => x.week).sort()[0] && u.per_week);
@@ -111,7 +112,23 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                       // Past this week's plan sessions: an extra session, or blocked if the program says so.
                       const u = s.kind === "group" ? use(k.id, s.org_id, s.week) : undefined;
                       const over = !booked && u && u.per_week !== null && u.booked >= u.per_week;
-                      if (over && u.plan_limit === "block") return (
+                      if (booked && paidExtras.includes(`${s.id}:${k.id}`)) return (
+                        <div key={k.id} className="flex items-center justify-between gap-3"><Pill tone="good">{k.first_name} is booked ✓</Pill><span className="text-xs text-muted">Paid extra · contact coach to cancel</span></div>
+                      );
+                      if (over && u.plan_limit === "charge" && u.extra_price_cents) return payOnline ? (
+                        <form key={k.id} action="/api/stripe/session" method="post" className="flex items-center justify-between gap-3">
+                          <input type="hidden" name="session" value={s.id} /><input type="hidden" name="athlete" value={k.id} />
+                          <span className="text-sm text-soft">{k.first_name}<span className="block text-[12px] text-warn">Extra session · plan&apos;s {u.per_week} used</span></span>
+                          <button disabled={s.spots === 0} aria-label={`Pay and book an extra session for ${k.first_name}`}
+                            className="min-h-11 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold disabled:opacity-40">Extra · {money(u.extra_price_cents)}</button>
+                        </form>
+                      ) : (
+                        <div key={k.id} className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-soft">{k.first_name}</span>
+                          <span className="text-right text-xs text-muted">{u.per_week} of {u.per_week} booked this week.<br />Extras are {money(u.extra_price_cents)}: ask your coach.</span>
+                        </div>
+                      );
+                      if (over && u.plan_limit !== "allow") return (
                         <div key={k.id} className="flex items-center justify-between gap-3">
                           <span className="text-sm text-soft">{k.first_name}</span>
                           <span className="text-right text-xs text-muted">{u.per_week} of {u.per_week} booked this week.<br />Ask your coach about an extra.</span>

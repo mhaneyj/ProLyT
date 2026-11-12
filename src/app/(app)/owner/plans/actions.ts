@@ -74,12 +74,17 @@ export async function deletePlan(form: FormData) {
 
 export async function setPlanLimit(form: FormData) {
   const me = await requirePerm("billing.manage");
-  const mode = form.get("mode") === "block" ? "block" : "allow";
+  const m = String(form.get("mode"));
+  const mode = m === "block" || m === "charge" ? m : "allow";
+  const dollars = Number(String(form.get("extra_price") ?? "").replace(/[$,\s]/g, ""));
+  const price = mode === "charge" && Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : null;
   try {
-    await asUser(me.id, (q) => q("select set_plan_limit($1, $2)", [me.orgId, mode]));
+    await asUser(me.id, (q) => q("select set_plan_limit($1, $2, $3)", [me.orgId, mode, price]));
   } catch (e) {
     back("error", dbMessage(e));
   }
   revalidatePath("/owner/plans");
-  back("ok", mode === "block" ? "Families can't book past their plan. You can still add them yourself." : "Families can book extra sessions past their plan.");
+  back("ok", mode === "block" ? "Families can't book past their plan. You can still add them yourself."
+    : mode === "charge" ? `Extra sessions are $${(price! / 100).toFixed(price! % 100 ? 2 : 0)}. Families pay when they book one.`
+    : "Families can book extra sessions past their plan.");
 }

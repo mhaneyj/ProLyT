@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePerm } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
+import { stripeConfigured } from "@/lib/stripe";
 import { Card, Notice, Pill, Title } from "@/components/ui";
 import { deletePlan, savePlan, setPlanActive, setPlanLimit } from "./actions";
 
@@ -40,7 +41,9 @@ export default async function Plans({ searchParams }: { searchParams: Promise<{ 
     select p.id, p.name, p.price_cents, p.sessions_per_week, p.description, p.includes, p.featured, p.active,
       (select count(*)::int from memberships m where m.plan_id = p.id and m.status in ('active', 'pending', 'past_due')) families
     from plans p where p.org_id = $1 order by p.active desc, p.sort, p.price_cents`, [me.orgId]),
-    (await q<{ plan_limit: "allow" | "block" }>("select plan_limit from orgs where id = $1", [me.orgId]))[0]?.plan_limit ?? "allow"] as const);
+    (await q<{ plan_limit: "allow" | "block" | "charge"; extra_price_cents: number | null }>("select plan_limit, extra_price_cents from orgs where id = $1", [me.orgId]))[0]] as const);
+  const mode = limit?.plan_limit ?? "allow";
+  const canCharge = stripeConfigured && me.features.payments;
   return (
     <>
       <Link href="/owner/settings" className="min-h-11 py-3 text-sm text-muted hover:text-cream">← Settings</Link>
@@ -83,10 +86,21 @@ export default async function Plans({ searchParams }: { searchParams: Promise<{ 
       <Card className="flex flex-col gap-2">
         <div className="font-semibold">When a family has booked all their plan&apos;s sessions for the week</div>
         <form action={setPlanLimit} className="flex flex-col gap-2">
-          {([["allow", "Let them book extras", "Marked as an extra session so you can charge or talk to them."], ["block", "Stop them booking", "They see they're out for the week. You can still add them yourself."]] as const).map(([v, l, d]) => (
-            <label key={v} className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3 text-sm has-[:checked]:border-gold">
-              <input type="radio" name="mode" value={v} defaultChecked={limit === v} className="mt-0.5 size-5 accent-[var(--color-gold)]" />
-              <span><span className="block font-semibold">{l}</span><span className="block text-[12px] text-muted">{d}</span></span>
+          {([
+            ["charge", "Charge for extras", canCharge ? "They pay your extra-session price when they book one." : "Turn on payouts to charge families online."],
+            ["allow", "Let them book extras free", "Marked as an extra session so you can follow up."],
+            ["block", "Stop them booking", "They see they're out for the week. You can still add them yourself."],
+          ] as const).map(([v, l, d]) => (
+            <label key={v} className={`flex min-h-11 items-start gap-2.5 rounded-lg border border-line p-3 text-sm has-[:checked]:border-gold ${v === "charge" && !canCharge ? "opacity-50" : "cursor-pointer"}`}>
+              <input type="radio" name="mode" value={v} defaultChecked={mode === v} disabled={v === "charge" && !canCharge} className="mt-0.5 size-5 accent-[var(--color-gold)]" />
+              <span className="flex-1"><span className="block font-semibold">{l}</span><span className="block text-[12px] text-muted">{d}</span>
+                {v === "charge" && canCharge ? (
+                  <span className="mt-2 flex items-center gap-2 text-[13px]">Price per extra
+                    <input name="extra_price" inputMode="decimal" defaultValue={limit?.extra_price_cents ? String(limit.extra_price_cents / 100) : ""} placeholder="$35"
+                      aria-label="Price per extra session" className="min-h-11 w-24 rounded-md border border-line bg-panel px-3 text-sm" />
+                  </span>
+                ) : null}
+              </span>
             </label>
           ))}
           <button className="min-h-11 rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Save</button>
