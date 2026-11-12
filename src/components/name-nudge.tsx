@@ -1,4 +1,4 @@
-import { setMyName } from "@/app/name-action";
+import { laterName, setMyName } from "@/app/name-action";
 
 /** Shown until the person has a name: everyone else sees it on rosters, messages and event staff lists. */
 export function NameNudge() {
@@ -11,6 +11,7 @@ export function NameNudge() {
           className="min-h-12 min-w-0 flex-1 rounded-md border border-[#333] bg-[#111] px-3 text-cream" />
         <button className="min-h-12 rounded-md bg-gold px-4 font-bold text-on-gold">Save name</button>
       </div>
+      <button formAction={laterName} formNoValidate className="-mb-2 min-h-11 self-start text-[13px] text-muted hover:text-cream">Not now</button>
     </form>
   );
 }

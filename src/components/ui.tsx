@@ -23,9 +23,9 @@ export function SectionLabel({ children, right }: { children: ReactNode; right?:
   );
 }
 
-export function Card({ children, className = "", accent = false }: { children: ReactNode; className?: string; accent?: boolean }) {
+export function Card({ children, className = "", accent = false, id }: { children: ReactNode; className?: string; accent?: boolean; id?: string }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? "border-gold bg-gold/5" : "border-line bg-panel"} ${className}`}>{children}</div>
+    <div id={id} className={`${id ? "scroll-mt-20 " : ""}rounded-xl border p-4 ${accent ? "border-gold bg-gold/5" : "border-line bg-panel"} ${className}`}>{children}</div>
   );
 }
 

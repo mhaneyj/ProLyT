@@ -178,12 +178,17 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             {next ? <input type="hidden" name="next" value={next} /> : null}
             <label htmlFor="email" className="sr-only">Email</label>
             <input id="email" name="email" type="email" autoComplete="username email" required placeholder="you@email.com" aria-label="Email" className={input} />
-            <label htmlFor="password" className="sr-only">Password</label>
-            <input id="password" name="password" type="password" autoComplete="current-password" placeholder="Password (if you set one)" aria-label="Password" className={input} />
-            <SubmitButton busy="One moment…" className={primaryBtn}>Sign in</SubmitButton>
-            <SubmitButton busy="Sending…" formAction={sendCode} className="min-h-12 w-full rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-cream hover:border-gold">Email me a code</SubmitButton>
+            <SubmitButton busy="Sending…" formAction={sendCode} className={primaryBtn}>Email me a code</SubmitButton>
+            <details className="group">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center text-sm text-muted hover:text-cream">Use a password instead</summary>
+              <div className="mt-2 flex flex-col gap-3">
+                <label htmlFor="password" className="sr-only">Password</label>
+                <input id="password" name="password" type="password" autoComplete="current-password" placeholder="Password" aria-label="Password" className={input} />
+                <SubmitButton busy="One moment…" className="min-h-12 w-full rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-cream hover:border-gold">Sign in</SubmitButton>
+              </div>
+            </details>
           </form>
-          <p className="text-center text-xs text-muted">No password or forgot it? Use a code. You stay signed in for a year.</p>
+          <p className="text-center text-xs text-muted">We email you a 6-digit code. No password to remember. You stay signed in for a year.</p>
         </div>
       )}
       {brand ? <div className="mt-auto text-center"><PoweredBy /></div> : null}

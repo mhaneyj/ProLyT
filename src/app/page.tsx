@@ -6,13 +6,14 @@ import { asService } from "@/lib/db";
 import { themeVars } from "@/lib/domain/brand";
 import { Kicker, LinkButton } from "@/components/ui";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
+import { PlayerCard } from "@/components/player-card";
 
 type Ev = { id: string; name: string; starts_on: string; location: string | null; status: string };
 
 const FAMILY = [
+  ["A Player Card that levels up", "Coaches test speed, agility and power. Every result moves the rating. Sign it, flip it, share it."],
   ["Verified numbers", "40, shuttle, vertical and more, measured by coaches and shown with a ✓."],
   ["Film that follows them", "Clips and highlights from every season in one profile."],
-  ["Everything in one app", "Schedule, booking, coach notes, messages and event passes."],
 ];
 const PROGRAM = [
   ["Run your program", "Schedules, booking, payments, attendance and coach pay."],
@@ -45,6 +46,16 @@ export default async function Welcome() {
           ? `Your athlete's progress with ${brand.name}, highlighted: schedule, verified results, film and coach notes in one place.`
           : "The athlete profile, team app and event platform for youth and high school football programs."}</p>
       </div>
+
+      {brand ? (
+        <div aria-hidden="true" className="relative -my-1 flex justify-center py-2">
+          <span className="absolute inset-x-6 top-1/2 h-1/2 -translate-y-1/2 rounded-full bg-gold/20 blur-3xl" />
+          <div className="relative w-[58%] -rotate-[4deg] drop-shadow-[0_18px_30px_rgba(0,0,0,0.6)]">
+            <PlayerCard size="sm" tier="player" first="Your" last="Athlete" position="ATH" grad={null} photo={null} ovr={84} attrs={null}
+              series="ProLyt" team={brand.name} number="7" foil />
+          </div>
+        </div>
+      ) : null}
 
       {events.length ? (
         <section aria-label="Events" className="flex flex-col gap-2">

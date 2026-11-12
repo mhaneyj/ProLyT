@@ -47,6 +47,17 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       <Title sub="Your program's look, coaches and coach pay.">Settings</Title>
       {root ? <Notice>Your families sign in at <span className="font-semibold text-cream">{d.org.slug}.{root}</span></Notice> : null}
 
+      <nav aria-label="Settings sections" className="sticky top-0 z-10 -mx-5 flex gap-2 overflow-x-auto bg-ink/95 px-5 py-2 backdrop-blur [scrollbar-width:none]">
+        {([
+          ["#payouts", "Get paid", can(me, "billing.manage")],
+          ["#branding", "Branding", can(me, "brand.manage")],
+          ["#staff", "Coaches", true],
+          ["#teams", "Teams", can(me, "roster.manage")],
+          ["#coach-pay", "Coach pay", can(me, "billing.manage")],
+        ] as const).filter((x) => x[2]).map(([h, l]) => (
+          <a key={h} href={h} className="flex min-h-11 flex-none items-center rounded-full border border-line px-3.5 text-[13px] font-semibold text-soft hover:border-gold hover:text-cream">{l}</a>
+        ))}
+      </nav>
       {sp.ok ? <Notice tone="good">{sp.ok}</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
       {can(me, "billing.manage") ? (
@@ -63,7 +74,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       ) : null}
       {d.payouts ? (
         <Card>
-          <section id="payouts" className="flex scroll-mt-4 flex-col gap-3">
+          <section id="payouts" className="flex scroll-mt-20 flex-col gap-3">
             <SectionLabel right={d.payouts.enabled ? <Pill tone="good">Payouts on</Pill> : d.payouts.connected ? <Pill tone="warn">Finishing setup</Pill> : <Pill tone="warn">Not set up</Pill>}>Get paid</SectionLabel>
             {sp.saved === "payouts" ? <Notice tone="good">Saved. Stripe may take a few minutes to finish checking your details.</Notice> : null}
             <p className="text-[13px] text-soft">Families pay through ProLyt. Every Friday we pay your coaches their share, take ProLyt&apos;s {feePercent()} platform fee, and send the rest to your bank through Stripe.</p>
@@ -99,7 +110,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </Card>
       ) : null}
 
-      {can(me, "brand.manage") ? <Card>
+      {can(me, "brand.manage") ? <Card id="branding">
         <SectionLabel>Branding</SectionLabel>
         <p className="mb-3 mt-1 text-xs text-muted">Shown to your families and coaches everywhere in the app, with a small &ldquo;Powered by ProLyt.&rdquo;</p>
         <BrandingForm name={d.org.name} color={d.org.brand_color} hasLogo={d.org.has_logo} />
@@ -107,7 +118,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       {staffOk ? (
       <Card>
-        <section id="staff" className="flex scroll-mt-4 flex-col gap-3">
+        <section id="staff" className="flex scroll-mt-20 flex-col gap-3">
         <SectionLabel>Coaches</SectionLabel>
         <div className="flex flex-col gap-2">
           {d.team.map((c) => {
@@ -194,7 +205,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       ) : null}
 
       {can(me, "roster.manage") ? (
-        <Card>
+        <Card id="teams">
           <SectionLabel>Teams</SectionLabel>
           <p className="mb-2 mt-1 text-xs text-muted">Teams show on each athlete&apos;s career. <Link href="/rosters" className="font-semibold text-gold">Manage rosters →</Link></p>
           <ul className="mb-3 divide-y divide-line">
@@ -218,7 +229,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </Card>
       ) : null}
 
-      {can(me, "billing.manage") ? <Card>
+      {can(me, "billing.manage") ? <Card id="coach-pay">
         <SectionLabel>Coach pay</SectionLabel>
         <p className="mb-3 mt-1 text-xs text-muted">Credited automatically when a coach checks a session in.</p>
         <CoachPayForm shareBps={d.org.share} groupCents={d.org.grp} />

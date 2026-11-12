@@ -11,6 +11,7 @@ import { PasskeyNudge } from "@/components/passkey";
 import { NameNudge } from "@/components/name-nudge";
 import { MARKETPLACE } from "@/lib/trainers";
 import { asUser } from "@/lib/db";
+import { cookies } from "next/headers";
 
 const isTrainer = (uid: string) => asUser(uid, (q) => q<{ t: boolean }>("select is_trainer() t")).then((r) => Boolean(r[0]?.t)).catch(() => false);
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
@@ -73,7 +74,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         {isDemo ? <div className="mx-5 mt-2 rounded bg-gold/10 px-3 py-1 text-center text-[11px] text-gold">Demo mode · sample data</div> : null}
         <main className="flex flex-1 flex-col gap-4 px-5 pb-36 pt-4">
-          {!me.name || me.name === me.email || me.name === "Member" ? <NameNudge /> : !isDemo && !(await hasPasskeyHere(me.id)) ? <PasskeyNudge /> : null}
+          {(!me.name || me.name === me.email || me.name === "Member") && !(await cookies()).get("name_later") ? <NameNudge /> : !isDemo && !(await hasPasskeyHere(me.id)) ? <PasskeyNudge /> : null}
           {children}
           {brand ? <div className="mt-6 text-center"><PoweredBy /></div> : null}
         </main>

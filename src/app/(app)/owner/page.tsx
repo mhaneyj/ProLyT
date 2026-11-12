@@ -4,6 +4,50 @@ import { asUser } from "@/lib/db";
 import { money } from "@/lib/domain/format";
 import { Card, Empty, SectionLabel, Stat, Title } from "@/components/ui";
 import { EventHistory, type EventRow } from "@/components/event-history";
+import { CopyLink } from "@/components/copy-link";
+import { stripeConfigured } from "@/lib/stripe";
+
+type Setup = { plans: number; described: number; payouts: boolean; sessions: number; coaches: number; families: number };
+
+/** The first-week list for a new program. Hidden once everything that matters is done. */
+function Launch({ s, pay }: { s: Setup; pay: boolean }) {
+  const steps = [
+    { done: s.described > 0, title: "Add your training plans", sub: s.plans && !s.described ? "Add a description so families know what they get." : "Each level, its price, sessions a week and what's included.", href: "/owner/plans", cta: "Add plans" },
+    ...(pay ? [{ done: s.payouts, title: "Connect your bank", sub: "So family payments land in your account. Takes about 5 minutes with Stripe.", href: "/owner/settings#payouts", cta: "Connect" }] : []),
+    { done: s.sessions > 0, title: "Post your first session", sub: "Families book from the schedule.", href: "/coach/new", cta: "Post" },
+    { done: s.coaches > 0, title: "Add your coaches", sub: "Optional. They take attendance and log test results.", href: "/owner/settings#staff", cta: "Invite" },
+    { done: s.families > 0, title: "Invite families", sub: "Send this link. Parents sign up their athlete and pick a plan.", share: true },
+  ];
+  const left = steps.filter((x) => !x.done).length;
+  if (!left) return null;
+  const next = steps.findIndex((x) => !x.done);
+  return (
+    <Card accent className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between">
+        <span className="font-cond text-[15px] font-extrabold uppercase tracking-[2px]">Get ready for families</span>
+        <span className="text-[13px] text-muted">{steps.length - left} of {steps.length} done</span>
+      </div>
+      <div className="flex gap-1" aria-hidden="true">{steps.map((x, i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${x.done ? "bg-gold" : "bg-line"}`} />)}</div>
+      <ol className="flex flex-col gap-2">
+        {steps.map((x, i) => (
+          <li key={x.title} className={`flex flex-col gap-2 rounded-lg border p-3 ${i === next ? "border-gold/60 bg-gold/5" : "border-line"}`}>
+            <div className="flex items-center gap-3">
+              <span className={`grid size-7 flex-none place-items-center rounded-full text-[13px] font-bold ${x.done ? "bg-gold text-on-gold" : "border border-line text-muted"}`}>{x.done ? "✓" : i + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className={`block font-semibold ${x.done ? "text-muted line-through" : ""}`}>{x.title}</span>
+                {!x.done ? <span className="block text-[12px] text-muted">{x.sub}</span> : null}
+              </span>
+              {!x.done && "href" in x && x.href ? (
+                <Link href={x.href} className={`flex min-h-11 flex-none items-center rounded-md px-4 text-sm font-bold ${i === next ? "bg-gold text-on-gold" : "border border-line hover:border-gold"}`}>{x.cta}</Link>
+              ) : null}
+            </div>
+            {!x.done && "share" in x ? <CopyLink path="/register" label="Family sign-up link" text="Sign up for training" /> : null}
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
 
 export const metadata = { title: "Dashboard" };
 
@@ -37,13 +81,26 @@ export default async function Owner() {
       where p.org_id = $1 and m.status in ('active','past_due') group by p.name, p.price_cents order by p.price_cents`, [me.orgId]);
     const tournaments = (await q<EventRow & { entry: string }>("select event_id, event, starts_on::text, host, entry, team, division, place, w, l, t from program_tournaments($1)", [me.orgId]))
       .map((r) => ({ ...r, team: r.team && r.team !== r.entry ? `${r.entry} (${r.team})` : r.entry }));
-    return { k, alerts, mix, tournaments };
+    const [setup] = await q<Setup>(`select
+      (select count(*)::int from plans where org_id = $1 and active) plans,
+      (select count(*)::int from plans where org_id = $1 and active and description is not null) described,
+      (select payouts_enabled from orgs where id = $1) payouts,
+      (select count(*)::int from sessions where org_id = $1) sessions,
+      (select count(*)::int from org_members where org_id = $1 and role = 'coach') coaches,
+      (select count(*)::int from program_athletes where org_id = $1) families`, [me.orgId]);
+    return { k, alerts, mix, tournaments, setup };
   });
+  const pay = stripeConfigured && me.features.payments;
+  const live = d.k.revenue > 0 || d.k.active > 0;
+  // The launch list covers payouts.
+  const alerts = d.alerts.filter((a) => !a.title.startsWith("Set up payouts"));
   const change = d.k.last ? Math.round(((d.k.revenue - d.k.last) / d.k.last) * 100) : null;
 
   return (
     <>
-      <div className="flex items-end justify-between gap-3"><Title sub="Last 30 days.">Dashboard</Title><span className="flex gap-4"><Link href="/host" className="min-h-11 pb-1 text-sm font-semibold">Events</Link><Link href="/owner/settings" className="min-h-11 pb-1 text-sm font-semibold">Settings</Link></span></div>
+      <div className="flex items-end justify-between gap-3"><Title sub={live ? "Last 30 days." : undefined}>Dashboard</Title><span className="flex gap-4"><Link href="/host" className="min-h-11 pb-1 text-sm font-semibold">Events</Link><Link href="/owner/settings" className="min-h-11 pb-1 text-sm font-semibold">Settings</Link></span></div>
+      <Launch s={d.setup} pay={pay} />
+      {live ? (<>
       <Card>
         <div className="flex items-baseline justify-between text-sm"><span className="text-muted">Revenue</span>
           {change !== null ? <span className={change >= 0 ? "font-bold text-good" : "font-bold text-warn"}>{change >= 0 ? "+" : ""}{change}% vs prior 30 days</span> : null}
@@ -58,8 +115,9 @@ export default async function Owner() {
         <Stat label="Active" value={d.k.active} tone="good" />
         <Stat label="Attendance taken" value={`${d.k.logged}%`} />
       </div>
-      <SectionLabel>Needs attention</SectionLabel>
-      {d.alerts.length === 0 ? <Empty title="All clear" /> : d.alerts.map((a, i) => (
+      </>) : null}
+      {live || alerts.length ? <SectionLabel>Needs attention</SectionLabel> : null}
+      {alerts.length === 0 ? (live ? <Empty title="All clear" /> : null) : alerts.map((a, i) => (
         <Card key={i} className="border-l-4 border-l-warn">
           <div className="font-semibold">{a.title}</div>
           <div className="text-sm text-muted">{a.sub}</div>
