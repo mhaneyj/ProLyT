@@ -57,6 +57,9 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
       order by s.starts_at`, [me.id]),
   );
   const mine = me.roles.includes("owner") ? sessions : sessions.filter((s) => s.mine);
+  const due = me.orgId && me.perms.includes("results.log")
+    ? await asUser(me.id, async (q) => (await q<{ due: number; total: number }>("select count(*) filter (where due)::int due, count(*)::int total from testing_roster($1)", [me.orgId]))[0])
+    : null;
   const today = mine.filter((s) => isSameLocalDay(s.starts_at));
   const later = mine.filter((s) => !isSameLocalDay(s.starts_at));
   // The session happening now, or the next one today, gets the big card.
@@ -91,6 +94,16 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
           </Hero>
         </Link>
       ) : null}
+      {due && due.total ? (
+        <Link href="/coach/testing" className={`flex items-center gap-3 rounded-[14px] border p-4 hover:border-gold ${due.due ? "border-warn/50 bg-warn/[0.07]" : "border-line bg-panel"}`}>
+          <span className={`font-display text-[34px] leading-none ${due.due ? "text-warn" : "text-good"}`}>{due.due || "✓"}</span>
+          <span className="min-w-0 flex-1 text-sm">
+            <span className="block font-semibold">{due.due ? `Due for a retest` : "Everyone tested this month"}</span>
+            <span className="block text-[12px] text-muted">{due.due ? `${due.due} of ${due.total} athletes haven't been timed in 30 days. Their cards, ranks and challenges are waiting on it.` : "Run Testing Day any time to update cards."}</span>
+          </span>
+          <span className="flex-none text-sm font-bold text-gold">Testing Day →</span>
+        </Link>
+      ) : null}
       {rest.length ? rest.map(row) : !focus ? <Empty title="No sessions today">Post one and families can book it right away.</Empty> : null}
       {later.length ? (
         <>
@@ -106,6 +119,8 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
           me.perms.includes("roster.manage") ? ["/rosters", "Rosters"] : null,
           ["/host", "Events"],
           ["/trainer", "My coach page"],
+          ["/coach/testing", "Testing Day"],
+          ["/help", "Help"],
           me.roles.includes("owner") && me.roles.includes("coach") ? ["/coach/earnings", "Earnings"] : null,
         ].filter((x): x is string[] => Boolean(x)).map(([href, label]) => (
           <Link key={href} href={href} className="flex min-h-12 items-center justify-center rounded-[10px] border border-line bg-panel px-2 text-center text-[14px] font-semibold hover:border-gold">{label}</Link>

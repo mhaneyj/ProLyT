@@ -116,6 +116,32 @@ export async function sendNudgeEmail(to: string, n: { subject: string; heading: 
   if (!res.ok) console.error("[email] nudge refused:", res.status);
 }
 
+/** Monthly progress report for a parent. */
+export async function sendReportEmail(to: string, r: { headline: string; summary: string; tests: { label: string; now: string; change: string; pr: boolean }[]; link: string; program: string }) {
+  const key = process.env.RESEND_API_KEY;
+  const sender = process.env.EMAIL_FROM ?? `ProLyt <signin@${ROOT_DOMAIN}>`;
+  if (!key) {
+    console.log(`[report email] ${to} → ${r.headline} | ${r.link}`);
+    return;
+  }
+  const rows = r.tests.map((t) => `<tr><td style="padding:8px 0;border-top:1px solid #eee">${escapeHtml(t.label)}<br><span style="font-size:12px;color:${t.pr ? "#1a7f37" : "#888"}">${escapeHtml(t.change)}</span></td><td style="padding:8px 0;border-top:1px solid #eee;text-align:right;font-weight:bold;font-size:18px">${escapeHtml(t.now)}</td></tr>`).join("");
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#111">
+      <p style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b08900;margin:0 0 8px">Monthly report · ${escapeHtml(r.program)}</p>
+      <h1 style="font-size:22px;margin:0 0 8px">${escapeHtml(r.headline)}</h1>
+      <p style="font-size:15px;color:#444;margin:0 0 16px">${escapeHtml(r.summary)}</p>
+      ${rows ? `<table style="width:100%;border-collapse:collapse;font-size:15px">${rows}</table>` : ""}
+      <p style="margin:24px 0"><a href="${r.link}" style="background:#F8C40A;color:#070707;padding:14px 22px;border-radius:6px;text-decoration:none;font-weight:bold">See the full report</a></p>
+      <p style="font-size:12px;color:#888">Sent on the 1st of each month. Powered by ProLyt</p>
+    </div>`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: sender, to, subject: r.headline, html }),
+  });
+  if (!res.ok) console.error("[email] report refused:", res.status);
+}
+
 /** Age/grade check result. No document details in email. */
 export async function sendAgeCheckEmail(to: string, first: string, approved: boolean, note: string | null, link: string) {
   const key = process.env.RESEND_API_KEY;

@@ -82,7 +82,7 @@ export async function saveBatch(_: BatchState, form: FormData): Promise<BatchSta
   const session = String(form.get("session") ?? "");
   const metric = String(form.get("metric") ?? "");
   const m = METRICS[metric];
-  if (!m || !z.guid().safeParse(session).success) return { error: "Pick a test" };
+  if (!m || (session && !z.guid().safeParse(session).success)) return { error: "Pick a test" };
   const entries = [...form.entries()].filter(([k, v]) => k.startsWith("v:") && String(v).trim() !== "")
     .map(([k, v]) => ({ athlete: k.slice(2), raw: String(v).trim() }));
   const values = Object.fromEntries(entries.map((e) => [e.athlete, e.raw]));
@@ -100,13 +100,13 @@ export async function saveBatch(_: BatchState, form: FormData): Promise<BatchSta
       for (const e of entries) {
         if (!z.guid().safeParse(e.athlete).success) continue;
         await q("insert into results (athlete_id, session_id, metric, value, unit, source) values ($1,$2,$3,$4,$5,'coach_logged')",
-          [e.athlete, session, metric, Number(e.raw.replace(",", ".")), m.unit]);
+          [e.athlete, session || null, metric, Number(e.raw.replace(",", ".")), m.unit]);
       }
     });
   } catch (err) {
     return { error: dbMessage(err), values };
   }
-  revalidatePath(`/coach/session/${session}`);
+  revalidatePath(session ? `/coach/session/${session}` : "/coach/testing");
   return { ok: `Saved ${entries.length} ${m.label} result${entries.length > 1 ? "s" : ""}. Families see them now.` };
 }
 

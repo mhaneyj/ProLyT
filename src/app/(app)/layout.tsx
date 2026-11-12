@@ -10,7 +10,7 @@ import { hasPasskeyHere } from "@/lib/passkeys";
 import { PasskeyNudge } from "@/components/passkey";
 import { NameNudge } from "@/components/name-nudge";
 import { MARKETPLACE } from "@/lib/trainers";
-import { asUser } from "@/lib/db";
+import { asService, asUser } from "@/lib/db";
 import { cookies } from "next/headers";
 
 const isTrainer = (uid: string) => asUser(uid, (q) => q<{ t: boolean }>("select is_trainer() t")).then((r) => Boolean(r[0]?.t)).catch(() => false);
@@ -18,6 +18,8 @@ import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireMe();
+  // One "opened" per person per day, for weekly-active counts. Never blocks the page.
+  void asService((q) => q("select note_open($1, $2)", [me.id, me.orgId ?? null])).catch(() => {});
   if (me.orgPaused && !me.isPlatformAdmin) redirect(homeFor(me));
   const brand = await brandById(me.orgId);
   const items: NavItem[] = [];

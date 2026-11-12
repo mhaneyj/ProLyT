@@ -78,6 +78,10 @@ export default async function Account({ searchParams }: { searchParams: Promise<
 
       <p className="text-[13px] text-muted">{u?.passkeys ? `Face ID / passkey is on for ${u.passkeys} device${u.passkeys === 1 ? "" : "s"}.` : "Tip: turn on Face ID from the banner on your home screen for one-tap sign-in."}</p>
       <EnablePush why="for messages, check-in and your teams' games." />
+      <Link href="/help" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line bg-panel px-4 hover:border-gold">
+        <span><span className="block font-semibold">Help &amp; feedback</span><span className="block text-[12px] text-muted">Report a problem, ask a question or send an idea to the ProLyt team</span></span>
+        <span aria-hidden="true" className="text-gold">→</span>
+      </Link>
       <form action={signOut}><Button kind="ghost">Sign out</Button></form>
     </>
   );

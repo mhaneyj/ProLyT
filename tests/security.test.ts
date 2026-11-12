@@ -1442,6 +1442,54 @@ describe("autopilot", () => {
   });
 });
 
+describe("operations", () => {
+  it("testing roster: staff only, shows best marks and who's due", async () => {
+    const rows = (await as(db, COACH, () => db.query<{ athlete_id: string; best: Record<string, number>; due: boolean }>("select athlete_id, best, due from testing_roster($1)", [ORG]))).rows;
+    const j = rows.find((r) => r.athlete_id === jordan)!;
+    expect(j.best["40yd"]).toBeGreaterThan(0);
+    expect(typeof j.due).toBe("boolean");
+    expect((await as(db, PARENT_A, () => db.query("select * from testing_roster($1)", [ORG]))).rows).toEqual([]);
+  });
+
+  it("health dashboard is ProLyt-staff only; monthly report is family/coach only", async () => {
+    await expect(as(db, OWNER, () => db.query("select admin_health()"))).rejects.toThrow(/admins only/);
+    const month = (await db.query<{ m: string }>("select date_trunc('month', now() at time zone 'America/Los_Angeles')::date::text m")).rows[0].m;
+    const r = (await as(db, PARENT_A, () => db.query<{ r: { first: string; sessions: number; tests: unknown[] } }>("select monthly_report($1, $2::date) r", [jordan, month]))).rows[0].r;
+    expect(r.first).toBe("Jordan");
+    expect(r.sessions).toBeGreaterThan(0);
+    expect((await as(db, PARENT_B, () => db.query<{ r: unknown }>("select monthly_report($1, $2::date) r", [jordan, month]))).rows[0].r).toBeNull();
+    await expect(as(db, PARENT_A, () => db.query("select * from due_reports(current_date)"))).rejects.toThrow(/permission/);
+    expect((await db.query("select 1 from due_reports($1::date) where athlete_id = $2", [month, jordan])).rows).toHaveLength(1);
+  });
+
+  it("tickets: anyone opens one; only they and ProLyt staff read it; staff replies set waiting, theirs reopen", async () => {
+    const id = (await as(db, PARENT_A, () => db.query<{ id: string }>("select open_ticket('bug', 'Book button does nothing', 'Tapped Book twice.', '{\"path\":\"/schedule\"}', $1) id", [ORG]))).rows[0].id;
+    const t = (await db.query<{ priority: string; status: string; org_id: string }>("select priority, status, org_id from tickets where id = $1", [id])).rows[0];
+    expect(t).toEqual({ priority: "high", status: "new", org_id: ORG });
+    expect((await as(db, PARENT_B, () => db.query("select * from tickets where id = $1", [id]))).rows).toEqual([]);
+    expect((await as(db, OWNER, () => db.query("select * from ticket_messages where ticket_id = $1", [id]))).rows).toEqual([]); // program owners don't see family tickets
+    await expect(as(db, PARENT_B, () => db.query("select reply_ticket($1, 'me too')", [id]))).rejects.toThrow(/Not found/);
+    await expect(as(db, PARENT_A, () => db.query("insert into tickets (user_id, kind, subject) values ($1, 'idea', 'sneaky')", [PARENT_A]))).rejects.toThrow(/permission/);
+    // Not a member of that program: org is dropped, not trusted.
+    const elsewhere = (await db.query<{ id: string }>("insert into orgs (name, slug) values ('Elsewhere FC', 'elsewhere-fc') returning id")).rows[0].id;
+    const other = (await as(db, PARENT_B, () => db.query<{ id: string }>("select open_ticket('idea', 'Dark mode please', 'It is already dark.', '{}', $1) id", [elsewhere]))).rows[0].id;
+    expect((await db.query<{ org_id: string | null }>("select org_id from tickets where id = $1", [other])).rows[0].org_id).toBeNull();
+    // Staff reply → waiting; family reply → open; resolved can be rated.
+    const admin = (await db.query<{ user_id: string }>("select user_id from platform_admins limit 1")).rows[0]?.user_id;
+    if (admin) {
+      await as(db, admin, () => db.query("select reply_ticket($1, 'Fixed, try again?')", [id]));
+      expect((await db.query<{ status: string }>("select status from tickets where id = $1", [id])).rows[0].status).toBe("waiting");
+      await as(db, PARENT_A, () => db.query("select reply_ticket($1, 'Works now')", [id]));
+      expect((await db.query<{ status: string }>("select status from tickets where id = $1", [id])).rows[0].status).toBe("open");
+      await as(db, admin, () => db.query("select reply_ticket($1, '', 'resolved')", [id]));
+      await as(db, PARENT_A, () => db.query("select rate_ticket($1, 5)", [id]));
+      expect((await db.query<{ rating: number; status: string }>("select rating, status from tickets where id = $1", [id])).rows[0]).toEqual({ rating: 5, status: "resolved" });
+      expect((await as(db, admin, () => db.query<{ tickets_open: number }>("select (admin_health()->>'tickets_open')::int tickets_open"))).rows[0].tickets_open).toBeGreaterThanOrEqual(1);
+    }
+    expect((await as(db, PARENT_A, () => db.query("select * from ticket_messages where ticket_id = $1", [id]))).rows.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe("ranks", () => {
   it("shows an athlete only their own place in their age group, the top mark and the mark to pass; never a name; 3+ only", async () => {
     const peer = async (age: number, broad: number | null, cone: number | null) => {

@@ -1,6 +1,7 @@
 import "server-only";
 import { asService } from "./db";
-import { sendNudgeEmail } from "./email";
+import { sendNudgeEmail, sendReportEmail } from "./email";
+import { lastMonth, reportLines, type MonthReport } from "./report";
 import { programOrigin } from "./invite";
 import { pushTo } from "./push";
 
@@ -41,4 +42,24 @@ export async function runAutopilot(now?: Date) {
     sent[d.kind] = (sent[d.kind] ?? 0) + 1;
   }
   return sent;
+}
+
+/** On the 1st: last month's progress report to every family with something to report. Emailed, plus a phone notification. */
+export async function runReports(now?: Date) {
+  const month = lastMonth(now);
+  const due = await asService((q) => q<{ athlete_id: string; org_id: string }>("select athlete_id, org_id from due_reports($1::date)", [month]));
+  let sent = 0;
+  for (const d of due) {
+    const [row] = await asService((q) => q<{ r: MonthReport }>("select monthly_report($1, $2::date) r", [d.athlete_id, month]));
+    if (!row?.r) continue;
+    const who = await asService((q) => q<Who>("select * from claim_nudge('report', $1, $2, $3, '{}'::jsonb)", [d.org_id, d.athlete_id, month]));
+    if (!who.length) continue;
+    const L = reportLines(row.r);
+    const path = `/athlete/${d.athlete_id}/report?month=${month.slice(0, 7)}`;
+    const origin = programOrigin(who[0], { proto: "https", host: who[0].custom_domain ?? "" });
+    await pushTo(who.filter((w) => w.has_push).map((w) => w.user_id), { title: L.headline, body: L.summary, url: path, tag: `report-${d.athlete_id}` });
+    await Promise.allSettled(who.map((w) => sendReportEmail(w.email, { headline: L.headline, summary: L.summary, tests: L.tests, link: `${origin}${path}`, program: w.org_name })));
+    sent++;
+  }
+  return { month, sent };
 }
