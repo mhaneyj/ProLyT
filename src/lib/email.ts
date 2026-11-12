@@ -93,6 +93,29 @@ export async function sendMessageAlert(to: string, link: string, where: string, 
   if (!res.ok) console.error("[email] message alert refused:", res.status);
 }
 
+/** An Autopilot follow-up for a family who hasn't turned on phone notifications. */
+export async function sendNudgeEmail(to: string, n: { subject: string; heading: string; body: string; link: string; cta: string; program: string }) {
+  const key = process.env.RESEND_API_KEY;
+  const sender = process.env.EMAIL_FROM ?? `ProLyt <signin@${ROOT_DOMAIN}>`;
+  if (!key) {
+    console.log(`[nudge email] ${to} → ${n.subject} | ${n.link}`);
+    return;
+  }
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#111">
+      <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(n.heading)}</h1>
+      <p style="font-size:15px;line-height:1.5">${escapeHtml(n.body)}</p>
+      <p style="margin:24px 0"><a href="${n.link}" style="background:#F8C40A;color:#070707;padding:14px 22px;border-radius:6px;text-decoration:none;font-weight:bold">${escapeHtml(n.cta)}</a></p>
+      <p style="font-size:12px;color:#888">From ${escapeHtml(n.program)}. Turn on phone notifications in the app to get these there instead. Powered by ProLyt</p>
+    </div>`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: sender, to, subject: n.subject, html }),
+  });
+  if (!res.ok) console.error("[email] nudge refused:", res.status);
+}
+
 /** Age/grade check result. No document details in email. */
 export async function sendAgeCheckEmail(to: string, first: string, approved: boolean, note: string | null, link: string) {
   const key = process.env.RESEND_API_KEY;

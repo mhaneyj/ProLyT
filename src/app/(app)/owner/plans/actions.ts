@@ -88,3 +88,12 @@ export async function setPlanLimit(form: FormData) {
     : mode === "charge" ? `Extra sessions are $${(price! / 100).toFixed(price! % 100 ? 2 : 0)}. Families pay when they book one.`
     : "Families can book extra sessions past their plan.");
 }
+
+/** Autopilot on or off (from the dashboard). */
+export async function setAutopilot(form: FormData) {
+  const me = await requirePerm("billing.manage");
+  const on = form.get("on") === "1";
+  await asUser(me.id, (q) => q("select set_autopilot($1, $2)", [me.orgId, on]));
+  revalidatePath("/owner");
+  redirect(`/owner?autopilot=${on ? "on" : "off"}`);
+}

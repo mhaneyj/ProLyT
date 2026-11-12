@@ -6,6 +6,32 @@ import { Card, Empty, SectionLabel, Stat, Title } from "@/components/ui";
 import { EventHistory, type EventRow } from "@/components/event-history";
 import { CopyLink } from "@/components/copy-link";
 import { stripeConfigured } from "@/lib/stripe";
+import { setAutopilot } from "./plans/actions";
+
+const NUDGE: Record<string, string> = { reminder: "session reminder", comeback: "come-back nudge", plan_left: "sessions-left nudge", challenges: "challenge alert" };
+
+/** What ProLyt did for the program on its own this month, and the switch. */
+function Autopilot({ on, nudges }: { on: boolean; nudges: { kind: string; n: number }[] }) {
+  const total = nudges.reduce((t, x) => t + x.n, 0);
+  return (
+    <Card className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block font-cond text-[15px] font-extrabold uppercase tracking-[2px]">Autopilot <span className={on ? "text-good" : "text-muted"}>{on ? "On" : "Off"}</span></span>
+          <span className="block text-[12px] text-muted">ProLyt follows up with families for you: reminders the day before, a nudge when a kid on a plan stops coming, sessions left on Thursday, new challenges on Monday.</span>
+        </span>
+        <form action={setAutopilot} className="flex-none"><input type="hidden" name="on" value={on ? "0" : "1"} />
+          <button className="min-h-11 rounded-md border border-line px-3 text-sm font-semibold hover:border-gold">{on ? "Turn off" : "Turn on"}</button>
+        </form>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 text-[13px] text-soft">
+        {total ? <><span className="text-muted">Last 30 days:</span>
+          {nudges.map((x) => <span key={x.kind}><span className="font-semibold text-cream">{x.n}</span> {NUDGE[x.kind] ?? x.kind}{x.n === 1 ? "" : "s"}</span>)}</> : <span className="text-muted">Nothing sent yet this month.</span>}
+        <Link href="/owner/plans/usage" className="ml-auto flex min-h-11 items-center font-semibold text-gold">Plan usage →</Link>
+      </div>
+    </Card>
+  );
+}
 
 type Setup = { plans: number; described: number; payouts: boolean; sessions: number; coaches: number; families: number };
 
@@ -88,7 +114,15 @@ export default async function Owner() {
       (select count(*)::int from sessions where org_id = $1) sessions,
       (select count(*)::int from org_members where org_id = $1 and role = 'coach') coaches,
       (select count(*)::int from program_athletes where org_id = $1) families`, [me.orgId]);
-    return { k, alerts, mix, tournaments, setup };
+    const [risk] = await q<{ idle: number; on: boolean }>(`select
+      (select count(*)::int from (select distinct on (m.athlete_id) m.athlete_id, m.status, m.created_at from memberships m join plans p on p.id = m.plan_id
+        where p.org_id = $1 order by m.athlete_id, m.created_at desc) x
+       where x.status in ('active','pending') and x.created_at < now() - interval '14 days'
+         and not exists (select 1 from attendance at join sessions s on s.id = at.session_id
+           where at.athlete_id = x.athlete_id and s.org_id = $1 and at.status = 'present' and s.starts_at > now() - interval '14 days')) idle,
+      (select autopilot from orgs where id = $1) "on"`, [me.orgId]);
+    const nudges = await q<{ kind: string; n: number }>("select kind, n from program_nudges($1)", [me.orgId]);
+    return { k, alerts, mix, tournaments, setup, risk, nudges };
   });
   const pay = stripeConfigured && me.features.payments;
   const live = d.k.revenue > 0 || d.k.active > 0;
@@ -100,6 +134,14 @@ export default async function Owner() {
     <>
       <div className="flex items-end justify-between gap-3"><Title sub={live ? "Last 30 days." : undefined}>Dashboard</Title><span className="flex gap-4"><Link href="/host" className="min-h-11 pb-1 text-sm font-semibold">Events</Link><Link href="/owner/settings" className="min-h-11 pb-1 text-sm font-semibold">Settings</Link></span></div>
       <Launch s={d.setup} pay={pay} />
+      {d.risk.idle ? (
+        <Link href="/owner/plans/usage" className="flex items-center gap-3 rounded-[14px] border border-warn/50 bg-warn/[0.07] p-4 hover:border-warn">
+          <span className="font-display text-[34px] leading-none text-warn">{d.risk.idle}</span>
+          <span className="min-w-0 flex-1 text-sm"><span className="block font-semibold">On a plan, not in for 2+ weeks</span>
+            <span className="block text-[12px] text-muted">{d.risk.on ? "Autopilot is nudging them. See who →" : "These families are the next to cancel. See who →"}</span></span>
+        </Link>
+      ) : null}
+      <Autopilot on={d.risk.on} nudges={d.nudges} />
       {live ? (<>
       <Card>
         <div className="flex items-baseline justify-between text-sm"><span className="text-muted">Revenue</span>

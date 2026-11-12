@@ -10,6 +10,10 @@
     {
       "path": "/api/cron/purge-docs",
       "schedule": "15 11 * * *"
+    },
+    {
+      "path": "/api/cron/autopilot",
+      "schedule": "0 0 * * *"
     }
   ]
 }

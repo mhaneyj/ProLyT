@@ -1395,6 +1395,53 @@ describe("ProLyt Trainer logs", () => {
   });
 });
 
+describe("autopilot", () => {
+  it("finds tomorrow's reminders and families paying but not coming; claims each once; owner sees it; families can't run it", async () => {
+    // A brand-new athlete on a plan for 3 weeks who hasn't come in.
+    const kid = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ('Quinn','Lapse','2012-05-01') returning id")).rows[0].id;
+    await db.query("insert into guardians (athlete_id, user_id, is_primary) values ($1,$2,true)", [kid, PARENT_A]);
+    await db.query("insert into program_athletes (org_id, athlete_id) values ($1,$2)", [ORG, kid]);
+    const plan = (await db.query<{ id: string }>("insert into plans (org_id, name, price_cents, sessions_per_week) values ($1,'Comeback Lab',9900,2) returning id", [ORG])).rows[0].id;
+    await db.query("insert into memberships (athlete_id, plan_id, status, created_at) values ($1,$2,'active', now() - interval '21 days')", [kid, plan]);
+    // Jordan has a session tomorrow at 5 PM Pacific.
+    const tomorrow = (await db.query<{ id: string }>(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id)
+      values ($1,'group','speed','Reminder test', ((now() at time zone 'America/Los_Angeles')::date + 1 + time '17:00') at time zone 'America/Los_Angeles',
+        ((now() at time zone 'America/Los_Angeles')::date + 1 + time '18:00') at time zone 'America/Los_Angeles', $2) returning id`, [ORG, COACH])).rows[0].id;
+    await db.query("insert into session_athletes (session_id, athlete_id) values ($1,$2)", [tomorrow, jordan]);
+
+    const due = (await db.query<{ kind: string; athlete_id: string; ref: string }>("select kind, athlete_id, ref from due_nudges()")).rows;
+    expect(due).toContainEqual(expect.objectContaining({ kind: "reminder", athlete_id: jordan, ref: tomorrow }));
+    const back = due.find((d) => d.kind === "comeback" && d.athlete_id === kid)!;
+    expect(back).toBeTruthy();
+    expect(due.find((d) => d.kind === "comeback" && d.athlete_id === jordan)).toBeUndefined(); // Jordan is coming
+
+    const claim = () => db.query<{ user_id: string; email: string }>("select user_id, email from claim_nudge('comeback', $1, $2, $3, '{}')", [ORG, kid, back.ref]);
+    expect((await claim()).rows.map((r) => r.user_id)).toEqual([PARENT_A]);
+    expect((await claim()).rows).toEqual([]); // second run sends nothing
+
+    // A Thursday with plan sessions unused and open spots left: plan_left.
+    await db.query(`insert into sessions (org_id, kind, program, title, starts_at, ends_at, coach_id)
+      values ($1,'group','speed','Friday open', ((week_start(now()) + 18)::timestamp + time '17:00') at time zone 'America/Los_Angeles',
+        ((week_start(now()) + 18)::timestamp + time '18:00') at time zone 'America/Los_Angeles', $2)`, [ORG, COACH]);
+    const thu = (await db.query<{ t: string }>("select (((week_start(now()) + 17)::timestamp + time '10:00') at time zone 'America/Los_Angeles')::text t")).rows[0].t;
+    const later = (await db.query<{ kind: string; athlete_id: string }>("select kind, athlete_id from due_nudges($1::timestamptz)", [thu])).rows;
+    expect(later).toContainEqual({ kind: "plan_left", athlete_id: kid });
+    const mon = (await db.query<{ t: string }>("select (((week_start(now()) + 14)::timestamp + time '10:00') at time zone 'America/Los_Angeles')::text t")).rows[0].t;
+    expect((await db.query("select 1 from due_nudges($1::timestamptz) where kind = 'challenges' and athlete_id = $2", [mon, kid])).rows).toHaveLength(1);
+
+    // Owner sees what was sent; families and other programs don't; nobody but the server can run it.
+    expect((await as(db, OWNER, () => db.query<{ kind: string; n: number }>("select kind, n from program_nudges($1)", [ORG]))).rows).toContainEqual({ kind: "comeback", n: 1 });
+    expect((await as(db, PARENT_A, () => db.query("select * from program_nudges($1)", [ORG]))).rows).toEqual([]);
+    expect((await as(db, PARENT_A, () => db.query("select * from nudges"))).rows).toEqual([]);
+    await expect(as(db, PARENT_A, () => db.query("select * from due_nudges()"))).rejects.toThrow(/permission/);
+    await expect(as(db, OWNER, () => db.query("select * from claim_nudge('comeback', $1, $2, 'x', '{}')", [ORG, kid]))).rejects.toThrow(/permission/);
+    await expect(as(db, PARENT_A, () => db.query("select set_autopilot($1, false)", [ORG]))).rejects.toThrow(/owner/);
+    await as(db, OWNER, () => db.query("select set_autopilot($1, false)", [ORG]));
+    expect((await db.query("select 1 from due_nudges() where org_id = $1", [ORG])).rows).toEqual([]);
+    await as(db, OWNER, () => db.query("select set_autopilot($1, true)", [ORG]));
+  });
+});
+
 describe("ranks", () => {
   it("shows an athlete only their own place in their age group, the top mark and the mark to pass; never a name; 3+ only", async () => {
     const peer = async (age: number, broad: number | null, cone: number | null) => {
