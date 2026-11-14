@@ -46,7 +46,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
           front={<PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
             attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} number={v.jersey} firstCard />}
           back={<CardBack first={a.first_name} last={a.last_name} ovr={rating.ovr} number={v.jersey} position={a.position} grad={a.grad_year} team={v.team}
-            attrs={attrs} flex={null} tests={v.tests} tally={`${v.cards.filter((c) => c.tier === "champion").length} · ${v.cards.filter((c) => c.tier === "mvp").length} · ${v.cards.length + 1}`} />} />
+            attrs={attrs} flex={null} tests={v.tests} stats={v.stats} band={v.band} cardNo={v.cardNo} highlight={v.highlight} career={v.career} nextUp={v.nextUp} tally={`${v.cards.filter((c) => c.tier === "champion").length} · ${v.cards.filter((c) => c.tier === "mvp").length} · ${v.cards.length + 1}`} />} />
         <p className="text-[12px] text-muted">Tap the card to flip it.</p>
       </div>
       {a.family ? (

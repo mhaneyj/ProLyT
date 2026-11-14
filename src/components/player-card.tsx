@@ -178,47 +178,111 @@ function ModernCard(p: CardProps & { kind: "signed" | "attendee" }) {
   );
 }
 
-/** The back: rating, attributes and bragging rights. */
+export type BackStats = {
+  cols: { key: string; short: string }[];          // test columns, e.g. 40 · SHTL · VERT · BROAD
+  seasons: { season: string; marks: Record<string, string> }[]; // newest last, like a real card back
+  best: Record<string, string>;
+};
+
+/** The back, Topps style: card number, bio row, season-by-season verified stats with a BEST line, ratings, a highlight. */
 export function CardBack(p: { first: string; last: string; ovr: number | null; number?: string | null; position: string | null; grad: number | null; team?: string | null;
-  attrs: { short: string; value: number | null }[] | null; flex?: string | null; tests?: { label: string; value: string; by: string }[]; tally?: string; size?: "lg" | "sm" }) {
+  attrs: { short: string; value: number | null }[] | null; flex?: string | null; tests?: { label: string; value: string; by: string }[]; tally?: string; size?: "lg" | "sm";
+  stats?: BackStats | null; band?: string | null; cardNo?: string; highlight?: string | null; career?: [string, string | number][] | null; nextUp?: string | null }) {
+  const ink = "#16130c", gold = "#f8c40a", paper = "#f3ead3";
+  const st = p.stats && p.stats.seasons.length ? p.stats : null;
+  const rows = st ? st.seasons.slice(-4) : [];
+  const cols = st?.cols ?? [];
+  const grid = `${u(150)} repeat(${Math.max(cols.length, 1)}, 1fr)`;
   return (
     <Shell lg={(p.size ?? "lg") === "lg"} label={`Back of ${p.first} ${p.last}'s card`}>
-      <div className="absolute inset-0 bg-[#0b0b0b] font-sans">
-        <div className="absolute" style={{ inset: u(24), border: `${u(2)} solid rgba(255,255,255,0.75)`, borderRadius: u(12) }} />
-        <div className="absolute flex items-start justify-between" style={{ left: u(56), right: u(56), top: u(60) }}>
-          <div className="font-light leading-none" style={{ fontSize: u(54), letterSpacing: u(-1) }}>{p.first}<b className="block truncate font-extrabold" style={{ fontSize: u(84), letterSpacing: u(-3), maxWidth: u(440) }}>{p.last}</b></div>
-          <div className="text-right leading-[0.85]"><b className="block font-extrabold" style={{ fontSize: u(140), letterSpacing: u(-6) }}>{p.ovr ?? "--"}</b>
-            <span className="font-extrabold" style={{ fontSize: u(20), letterSpacing: u(6), color: "rgba(255,255,255,0.7)" }}>OVERALL</span></div>
-        </div>
-        <div className="absolute flex font-extrabold" style={{ left: u(58), right: u(56), top: u(270), gap: u(34), fontSize: u(18), letterSpacing: u(4), color: "rgba(255,255,255,0.65)" }}>
-          {[["NO.", p.number ? p.number.padStart(2, "0") : "--"], ["POS", posShort(p.position)], ["CLASS", p.grad ? String(p.grad) : "--"], ["TEAM", p.team ?? "--"]].map(([k, v]) => (
-            <span key={k} className="min-w-0">{k}<b className="block truncate text-white" style={{ fontSize: u(32), letterSpacing: 0, marginTop: u(4) }}>{v}</b></span>
-          ))}
-        </div>
-        <div className="absolute grid grid-cols-6" style={{ left: u(56), right: u(56), top: u(370), borderTop: `${u(2)} solid rgba(255,255,255,0.3)`, borderBottom: `${u(2)} solid rgba(255,255,255,0.3)` }}>
-          {(p.attrs ?? ["SPD", "AGI", "EXP", "STR", "TEC", "IQ"].map((s) => ({ short: s, value: null }))).map((a) => (
-            <div key={a.short} className="text-center" style={{ padding: `${u(18)} 0` }}>
-              <b className="block font-extrabold" style={{ fontSize: u(50), letterSpacing: u(-2) }}>{p.attrs ? a.value ?? "–" : "🔒"}</b>
-              <span className="font-extrabold" style={{ fontSize: u(16), letterSpacing: u(4), color: "rgba(255,255,255,0.6)" }}>{a.short}</span>
-            </div>
-          ))}
-        </div>
-        {p.flex ? (
-          <div className="absolute flex items-baseline bg-white text-[#0b0b0b]" style={{ left: u(56), right: u(56), top: u(540), padding: `${u(20)} ${u(26)}`, gap: u(18) }}>
-            <b className="font-extrabold" style={{ fontSize: u(58), letterSpacing: u(-2) }}>#1</b>
-            <span className="font-extrabold" style={{ fontSize: u(26), lineHeight: 1.15 }}>{p.flex}</span>
+      <div className="absolute inset-0 font-sans" style={{ background: paper, color: ink }}>
+        {/* paper grain */}
+        <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(rgba(0,0,0,0.05) 1px, transparent 1px)", backgroundSize: `${u(6)} ${u(6)}` }} />
+        <div className="absolute" style={{ inset: u(18), border: `${u(4)} solid ${ink}`, borderRadius: u(14) }} />
+        {/* Header band */}
+        <div className="absolute flex items-stretch" style={{ left: u(18), right: u(18), top: u(18), height: u(150), background: ink, borderRadius: `${u(12)} ${u(12)} 0 0` }}>
+          <div className="flex flex-col items-center justify-center" style={{ width: u(150), background: gold, color: ink, borderRadius: `${u(12)} 0 0 0` }}>
+            <span className="font-extrabold" style={{ fontSize: u(18), letterSpacing: u(4) }}>CARD</span>
+            <b className="font-display leading-none" style={{ fontSize: u(64) }}>{p.cardNo ?? "001"}</b>
           </div>
-        ) : null}
-        <div className="absolute" style={{ left: u(56), right: u(56), top: u(p.flex ? 690 : 560) }}>
-          {(p.tests ?? []).slice(0, 3).map((t) => (
-            <div key={t.label} className="flex justify-between" style={{ padding: `${u(13)} 0`, borderBottom: `${u(1)} solid rgba(255,255,255,0.2)`, fontSize: u(27) }}>
-              <span>{t.label}</span><b className="font-extrabold">{t.value} <span className="font-extrabold" style={{ fontSize: u(19), letterSpacing: u(2), color: "rgba(255,255,255,0.55)" }}>{t.by}</span></b>
-            </div>
-          ))}
-          {p.tally ? <div className="flex justify-between" style={{ padding: `${u(13)} 0`, fontSize: u(27) }}><span>Titles · MVPs · Cards</span><b className="font-extrabold">{p.tally}</b></div> : null}
+          <div className="flex min-w-0 flex-1 flex-col justify-center" style={{ padding: `0 ${u(26)}`, color: "#fff" }}>
+            <span className="truncate font-extrabold uppercase leading-none" style={{ fontSize: u(24), letterSpacing: u(5), color: "rgba(255,255,255,0.75)" }}>{p.first}</span>
+            <b className="truncate font-display uppercase leading-none" style={{ fontSize: u(62), letterSpacing: u(1), marginTop: u(4) }}>{p.last}</b>
+            <span className="truncate font-extrabold uppercase" style={{ fontSize: u(19), letterSpacing: u(4), color: gold, marginTop: u(8) }}>
+              {posShort(p.position)}{p.team ? ` · ${p.team}` : ""}
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center" style={{ width: u(130), color: "#fff" }}>
+            <b className="font-display leading-none" style={{ fontSize: u(70) }}>{p.ovr ?? "--"}</b>
+            <span className="font-extrabold" style={{ fontSize: u(15), letterSpacing: u(4), color: gold }}>OVR</span>
+          </div>
         </div>
-        <div className="absolute flex justify-between font-extrabold" style={{ left: u(58), right: u(56), bottom: u(52), fontSize: u(19), letterSpacing: u(6), color: "rgba(255,255,255,0.75)" }}>
-          <span>#EARNEDNOTBOUGHT</span><span>PROLYT 26/27</span>
+        <div className="absolute flex flex-col" style={{ left: u(40), right: u(40), top: u(188), bottom: u(84), gap: u(22) }}>
+          {/* Bio row */}
+          <div className="flex justify-between font-extrabold uppercase" style={{ padding: `0 ${u(8)}`, fontSize: u(17), letterSpacing: u(3), color: "rgba(22,19,12,0.6)" }}>
+            {[["No.", p.number ? p.number.padStart(2, "0") : "--"], ["Pos", posShort(p.position)], ["Class", p.grad ? String(p.grad) : "--"], ["Age grp", p.band ?? "--"]].map(([k, v]) => (
+              <span key={k}>{k}<b className="block font-display text-[1.6em] leading-none" style={{ color: ink, letterSpacing: 0, marginTop: u(4) }}>{v}</b></span>
+            ))}
+          </div>
+          {/* Stats table */}
+          <div>
+            <div className="grid font-extrabold uppercase" style={{ gridTemplateColumns: grid, background: ink, color: gold, fontSize: u(19), letterSpacing: u(2), padding: `${u(10)} ${u(12)}` }}>
+              <span>Season</span>{cols.map((c) => <span key={c.key} className="text-right">{c.short}</span>)}
+            </div>
+            {st ? (
+              <>
+                {rows.map((r, i) => (
+                  <div key={r.season} className="tabular grid items-baseline" style={{ gridTemplateColumns: grid, background: i % 2 ? "rgba(22,19,12,0.06)" : "transparent", fontSize: u(24), padding: `${u(9)} ${u(12)}` }}>
+                    <span className="font-extrabold" style={{ fontSize: u(19), letterSpacing: u(1) }}>{r.season}</span>
+                    {cols.map((c) => <span key={c.key} className="text-right">{r.marks[c.key] ?? "–"}</span>)}
+                  </div>
+                ))}
+                <div className="tabular grid items-baseline font-extrabold" style={{ gridTemplateColumns: grid, borderTop: `${u(3)} solid ${ink}`, fontSize: u(25), padding: `${u(9)} ${u(12)}` }}>
+                  <span style={{ fontSize: u(19), letterSpacing: u(2) }}>BEST</span>
+                  {cols.map((c) => <span key={c.key} className="text-right">{st.best[c.key] ?? "–"}</span>)}
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: `${u(22)} ${u(12)}`, fontSize: u(22), color: "rgba(22,19,12,0.6)" }}>No verified tests yet. Stats fill in after Testing Day.</div>
+            )}
+          </div>
+          {/* Ratings strip */}
+          <div className="grid grid-cols-6">
+            {(p.attrs ?? ["SPD", "AGI", "EXP", "STR", "TEC", "IQ"].map((x) => ({ short: x, value: null }))).map((a, i) => (
+              <div key={a.short} className="text-center" style={{ borderLeft: i ? `${u(2)} solid rgba(22,19,12,0.15)` : undefined }}>
+                <b className="block font-display leading-none" style={{ fontSize: u(44) }}>{p.attrs ? a.value ?? "–" : "🔒"}</b>
+                <span className="font-extrabold" style={{ fontSize: u(15), letterSpacing: u(3), color: "rgba(22,19,12,0.6)" }}>{a.short}</span>
+              </div>
+            ))}
+          </div>
+          {/* Career line */}
+          {p.career ? (
+            <div className="grid grid-cols-4 text-center" style={{ border: `${u(3)} solid ${ink}`, borderRadius: u(10) }}>
+              {p.career.map(([k, v], i) => (
+                <div key={k} style={{ padding: `${u(10)} 0`, borderLeft: i ? `${u(2)} solid rgba(22,19,12,0.2)` : undefined }}>
+                  <b className="block font-display leading-none" style={{ fontSize: u(40) }}>{v}</b>
+                  <span className="font-extrabold uppercase" style={{ fontSize: u(14), letterSpacing: u(2), color: "rgba(22,19,12,0.6)" }}>{k}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {/* Next level note */}
+          {p.nextUp ? (
+            <div style={{ borderTop: `${u(2)} dashed rgba(22,19,12,0.35)`, paddingTop: u(14) }}>
+              <span className="block font-extrabold" style={{ fontSize: u(16), letterSpacing: u(3), color: "rgba(22,19,12,0.6)" }}>NEXT LEVEL</span>
+              <span className="block font-bold leading-snug" style={{ fontSize: u(24), marginTop: u(4) }}>{p.nextUp}</span>
+            </div>
+          ) : null}
+          {/* Highlight */}
+          {p.highlight || p.flex ? (
+            <div className="mt-auto flex items-center" style={{ gap: u(16), background: ink, color: "#fff", padding: `${u(16)} ${u(20)}`, borderRadius: u(10) }}>
+              <span className="flex-none font-extrabold" style={{ fontSize: u(16), letterSpacing: u(3), color: gold }}>HIGHLIGHT</span>
+              <span className="font-bold leading-tight" style={{ fontSize: u(22) }}>{p.highlight ?? p.flex}</span>
+            </div>
+          ) : null}
+        </div>
+        <div className="absolute flex justify-between font-extrabold" style={{ left: u(44), right: u(44), bottom: u(44), fontSize: u(15), letterSpacing: u(4), color: "rgba(22,19,12,0.65)" }}>
+          <span>PROLYT SERIES 1 · 26/27</span><span>#EARNEDNOTBOUGHT</span>
         </div>
       </div>
     </Shell>

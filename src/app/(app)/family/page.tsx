@@ -143,7 +143,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
               front={<PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={ovr}
                 attrs={cardAttrs(card)} tier="player" series="ProLyt" trench={card.rating.trench} foil={card.plus} team={card.team} number={card.jersey} firstCard />}
               back={<CardBack first={a.first_name} last={a.last_name} ovr={ovr} number={card.jersey} position={a.position} grad={a.grad_year} team={card.team}
-                attrs={cardAttrs(card)} tests={card.tests} tally={`${card.cards.filter((c) => c.tier === "champion").length} · ${card.cards.filter((c) => c.tier === "mvp").length} · ${card.cards.length + 1}`} />} />
+                attrs={cardAttrs(card)} tests={card.tests} stats={card.stats} band={card.band} cardNo={card.cardNo} highlight={card.highlight} career={card.career} nextUp={card.nextUp} tally={`${card.cards.filter((c) => c.tier === "champion").length} · ${card.cards.filter((c) => c.tier === "mvp").length} · ${card.cards.length + 1}`} />} />
           </div>
           {card.ranks[0] ? (
             <Link href={`/athlete/${a.id}/cards`} className="mt-1 flex items-center gap-2 rounded-full border border-gold/50 bg-gold/10 px-3.5 py-1.5 text-[13px] font-semibold">

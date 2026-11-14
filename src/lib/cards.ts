@@ -2,6 +2,17 @@ import "server-only";
 import { asUser } from "@/lib/db";
 import { formatValue, metricLabel } from "@/lib/domain/metrics";
 import { ATTRS, computeRating, nextGoal, type Attr, type Rating } from "@/lib/domain/rating";
+import { METRICS } from "@/lib/domain/metrics";
+import type { BackStats } from "@/components/player-card";
+
+/** Columns on the card back, in order. Only tests the athlete has show up. */
+const BACK_COLS = [["40yd", "40"], ["10yd", "10"], ["pro_agility", "SHTL"], ["three_cone", "3-CN"], ["vertical", "VERT"], ["broad", "BRD"]] as const;
+const plain = (metric: string, v: number) => {
+  const m = METRICS[metric];
+  return m?.unit === "s" ? v.toFixed(2) : m?.unit === "in" && metric === "broad" ? `${Math.floor(v / 12)}'${Math.round(v % 12)}"` : m?.unit === "in" ? `${v}"` : String(v);
+};
+/** A stable 3-digit card number from the athlete id, like a set number. */
+export const cardNumber = (id: string) => String((parseInt(id.replace(/-/g, "").slice(-6), 16) % 900) + 100);
 
 type CardData = { age: number; position: string | null; tests: { metric: string; value: number }[]; coach: Partial<Record<Attr, number>>; rated_at: string | null };
 
@@ -29,6 +40,12 @@ export type PlayerCardView = {
   tests: { label: string; value: string; by: string }[];
   ranks: Rank[];
   challenges: Challenge[];
+  stats: BackStats | null;
+  band: string | null;
+  cardNo: string;
+  highlight: string | null;
+  career: [string, number][];
+  nextUp: string | null;
 };
 
 /** Everything the Player Card screens need, as the signed-in person is allowed to see it. Null if they can't. */
@@ -42,11 +59,49 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
     const [id] = await q<{ team: string | null; jersey: string | null; autograph: string | null }>("select team, jersey, autograph from card_identity($1)", [athleteId]);
     const ranks = (await q<Rank>("select org_name, band, metric, value::float value, rank, of_n, top_value::float top_value, next_value::float next_value from athlete_ranks($1)", [athleteId]));
     const challenges = await q<Challenge>("select id, kind, metric, target::float target, baseline::float baseline, sessions, progress, status, done_total, streak from weekly_challenges($1)", [athleteId]);
+    const hist = await q<{ season: string; sort: string; metric: string; v: number; lib: boolean }>(`
+      select case when extract(month from r.recorded_at at time zone 'America/Los_Angeles') <= 6 then 'SPR ' else 'FALL ' end
+          || to_char(r.recorded_at at time zone 'America/Los_Angeles', 'YY') season,
+        to_char(r.recorded_at at time zone 'America/Los_Angeles', 'YYYY') || case when extract(month from r.recorded_at at time zone 'America/Los_Angeles') <= 6 then '1' else '2' end sort,
+        r.metric, (case when m.lower_is_better then min(r.value) else max(r.value) end)::float v, m.lower_is_better lib
+      from results r join metrics m on m.key = r.metric
+      where r.athlete_id = $1 and r.source <> 'self_reported' and r.voided_at is null and r.metric = any($2::text[])
+      group by 1, 2, r.metric, m.lower_is_better order by 2`, [athleteId, BACK_COLS.map((c) => c[0])]);
+    const [b] = await q<{ band: string | null }>("select age_band(birth_date) band from athletes where id = $1", [athleteId]);
+    // Career line: sessions attended, personal bests set, events, challenges done.
+    const [cr] = await q<{ sessions: number; prs: number; challenges: number }>(`select
+      (select count(*)::int from attendance where athlete_id = $1 and status = 'present') sessions,
+      (select count(*)::int from (
+         select r.value, m.lower_is_better lib,
+           min(r.value) over (partition by r.metric order by r.recorded_at rows between unbounded preceding and 1 preceding) prev_min,
+           max(r.value) over (partition by r.metric order by r.recorded_at rows between unbounded preceding and 1 preceding) prev_max
+         from results r join metrics m on m.key = r.metric
+         where r.athlete_id = $1 and r.source <> 'self_reported' and r.voided_at is null) x
+       where (lib and value < prev_min) or (not lib and value > prev_max)) prs,
+      (select count(*)::int from challenges where athlete_id = $1 and status = 'done') challenges`, [athleteId]);
+    const cols = BACK_COLS.filter(([k]) => hist.some((h) => h.metric === k)).slice(0, 4).map(([key, short]) => ({ key, short }));
+    const seasons: BackStats["seasons"] = [];
+    for (const h of hist) {
+      let row = seasons.find((x) => x.season === h.season);
+      if (!row) seasons.push((row = { season: h.season, marks: {} }));
+      row.marks[h.metric] = plain(h.metric, h.v);
+    }
+    const best: Record<string, string> = {};
+    for (const c of cols) {
+      const xs = hist.filter((h) => h.metric === c.key);
+      if (xs.length) best[c.key] = plain(c.key, xs[0].lib ? Math.min(...xs.map((x) => x.v)) : Math.max(...xs.map((x) => x.v)));
+    }
     // Best verified times for the back of the card, fastest first among the headline tests.
     const tests = input.tests.filter((t) => ["40yd", "pro_agility", "vertical", "10yd", "broad"].includes(t.metric)).slice(0, 2)
       .map((t) => ({ label: metricLabel(t.metric), value: formatValue(t.metric, t.value), by: "VERIFIED" }));
     return { rating: computeRating(input), goal: nextGoal(input), coach: row.d.coach, plus: row.plus, canRate: row.can_rate, cards, ratedAt: row.d.rated_at,
-      team: id?.team ?? null, jersey: id?.jersey ?? null, autograph: id?.autograph ?? null, tests, ranks, challenges };
+      team: id?.team ?? null, jersey: id?.jersey ?? null, autograph: id?.autograph ?? null, tests, ranks, challenges,
+      stats: cols.length ? { cols, seasons, best } : null, band: b?.band ?? null, cardNo: cardNumber(athleteId),
+      highlight: ranks[0] ? `#${ranks[0].rank} of ${ranks[0].of_n} in ${ranks[0].band} ${METRICS[ranks[0].metric]?.label.toLowerCase() ?? ranks[0].metric} at ${ranks[0].org_name}`
+        : cards.length ? `Earned ${cards.length} event card${cards.length === 1 ? "" : "s"} this season` : null,
+      nextUp: (() => { const g = nextGoal(input); if (!g) return null; const m = METRICS[g.metric];
+        return `${m?.lowerIsBetter ? "Run" : "Hit"} ${formatValue(g.metric, g.target)} in the ${metricLabel(g.metric).toLowerCase()} and ${ATTRS.find((x) => x.key === g.attr)?.label ?? g.attr} goes up ${g.gain}.`; })(),
+      career: [["Sessions", cr?.sessions ?? 0], ["PRs", cr?.prs ?? 0], ["Events", cards.length], ["Challenges", cr?.challenges ?? 0]] };
   });
 }
 

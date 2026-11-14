@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireMe } from "@/lib/auth";
 import { loadPlayerCard, cardAttrs } from "@/lib/cards";
-import { PlayerCard } from "@/components/player-card";
+import { CardBack, PlayerCard } from "@/components/player-card";
 import { PackRip, type Rarity } from "@/components/pack-rip";
 import { loadAthlete } from "../header";
 
@@ -34,12 +34,8 @@ export default async function Rip({ params, searchParams }: { params: Promise<{ 
         front={<PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={v.rating.ovr}
           attrs={attrs} tier={tier} series={tier === "champion" ? `40 YD${pr40 ? ` · ${pr40}` : ""}` : "ProLyt"} badge={tier === "champion" ? "PR" : undefined} trench={v.rating.trench} foil={rarity !== "base"} team={v.team} number={v.jersey}
           serial={rarity === "black" ? "1/1" : null} />}
-        back={<div role="img" aria-label="Card back" className="relative grid aspect-[5/7] w-full place-items-center overflow-hidden rounded-[4%] border-[6px] border-[#2a2a2a]"
-          style={{ background: "repeating-conic-gradient(from 0deg at 50% 50%, #111 0 6deg, #1b1b1b 6deg 12deg)" }}>
-          <div className="rip-foil absolute inset-0 opacity-40" />
-          <div className="relative flex flex-col items-center gap-1 text-center"><span className="font-display text-[56px] leading-none tracking-[2px] text-gold">PROLYT</span>
-            <span className="font-cond text-[12px] font-extrabold uppercase tracking-[5px] text-soft">Earned, not bought</span></div>
-        </div>}
+        back={<CardBack first={a.first_name} last={a.last_name} ovr={v.rating.ovr} number={v.jersey} position={a.position} grad={a.grad_year} team={v.team}
+          attrs={attrs} stats={v.stats} band={v.band} cardNo={v.cardNo} highlight={v.highlight} career={v.career} nextUp={v.nextUp} />}
         share={
           <div className="grid w-full grid-cols-2 gap-2">
             <a href={`/api/card/${a.id}?story=1`} download className="flex min-h-12 items-center justify-center rounded-md bg-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">Post it</a>
