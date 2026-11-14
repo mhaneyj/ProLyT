@@ -34,3 +34,20 @@ body { background: var(--color-ink); color: var(--color-cream); font-family: var
 .card-flip-inner > :last-child { transform: rotateY(180deg); }
 .card-flip[data-flipped="true"] .card-flip-inner { transform: rotateY(180deg); }
 @media (prefers-reduced-motion: reduce) { .card-flip-inner { transition: none; } }
+
+/* Pack rip */
+.rip-foil { background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,.55) 32%, transparent 44%, transparent 58%, rgba(255,255,255,.3) 66%, transparent 74%); background-size: 250% 100%; animation: rip-foil 3.2s linear infinite; mix-blend-mode: overlay; }
+@keyframes rip-foil { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.rip-hint { animation: rip-hint 1.6s ease-in-out infinite; }
+@keyframes rip-hint { 0%,100% { transform: translateX(0); opacity: .75; } 50% { transform: translateX(6px); opacity: 1; } }
+.rip-rays { background: repeating-conic-gradient(from 0deg, var(--ray) 0deg 6deg, transparent 6deg 18deg); mask-image: radial-gradient(circle, #000 0, transparent 45%); -webkit-mask-image: radial-gradient(circle, #000 0, transparent 45%); animation: rip-rays 14s linear infinite, rip-in .8s ease-out both; }
+@keyframes rip-rays { to { transform: translate(-50%,-50%) rotate(360deg); } }
+@keyframes rip-in { from { opacity: 0; } to { opacity: .55; } }
+.rip-spark { animation: rip-spark 1.1s cubic-bezier(.1,.7,.3,1) both; }
+@keyframes rip-spark { from { transform: rotate(var(--a)) translateX(0) scale(1.4); opacity: 1; } to { transform: rotate(var(--a)) translateX(var(--d)) scale(.2); opacity: 0; } }
+.rip-shine { position: relative; }
+.rip-shine::after { content: ""; position: absolute; inset: 0; border-radius: 4%; pointer-events: none; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.6) 45%, transparent 60%); background-size: 300% 100%; animation: rip-sweep 1.2s .5s ease-out both; mix-blend-mode: overlay; }
+@keyframes rip-sweep { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+.rip-pop { animation: rip-pop .5s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes rip-pop { from { transform: scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rip-foil, .rip-hint, .rip-rays, .rip-spark, .rip-shine::after, .rip-pop { animation: none !important; } }

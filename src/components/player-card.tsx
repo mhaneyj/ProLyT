@@ -31,6 +31,7 @@ export type CardProps = {
   inscription?: string | null; // handwritten line under the autograph
   serial?: string | null;      // "07/25"
   firstCard?: boolean;
+  badge?: string;              // gold card tag, e.g. "PERSONAL BEST" (default "CHAMPIONS")
 };
 
 /** Design pixels (the card is designed 750 wide) to container units. */
@@ -113,7 +114,7 @@ function ChromeCard(p: CardProps & { kind: "player" | "champion" | "mvp" }) {
             <div className={`absolute inset-0 ${p.foil || p.kind !== "player" ? "card-sheen" : ""}`} style={{ background: c.refr, mixBlendMode: "screen" }} />
             <div className="absolute inset-x-0 bottom-0" style={{ height: u(400), background: "linear-gradient(180deg, rgba(7,8,13,0), rgba(7,8,13,0.94) 68%)" }} />
 
-            {p.kind === "champion" ? <div className="absolute font-display" style={{ left: u(30), top: u(30), padding: `${u(6)} ${u(16)}`, background: c.tag, color: "#07080d", fontSize: u(34), letterSpacing: u(3), transform: "skewX(-10deg)" }}>CHAMPIONS</div> : null}
+            {p.kind === "champion" ? <div className="absolute font-display" style={{ left: u(30), top: u(30), padding: `${u(6)} ${u(16)}`, background: c.tag, color: "#07080d", fontSize: u(34), letterSpacing: u(3), transform: "skewX(-10deg)" }}>{p.badge ?? "CHAMPIONS"}</div> : null}
             {p.kind === "mvp" ? <div className="absolute font-display leading-none" style={{ left: u(28), top: u(16), fontSize: u(120), letterSpacing: u(2), ...textFill("linear-gradient(115deg, #ff6ec7, #7afcff 35%, #feff9c 55%, #b28dff 80%)"), filter: "drop-shadow(0 2px 0 #000)" }}>MVP</div> : null}
             <div className="absolute text-right font-cond font-extrabold" style={{ right: u(32), top: u(30), fontSize: u(24), letterSpacing: u(7), lineHeight: 1.15, maxWidth: u(380) }}>
               {set}
