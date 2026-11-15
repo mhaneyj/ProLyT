@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import * as sound from "@/lib/rip-sound";
 
 // The moment a kid gets a card: a sealed ProLyt pack, a drag-to-tear strip, the card rising out face-down,
 // a flip, and the rating counting up. Rarer pulls get a bigger reveal. Reduced motion skips straight to the card.
@@ -26,20 +27,38 @@ export function PackRip(p: {
   const strip = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x0: number; w: number } | null>(null);
   const reduced = useRef(false);
+  const [audio, setAudio] = useState(true);
+  const revealed = useRef(false);
 
-  useEffect(() => { reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches; }, []);
+  useEffect(() => { reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches; setAudio(sound.soundOn()); }, []);
 
   const buzz = (ms: number | number[]) => { try { navigator.vibrate?.(ms); } catch { /* not supported */ } };
+
+  // The card shows its back first. Rarer cards glow through it ("a tell"), then a tap flips it; if nobody taps it flips itself.
+  const flip = useCallback(() => {
+    if (revealed.current) return;
+    revealed.current = true;
+    setStage("front");
+    sound.reveal(p.rarity);
+    buzz(p.rarity === "base" ? 20 : [25, 40, 25, 40, 60]);
+    p.onOpened?.();
+  }, [p]);
 
   const open = useCallback(() => {
     setTear(1);
     buzz([18, 30, 40]);
-    if (reduced.current) { setStage("front"); p.onOpened?.(); return; }
+    sound.tearOpen();
+    if (reduced.current) { revealed.current = true; setStage("front"); p.onOpened?.(); return; }
     setStage("torn");
-    setTimeout(() => setStage("rising"), 420);
-    setTimeout(() => setStage("back"), 1350);
-    setTimeout(() => { setStage("front"); buzz(p.rarity === "base" ? 20 : [25, 40, 25, 40, 60]); p.onOpened?.(); }, p.rarity === "base" ? 1900 : 2500);
+    setTimeout(() => { setStage("rising"); sound.rise(); }, 420);
+    setTimeout(() => { setStage("back"); sound.suspense(p.rarity); buzz(p.rarity === "base" ? 10 : [30, 60, 30, 60, 30]); }, 1350);
   }, [p]);
+
+  useEffect(() => {
+    if (stage !== "back") return;
+    const t = setTimeout(flip, p.rarity === "base" ? 1600 : 6000);
+    return () => clearTimeout(t);
+  }, [stage, flip, p.rarity]);
 
   // Count the rating up once the front shows.
   useEffect(() => {
@@ -66,7 +85,7 @@ export function PackRip(p: {
   const onMove = (e: React.PointerEvent) => {
     if (!drag.current || stage !== "sealed") return;
     const k = Math.min(1, Math.max(0, (e.clientX - drag.current.x0) / drag.current.w));
-    if (Math.floor(k * 10) > Math.floor(tear * 10)) buzz(6);
+    if (Math.floor(k * 10) > Math.floor(tear * 10)) { buzz(6); sound.tearTick(k); }
     setTear((t) => Math.max(t, k));
     if (k > 0.85) { drag.current = null; open(); }
   };
@@ -94,10 +113,19 @@ export function PackRip(p: {
         </div>
       ) : null}
 
+      <button type="button" aria-pressed={audio} aria-label={audio ? "Mute sound" : "Turn sound on"}
+        onClick={() => { const on = !audio; sound.setSound(on); setAudio(on); }}
+        className="absolute right-3 top-2 z-20 flex size-11 items-center justify-center rounded-full border border-line bg-panel/80 text-soft hover:text-cream">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" />{audio ? <path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12" /> : <path d="M17 9l5 6M22 9l-5 6" />}</svg>
+      </button>
       <div className="relative w-[78%] max-w-[340px]" style={{ aspectRatio: "5 / 7" }}>
         {/* The card: starts inside the pack, rises, shows its back, flips to the front */}
         <div className={`card-flip absolute inset-0 transition-transform ${stage === "rising" || shown ? "duration-[900ms]" : "duration-0"}`}
-          data-flipped={stage === "front"} style={{
+          data-flipped={stage === "front"} data-tell={stage === "back" && p.rarity !== "base" ? p.rarity : undefined}
+          onClick={stage === "back" ? flip : undefined} role={stage === "back" ? "button" : undefined} tabIndex={stage === "back" ? 0 : undefined}
+          aria-label={stage === "back" ? "Tap to reveal your card" : undefined}
+          onKeyDown={stage === "back" ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } } : undefined}
+          style={{ ["--tell" as string]: r.glow, cursor: stage === "back" ? "pointer" : undefined,
             transform: sealed || stage === "torn" ? "translateY(18%) scale(.92)" : stage === "rising" ? "translateY(-6%) scale(.98)" : "translateY(0) scale(1)",
             transitionTimingFunction: "cubic-bezier(.2,.8,.2,1)", zIndex: shown ? 3 : 1, opacity: sealed ? 0 : 1,
           }}>
@@ -150,6 +178,8 @@ export function PackRip(p: {
             <span className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{p.reason}</span>
             <span className="rip-hint text-sm text-soft">Swipe across the top to rip it open →</span>
           </>
+        ) : stage === "back" ? (
+          <span className="rip-hint font-cond text-[15px] font-extrabold uppercase tracking-[3px] text-soft" style={{ animationName: "rip-pulse" }}>Tap to reveal</span>
         ) : stage === "front" ? (
           <div className="rip-pop flex w-full flex-col items-center gap-3">
             <span className="font-cond text-[13px] font-extrabold uppercase tracking-[3px]" style={{ color: p.rarity === "base" ? "#ddd" : p.rarity === "black" ? "#c9b0ff" : "#f8c40a" }}>
