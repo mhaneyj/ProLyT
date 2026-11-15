@@ -140,6 +140,12 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
       {cancelled ? <Notice tone="good">Cancelled. The trainer was told and any card payment is refunded.</Notice> : null}
       {error ? <Notice tone="bad">{error}</Notice> : null}
 
+      {card?.packs.length ? (
+        <Link href={`/athlete/${a.id}/rip`} className="flex min-h-14 items-center justify-between rounded-[14px] border-2 border-gold bg-gold/10 px-4">
+          <span><span className="block font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{card.packs.length} pack{card.packs.length === 1 ? "" : "s"} ready</span><span className="text-sm text-soft">{a.first_name} earned {card.packs.length === 1 ? "a new card" : "new cards"}. Rip it open.</span></span>
+          <span aria-hidden="true" className="font-display text-[26px] text-gold">→</span>
+        </Link>
+      ) : null}
       {card?.upgrade && frontCard ? <UpgradeReveal up={card.upgrade} card={<TiltCard finish="gold">{frontCard}</TiltCard>} first={a.first_name} athleteId={a.id} ovr={card.rating.ovr} marks={card.marks} /> : null}
       {card ? (
         <div className="flex flex-col items-center gap-1.5">

@@ -11,7 +11,6 @@ import { Ranks } from "@/components/ranks";
 import { Challenges } from "@/components/challenges";
 import { TiltCard } from "@/components/tilt-card";
 import { Binder } from "@/components/binder";
-import { binderSlots } from "@/lib/binder";
 import { UpgradeReveal } from "@/components/upgrade-reveal";
 import { loadAthlete } from "../header";
 import { askParent, rateAthlete, saveAutograph } from "./actions";
@@ -65,10 +64,19 @@ export default async function Cards({ params, searchParams }: { params: Promise<
         <span className="text-sm"><span className="font-semibold">Train to move this card</span> <span className="text-muted">· ProLyt Trainer</span></span>
         <span aria-hidden="true" className="text-gold">→</span>
       </Link>
-      <Binder first={a.first_name} slots={binderSlots({
-        ovr: rating.ovr, autograph: v.autograph, testCount: v.tests.length,
-        challengesDone: Math.max(0, ...v.challenges.map((c) => c.done_total)), bestStreak: Math.max(0, ...v.challenges.map((c) => c.streak)),
-        bestRank: v.ranks.length ? Math.min(...v.ranks.map((r) => r.rank)) : null, tiers: v.cards.map((c) => c.tier) })} />
+      {a.family && v.packs.length ? (
+        <Link href={`/athlete/${a.id}/rip`} className="rip-hint-card flex min-h-14 items-center justify-between rounded-[14px] border-2 border-gold bg-gold/10 px-4">
+          <span><span className="block font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{v.packs.length} pack{v.packs.length === 1 ? "" : "s"} ready</span><span className="text-sm text-soft">{a.first_name} earned {v.packs.length === 1 ? "a new card" : "new cards"}. Rip it open.</span></span>
+          <span aria-hidden="true" className="font-display text-[26px] text-gold">→</span>
+        </Link>
+      ) : null}
+      {v.power ? (
+        <Link href={`/rankings?sport=${v.power.sport}&band=${v.power.band}&group=${v.power.grp}`} className="flex min-h-14 items-center justify-between rounded-[14px] border border-line bg-panel px-4 hover:border-gold">
+          <span><span className="block font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">Power ranking</span><span className="text-sm">#{v.power.rank} of {v.power.of_n} · {v.power.band} {v.power.grp}</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
+      <Binder first={a.first_name} slots={v.slots} />
       <Challenges items={v.challenges} ranks={v.ranks} athleteId={a.id} first={a.first_name} />
       <Ranks ranks={v.ranks} plus={plus} athleteId={a.id} first={a.first_name} />
 

@@ -1668,3 +1668,38 @@ describe("report sponsor", () => {
     expect(r.sponsor).toBe("Loomis Tire & Auto");
   });
 });
+
+describe("packs and power rankings", () => {
+  const P = "10000000-0000-0000-0000-0000000000c1";
+  it("packs are granted once, from the server, and only the family opens them", async () => {
+    await expect(as(db, PARENT_A, () => db.query("select grant_packs($1, '[]'::jsonb)", [jordan]))).rejects.toThrow(/permission denied/);
+    const slots = JSON.stringify([{ no: 1, title: "Rookie", rarity: "base" }, { no: 6, title: "Ranked", rarity: "base" }]);
+    expect((await db.query<{ n: number }>("select grant_packs($1, $2::jsonb) n", [jordan, slots])).rows[0].n).toBe(2);
+    expect((await db.query<{ n: number }>("select grant_packs($1, $2::jsonb) n", [jordan, slots])).rows[0].n).toBe(0);
+    const id = (await as(db, PARENT_A, () => db.query<{ id: string }>("select id from card_packs where slot_no = 1"))).rows[0].id;
+    expect((await as(db, PARENT_B, () => db.query("select id from card_packs"))).rows).toHaveLength(0);
+    await expect(as(db, PARENT_B, () => db.query("select open_pack($1)", [id]))).rejects.toThrow(/family/);
+    await as(db, PARENT_A, () => db.query("select open_pack($1)", [id]));
+    expect((await db.query<{ opened_at: string | null }>("select opened_at from card_packs where id = $1", [id])).rows[0].opened_at).not.toBeNull();
+  });
+
+  it("boards name only opted-in athletes 13+, hide thin groups, and never expose the table", async () => {
+    const mk = async (first: string, years: number, ovr: number, optIn = false) => {
+      const id = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date, leaderboard_opt_in) values ($1,'Test', current_date - ($2 || ' years 3 months')::interval, $3) returning id", [first, String(years), optIn])).rows[0].id;
+      await db.query("insert into power_scores (athlete_id, sport, band, grp, ovr) values ($1,'football','HS','OL',$2)", [id, ovr]);
+      return id;
+    };
+    await db.query("delete from power_scores");
+    await mk("Ann", 16, 90, true); await mk("Bo", 16, 85);
+    expect((await as(db, PARENT_A, () => db.query("select * from power_board('football','HS','OL')"))).rows).toHaveLength(0); // only 2
+    await mk("Cy", 12, 80, true); // opted in but under 13: still anonymous
+    const rows = (await as(db, PARENT_A, () => db.query<{ rank: number; display_name: string | null }>("select rank, display_name from power_board('football','HS','OL')"))).rows;
+    expect(rows.map((r) => r.rank)).toEqual([1, 2, 3]);
+    expect(rows.map((r) => r.display_name)).toEqual(["Ann T.", null, null]);
+    await expect(as(db, PARENT_A, () => db.query("select * from power_scores"))).rejects.toThrow(/permission denied/);
+    await expect(as(db, PARENT_B, () => db.query("select set_leaderboard($1, true)", [jordan]))).rejects.toThrow(/parent/);
+    const pa = (await db.query<{ id: string }>("select athlete_id id from guardians where user_id = $1 limit 1", [PARENT_A])).rows[0].id;
+    await db.query("update athletes set birth_date = current_date - interval '10 years' where id = $1", [pa]);
+    await expect(as(db, PARENT_A, () => db.query("select set_leaderboard($1, true)", [pa]))).rejects.toThrow(/13/);
+  });
+});

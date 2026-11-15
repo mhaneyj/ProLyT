@@ -1,5 +1,6 @@
 import "server-only";
-import { asUser } from "@/lib/db";
+import { asService, asUser } from "@/lib/db";
+import { binderSlots, type Slot } from "@/lib/binder";
 import { formatValue, metricLabel } from "@/lib/domain/metrics";
 import { ATTRS, attrLabel, computeRating, isHockey, nextGoal, type Attr, type Rating } from "@/lib/domain/rating";
 import { METRICS } from "@/lib/domain/metrics";
@@ -66,11 +67,14 @@ export type PlayerCardView = {
   nextUp: string | null;
   marks: Record<string, number>;
   upgrade: Upgrade | null;
+  power: { sport: string; band: string; grp: string; ovr: number; rank: number; of_n: number } | null;
+  slots: Slot[];
+  packs: { id: string; slot_no: number; title: string; rarity: "base" | "chrome" | "gold" | "black" }[];
 };
 
 /** Everything the Player Card screens need, as the signed-in person is allowed to see it. Null if they can't. */
 export async function loadPlayerCard(uid: string, athleteId: string): Promise<PlayerCardView | null> {
-  return asUser(uid, async (q) => {
+  const view = await asUser(uid, async (q): Promise<PlayerCardView | null> => {
     const [row] = await q<{ d: CardData | null; plus: boolean; can_rate: boolean }>(
       "select player_card_data($1) d, athlete_plus($1) plus, perm_for_athlete($1, 'results.log') can_rate", [athleteId]);
     if (!row?.d) return null;
@@ -82,6 +86,7 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
     const [id] = await q<{ team: string | null; jersey: string | null; autograph: string | null }>("select team, jersey, autograph from card_identity($1)", [athleteId]);
     const [sp] = await q<{ s: string | null }>("select card_sponsor($1) s", [athleteId]);
     const ranks = (await q<Rank>("select org_name, band, metric, value::float value, rank, of_n, top_value::float top_value, next_value::float next_value from athlete_ranks($1)", [athleteId]));
+    const [power] = await q<NonNullable<PlayerCardView["power"]>>("select sport, band, grp, ovr, rank, of_n from my_power($1)", [athleteId]);
     const challenges = await q<Challenge>("select id, kind, metric, target::float target, baseline::float baseline, sessions, progress, status, done_total, streak from weekly_challenges($1)", [athleteId]);
     const hist = await q<{ season: string; sort: string; metric: string; v: number; lib: boolean }>(`
       select case when extract(month from r.recorded_at at time zone 'America/Los_Angeles') <= 6 then 'SPR ' else 'FALL ' end
@@ -134,8 +139,18 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
         : cards.length ? `Earned ${cards.length} event card${cards.length === 1 ? "" : "s"} this season` : null,
       nextUp: (() => { const g = nextGoal(input); if (!g) return null; const m = METRICS[g.metric];
         return `${m?.lowerIsBetter ? (m?.sport === "hockey" ? "Skate" : "Run") : "Hit"} ${formatValue(g.metric, g.target)} in the ${metricLabel(g.metric).toLowerCase()} and ${attrLabel(g.attr, rating.group)} goes up ${g.gain}.`; })(),
-      career: [["Sessions", cr?.sessions ?? 0], ["PRs", cr?.prs ?? 0], ["Events", cards.length], ["Challenges", cr?.challenges ?? 0]] };
+      career: [["Sessions", cr?.sessions ?? 0], ["PRs", cr?.prs ?? 0], ["Events", cards.length], ["Challenges", cr?.challenges ?? 0]],
+      slots: binderSlots({ ovr: rating.ovr, autograph: id?.autograph ?? null, testCount: input.tests.length,
+        challengesDone: Math.max(0, ...challenges.map((c) => c.done_total)), bestStreak: Math.max(0, ...challenges.map((c) => c.streak)),
+        bestRank: ranks.length ? Math.min(...ranks.map((r) => r.rank)) : null, tiers: cards.map((c) => c.tier) }),
+      power: power ?? null, packs: [] as PlayerCardView["packs"] };
   });
+  if (!view) return null;
+  // Each card an athlete has earned becomes one pack, granted once. Then the unopened ones are listed for the family.
+  const owned = view.slots.filter((x) => x.owned).map((x) => ({ no: x.no, title: x.title, rarity: x.rarity }));
+  if (owned.length) await asService((q) => q("select grant_packs($1, $2::jsonb)", [athleteId, JSON.stringify(owned)]));
+  view.packs = await asUser(uid, (q) => q<PlayerCardView["packs"][number]>("select id, slot_no, title, rarity from card_packs where athlete_id = $1 and opened_at is null order by slot_no", [athleteId]));
+  return view;
 }
 
 /** Attribute chips for the card, or null when they're locked (no ProLyt+ and not a coach). */

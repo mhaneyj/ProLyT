@@ -70,7 +70,10 @@ insert into athletes (first_name, last_name, birth_date, grad_year, position, sc
   ('Mason', 'Cole', (current_date - interval '16 years 1 month')::date, 2028, 'WR', 'Sample High'),
   ('Owen', 'Diaz', (current_date - interval '15 years 1 month')::date, 2029, 'LB', 'Sample High'),
   ('Caleb', 'Ford', (current_date - interval '16 years 9 months')::date, 2028, 'OL', 'Sample High'),
-  ('Luke', 'Grant', (current_date - interval '15 years 5 months')::date, 2029, 'TE', 'Sample High');
+  ('Luke', 'Grant', (current_date - interval '15 years 5 months')::date, 2029, 'TE', 'Sample High'),
+  ('Devon', 'Webb', (current_date - interval '16 years 2 months')::date, 2028, 'OL', 'Sample High'),
+  ('Marcus', 'Hall', (current_date - interval '15 years 9 months')::date, 2029, 'OL', 'Sample High');
+update athletes set leaderboard_opt_in = true where last_name in ('Ford', 'Webb');
 
 insert into program_athletes (org_id, athlete_id) select '${ORG_ID}', id from athletes;
 
@@ -116,8 +119,10 @@ select ('60000000-0000-0000-0000-0000000000' || lpad(w::text, 2, '0'))::uuid, '$
 from generate_series(1, 8) w;
 
 insert into results (athlete_id, metric, value, unit, source, logged_by, recorded_at)
-select a.id, v.metric, v.value, 's', 'coach_logged', '${LEM}', now() - interval '20 days'
+select a.id, v.metric, v.value, case when v.metric = 'sled_lb' then 'lb' else 's' end, 'coach_logged', '${LEM}', now() - interval '20 days'
 from (values ('Reed', '40yd', 4.88), ('Cole', '40yd', 5.06), ('Diaz', '40yd', 5.17), ('Ford', '40yd', 5.64), ('Grant', '40yd', 5.33),
+             ('Ford', 'pro_agility', 5.10), ('Ford', 'sled_lb', 340), ('Webb', '40yd', 5.31), ('Webb', 'pro_agility', 4.88), ('Webb', 'sled_lb', 365),
+             ('Hall', '40yd', 5.55), ('Hall', 'pro_agility', 5.02), ('Hall', 'sled_lb', 305),
              ('Reed', 'pro_agility', 4.52), ('Cole', 'pro_agility', 4.71), ('Diaz', 'pro_agility', 4.84), ('Grant', 'pro_agility', 4.95))
   v(last, metric, value) join athletes a on a.last_name = v.last;
 
