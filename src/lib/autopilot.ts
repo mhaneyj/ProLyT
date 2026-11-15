@@ -58,7 +58,7 @@ export async function runReports(now?: Date) {
     const path = `/athlete/${d.athlete_id}/report?month=${month.slice(0, 7)}`;
     const origin = programOrigin(who[0], { proto: "https", host: who[0].custom_domain ?? "" });
     await pushTo(who.filter((w) => w.has_push).map((w) => w.user_id), { title: L.headline, body: L.summary, url: path, tag: `report-${d.athlete_id}` });
-    await Promise.allSettled(who.map((w) => sendReportEmail(w.email, { headline: L.headline, summary: L.summary, tests: L.tests, link: `${origin}${path}`, program: w.org_name })));
+    await Promise.allSettled(who.map((w) => sendReportEmail(w.email, { headline: L.headline, summary: L.summary, tests: L.tests, link: `${origin}${path}`, program: w.org_name, sponsor: L.sponsor })));
     sent++;
   }
   return { month, sent };

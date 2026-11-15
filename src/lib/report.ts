@@ -1,7 +1,7 @@
 import { formatValue, METRICS } from "@/lib/domain/metrics";
 
 export type MonthReport = {
-  first: string; month: string; sessions: number; workouts: number; challenges: number;
+  first: string; month: string; sponsor?: string | null; sessions: number; workouts: number; challenges: number;
   tests: { metric: string; now: number; before: number | null }[];
 };
 
@@ -22,7 +22,7 @@ export function reportLines(r: MonthReport) {
     : r.sessions ? `${r.first} trained ${r.sessions} time${r.sessions === 1 ? "" : "s"} in ${r.month.split(" ")[0]}`
     : `${r.first}'s ${r.month.split(" ")[0]}`;
   const summary = [`${r.sessions} session${r.sessions === 1 ? "" : "s"}`, `${r.workouts} home workout${r.workouts === 1 ? "" : "s"}`, `${r.challenges} challenge${r.challenges === 1 ? "" : "s"} done`].join(" · ");
-  return { headline, summary, tests };
+  return { headline, summary, tests, sponsor: r.sponsor ?? null };
 }
 
 /** First day of last month (Pacific), as YYYY-MM-DD. */

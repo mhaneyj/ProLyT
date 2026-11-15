@@ -53,6 +53,7 @@ export default async function Report({ params, searchParams }: { params: Promise
         )) : <p className="text-sm text-muted">No coach-verified tests this month. Ask a coach to time {a.first_name} at the next session.</p>}
       </section>
 
+      {L.sponsor ? <p className="text-center text-[13px] text-soft">This report is presented by <span className="font-semibold text-cream">{L.sponsor}</span>. Thank you for supporting {card?.team ?? "the program"}.</p> : null}
       {card?.ranks[0] ? <p className="rounded-[14px] border border-gold/50 bg-gold/[0.06] px-4 py-3 text-sm"><span className="font-semibold">Where {a.first_name} stands now:</span> {rankLine(card.ranks[0])}</p> : null}
       <div className="grid grid-cols-2 gap-2">
         <Link href={`/athlete/${id}/cards`} className="flex min-h-12 items-center justify-center rounded-md border border-line text-sm font-semibold hover:border-gold">Player Card</Link>

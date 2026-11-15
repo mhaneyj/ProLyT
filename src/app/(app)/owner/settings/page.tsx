@@ -122,6 +122,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <SectionLabel>Card sponsor</SectionLabel>
         <p className="mb-3 mt-1 text-xs text-muted">Sell &ldquo;Presented by&rdquo; to a local business. The money goes to your program, never to an athlete.</p>
         <SponsorForm sponsor={d.org.sponsor ?? ""} />
+        <Link href="/owner/sponsor" className="mt-3 flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] hover:border-gold">Sponsor one-pager</Link>
       </Card> : null}
 
       {can(me, "brand.manage") ? <Card id="sports">

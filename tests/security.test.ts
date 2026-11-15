@@ -1660,3 +1660,11 @@ describe("card sponsor", () => {
     await expect(db.query("insert into card_series (event_id, org_id, name, color, accent, sponsor, created_by) select id, org_id, 'S', '#000000', '#ffffff', 'Team uniform co', $1 from events limit 1", [OWNER])).rejects.toThrow(/can't include|violates|null/);
   });
 });
+
+describe("report sponsor", () => {
+  it("the monthly report carries the program's sponsor", async () => {
+    await as(db, OWNER, () => db.query("update orgs set card_sponsor = 'Loomis Tire & Auto' where id = $1", [ORG]));
+    const r = (await as(db, PARENT_A, () => db.query<{ r: { sponsor: string | null } }>("select monthly_report($1, date_trunc('month', current_date)::date) r", [jordan]))).rows[0].r;
+    expect(r.sponsor).toBe("Loomis Tire & Auto");
+  });
+});

@@ -117,7 +117,7 @@ export async function sendNudgeEmail(to: string, n: { subject: string; heading: 
 }
 
 /** Monthly progress report for a parent. */
-export async function sendReportEmail(to: string, r: { headline: string; summary: string; tests: { label: string; now: string; change: string; pr: boolean }[]; link: string; program: string }) {
+export async function sendReportEmail(to: string, r: { headline: string; summary: string; tests: { label: string; now: string; change: string; pr: boolean }[]; link: string; program: string; sponsor?: string | null }) {
   const key = process.env.RESEND_API_KEY;
   const sender = process.env.EMAIL_FROM ?? `ProLyt <signin@${ROOT_DOMAIN}>`;
   if (!key) {
@@ -132,6 +132,7 @@ export async function sendReportEmail(to: string, r: { headline: string; summary
       <p style="font-size:15px;color:#444;margin:0 0 16px">${escapeHtml(r.summary)}</p>
       ${rows ? `<table style="width:100%;border-collapse:collapse;font-size:15px">${rows}</table>` : ""}
       <p style="margin:24px 0"><a href="${r.link}" style="background:#F8C40A;color:#070707;padding:14px 22px;border-radius:6px;text-decoration:none;font-weight:bold">See the full report</a></p>
+      ${r.sponsor ? `<p style="font-size:13px;color:#444;border-top:1px solid #eee;padding-top:12px;margin:0 0 8px">This report is presented by <strong>${escapeHtml(r.sponsor)}</strong>. Thank you for supporting ${escapeHtml(r.program)}.</p>` : ""}
       <p style="font-size:12px;color:#888">Sent on the 1st of each month. Powered by ProLyt</p>
     </div>`;
   const res = await fetch("https://api.resend.com/emails", {
