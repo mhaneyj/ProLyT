@@ -1847,3 +1847,13 @@ describe("pack notices", () => {
     expect((await db.query("select * from claim_expiring_credits()")).rows).toHaveLength(0); // once per purchase
   });
 });
+
+describe("ask ProLyt", () => {
+  it("rate limits per person, server only, and stores no question text", async () => {
+    await expect(as(db, PARENT_A, () => db.query("select ask_take($1)", [PARENT_A]))).rejects.toThrow(/permission/);
+    const oks: boolean[] = [];
+    for (let i = 0; i < 7; i++) oks.push((await db.query<{ ok: boolean }>("select ask_take($1) ok", [PARENT_B])).rows[0].ok);
+    expect(oks).toEqual([true, true, true, true, true, false, false]);
+    expect((await db.query<{ column_name: string }>("select column_name from information_schema.columns where table_name='ask_log'")).rows.map((r) => r.column_name).sort()).toEqual(["at", "id", "user_id"]);
+  });
+});

@@ -132,6 +132,7 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
           ["/host", "Events"],
           ["/trainer", "Coach profile"],
           ["/coach/testing", "Testing Day"],
+          ["/guide", "Guide + Ask ProLyt"],
           ["/help", "Help"],
           me.roles.includes("coach") ? ["/coach/earnings", "Earnings"] : null,
         ].filter((x): x is string[] => Boolean(x)).map(([href, label]) => (

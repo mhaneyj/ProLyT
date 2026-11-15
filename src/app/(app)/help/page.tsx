@@ -22,6 +22,9 @@ export default async function Help({ searchParams }: { searchParams: Promise<{ k
       <Title sub="Goes straight to the ProLyt team. We usually reply within a day.">Help &amp; feedback</Title>
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
       {sp.ref ? <Notice>Sorry about that error. Tell us what you were doing and we&apos;ll fix it. We already have the technical details.</Notice> : null}
+      <Link href="/guide" className="rounded-[14px] border border-gold/40 bg-gold/[0.05] px-4 py-3 text-sm hover:border-gold">
+        <span className="font-semibold">Quick question?</span> <span className="text-muted">Read the guide or ask ProLyt →</span>
+      </Link>
       {family && me.features.messaging ? (
         <Link href="/messages" className="rounded-[14px] border border-line bg-panel px-4 py-3 text-sm hover:border-gold">
           <span className="font-semibold">About sessions, schedule or your athlete?</span> <span className="text-muted">Your coaches answer those. Message them →</span>
