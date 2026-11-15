@@ -3,6 +3,7 @@
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright"); // uses NODE_PATH or a local install
 import { mkdirSync } from "node:fs";
+let upgradeSeen = false; // set when the card-upgrade moment shows up after a coach logs a new best
 
 // Family tabs are Home · Schedule · Feed · Messages; the kid's Progress/Film/Profile live on Home.
 async function openTab(page, name) {
@@ -28,6 +29,11 @@ const check = (name, ok, detail = "") => { results.push({ name, ok, detail }); c
 async function as(userName) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
+  // The card-upgrade moment pops up after a coach logs a new best; check it, then carry on.
+  await page.addLocatorHandler(page.getByRole("dialog", { name: /card was upgraded/ }), async () => {
+    upgradeSeen = true;
+    await page.getByRole("button", { name: "Let's go" }).click();
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${BASE}/login`);
@@ -250,6 +256,7 @@ const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullP
   await ctx.close();
 }
 
+check("card-upgrade moment showed after a coach logged a new best", upgradeSeen);
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

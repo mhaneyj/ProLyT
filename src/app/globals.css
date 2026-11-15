@@ -51,3 +51,22 @@ body { background: var(--color-ink); color: var(--color-cream); font-family: var
 .rip-pop { animation: rip-pop .5s cubic-bezier(.2,1.4,.4,1) both; }
 @keyframes rip-pop { from { transform: scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .rip-foil, .rip-hint, .rip-rays, .rip-spark, .rip-shine::after, .rip-pop { animation: none !important; } }
+
+/* Tilt-to-shine */
+.tilt { --rx: 0deg; --ry: 0deg; --mx: 50%; --my: 50%; --hx: 50%; perspective: 900px; }
+.tilt-inner { position: relative; transform: rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d; will-change: transform; }
+.tilt-glare, .tilt-holo { position: absolute; inset: 0; pointer-events: none; border-radius: 4.2% / 3%; overflow: hidden; }
+.tilt-glare { background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.55), rgba(255,255,255,.08) 30%, transparent 55%); mix-blend-mode: overlay; }
+.tilt-holo { background-size: 300% 300%; background-position: var(--hx) var(--my); mix-blend-mode: color-dodge; }
+.tilt[data-finish="chrome"] .tilt-holo { opacity: .28; background-image: repeating-linear-gradient(115deg, transparent 0 8%, rgba(190,215,255,.9) 12%, transparent 16% 24%, rgba(255,255,255,.7) 27%, transparent 31% 40%); }
+.tilt[data-finish="gold"] .tilt-holo { opacity: .4; background-image: radial-gradient(rgba(255,240,170,.9) 0.6px, transparent 1.4px), repeating-linear-gradient(115deg, transparent 0 10%, rgba(248,196,10,.9) 15%, transparent 20% 30%, rgba(255,250,210,.8) 34%, transparent 38% 46%); background-size: 7px 7px, 300% 300%; }
+.tilt[data-finish="black"] .tilt-holo { opacity: .38; background-image: radial-gradient(rgba(255,255,255,.9) 0.5px, transparent 1.3px), repeating-linear-gradient(110deg, #ff2d95 0%, #ffcf3a 7%, #2dffd2 14%, #6a5cff 21%, #ff2d95 28%); background-size: 6px 6px, 300% 300%; }
+@media (prefers-reduced-motion: reduce) { .tilt-inner { transform: none; } }
+
+/* Upgrade moment */
+.up-in { animation: rip-pop .5s cubic-bezier(.2,1.4,.4,1) both; }
+.up-card { animation: up-card .9s cubic-bezier(.2,1.2,.3,1) both; }
+@keyframes up-card { from { transform: translateY(30px) scale(.85) rotate(-3deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.up-stamp { transform: translate(-50%, -50%) rotate(-12deg); background: rgba(10,10,10,.75); box-shadow: 0 0 30px rgba(248,196,10,.6); animation: up-stamp .45s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes up-stamp { from { transform: translate(-50%, -50%) rotate(-12deg) scale(3); opacity: 0; } to { transform: translate(-50%, -50%) rotate(-12deg) scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .up-in, .up-card, .up-stamp { animation: none; } }

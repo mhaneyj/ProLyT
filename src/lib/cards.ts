@@ -26,6 +26,22 @@ export type Rank = { org_name: string; band: string; metric: string; value: numb
 export type Challenge = { id: string; kind: "test" | "attend" | "sign"; metric: string | null; target: number | null; baseline: number | null;
   sessions: number | null; progress: number | null; status: "open" | "done" | "missed"; done_total: number; streak: number };
 
+export type Upgrade = { ovrFrom: number | null; ovrTo: number | null; lines: { metric: string; label: string; from: string | null; to: string }[] };
+
+/** What got better since this viewer last saw the card: new bests on tests, and the overall. */
+export function diffCard(seen: { ovr: number | null; marks: Record<string, number> } | null, ovr: number | null, marks: Record<string, number>): Upgrade | null {
+  if (!seen) return null;
+  const lines: Upgrade["lines"] = [];
+  for (const [metric, v] of Object.entries(marks)) {
+    const m = METRICS[metric];
+    const old = seen.marks[metric];
+    const better = old === undefined ? false : m?.lowerIsBetter ? v < old : v > old;
+    if (better) lines.push({ metric, label: m?.label ?? metric, from: formatValue(metric, old), to: formatValue(metric, v) });
+  }
+  const up = ovr !== null && (seen.ovr === null || ovr > seen.ovr);
+  return lines.length || up ? { ovrFrom: seen.ovr, ovrTo: ovr, lines } : null;
+}
+
 export type PlayerCardView = {
   rating: Rating;
   goal: ReturnType<typeof nextGoal>;
@@ -46,6 +62,8 @@ export type PlayerCardView = {
   highlight: string | null;
   career: [string, number][];
   nextUp: string | null;
+  marks: Record<string, number>;
+  upgrade: Upgrade | null;
 };
 
 /** Everything the Player Card screens need, as the signed-in person is allowed to see it. Null if they can't. */
@@ -91,10 +109,19 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
       const xs = hist.filter((h) => h.metric === c.key);
       if (xs.length) best[c.key] = plain(c.key, xs[0].lib ? Math.min(...xs.map((x) => x.v)) : Math.max(...xs.map((x) => x.v)));
     }
+    // The upgrade moment: compare with what this viewer last saw. First look just records it.
+    const rating = computeRating(input);
+    const marks: Record<string, number> = {};
+    for (const t of input.tests) if (METRICS[t.metric] && (marks[t.metric] === undefined || (METRICS[t.metric].lowerIsBetter ? t.value < marks[t.metric] : t.value > marks[t.metric]))) marks[t.metric] = t.value;
+    const [seen] = await q<{ ovr: number | null; marks: Record<string, number> }>("select ovr, marks from card_seen where user_id = $1 and athlete_id = $2", [uid, athleteId]);
+    const upgrade = diffCard(seen ?? null, rating.ovr, marks);
+    if (!upgrade && (!seen || seen.ovr !== rating.ovr || JSON.stringify(seen.marks) !== JSON.stringify(marks))) {
+      await q("select mark_card_seen($1, $2, $3::jsonb)", [athleteId, rating.ovr, JSON.stringify(marks)]);
+    }
     // Best verified times for the back of the card, fastest first among the headline tests.
     const tests = input.tests.filter((t) => ["40yd", "pro_agility", "vertical", "10yd", "broad"].includes(t.metric)).slice(0, 2)
       .map((t) => ({ label: metricLabel(t.metric), value: formatValue(t.metric, t.value), by: "VERIFIED" }));
-    return { rating: computeRating(input), goal: nextGoal(input), coach: row.d.coach, plus: row.plus, canRate: row.can_rate, cards, ratedAt: row.d.rated_at,
+    return { marks, upgrade, rating, goal: nextGoal(input), coach: row.d.coach, plus: row.plus, canRate: row.can_rate, cards, ratedAt: row.d.rated_at,
       team: id?.team ?? null, jersey: id?.jersey ?? null, autograph: id?.autograph ?? null, tests, ranks, challenges,
       stats: cols.length ? { cols, seasons, best } : null, band: b?.band ?? null, cardNo: cardNumber(athleteId),
       highlight: ranks[0] ? `#${ranks[0].rank} of ${ranks[0].of_n} in ${ranks[0].band} ${METRICS[ranks[0].metric]?.label.toLowerCase() ?? ranks[0].metric} at ${ranks[0].org_name}`

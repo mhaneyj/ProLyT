@@ -63,3 +63,12 @@ export async function saveAutograph(athlete: string, path: string | null): Promi
   await track("autograph_saved", { userId: me.id, props: { athlete, cleared: !path } });
   revalidatePath(`/athlete/${athlete}/cards`);
 }
+
+/** After the upgrade reveal: remember what they've now seen so it plays once. */
+export async function markCardSeen(athleteId: string, ovr: number | null, marks: Record<string, number>) {
+  const me = await requireMe();
+  if (!/^[0-9a-f-]{36}$/.test(athleteId)) return;
+  await asUser(me.id, (q) => q("select mark_card_seen($1, $2, $3::jsonb)", [athleteId, ovr, JSON.stringify(marks)]));
+  revalidatePath("/family");
+  revalidatePath(`/athlete/${athleteId}/cards`);
+}

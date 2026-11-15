@@ -9,6 +9,8 @@ import { AutographPad, FlipCard } from "@/components/autograph-pad";
 import { Card, Notice, SectionLabel, Title } from "@/components/ui";
 import { Ranks } from "@/components/ranks";
 import { Challenges } from "@/components/challenges";
+import { TiltCard } from "@/components/tilt-card";
+import { UpgradeReveal } from "@/components/upgrade-reveal";
 import { loadAthlete } from "../header";
 import { askParent, rateAthlete, saveAutograph } from "./actions";
 
@@ -32,6 +34,8 @@ export default async function Cards({ params, searchParams }: { params: Promise<
   const missing = rating.missing.map((k) => ATTRS.find((x) => x.key === k)!);
   const g = v.goal;
 
+  const front = <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
+    attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} number={v.jersey} firstCard />;
   return (
     <>
       {switcher}
@@ -41,13 +45,13 @@ export default async function Cards({ params, searchParams }: { params: Promise<
       {sp.ok === "asked" ? <Notice tone="good">Sent. Your parent got a notification to unlock your full card.</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
 
+      {v.upgrade ? <UpgradeReveal up={v.upgrade} card={<TiltCard finish="gold">{front}</TiltCard>} first={a.first_name} athleteId={a.id} ovr={rating.ovr} marks={v.marks} /> : null}
       <div className="flex flex-col items-center gap-2">
         <FlipCard label={`${a.first_name}'s Chrome card`}
-          front={<PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
-            attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} number={v.jersey} firstCard />}
+          front={<TiltCard finish={plus ? "chrome" : "base"}>{front}</TiltCard>}
           back={<CardBack first={a.first_name} last={a.last_name} ovr={rating.ovr} number={v.jersey} position={a.position} grad={a.grad_year} team={v.team}
             attrs={attrs} flex={null} tests={v.tests} stats={v.stats} band={v.band} cardNo={v.cardNo} highlight={v.highlight} career={v.career} nextUp={v.nextUp} tally={`${v.cards.filter((c) => c.tier === "champion").length} · ${v.cards.filter((c) => c.tier === "mvp").length} · ${v.cards.length + 1}`} />} />
-        <p className="text-[12px] text-muted">Tap the card to flip it.</p>
+        <p className="text-[12px] text-muted">Tilt your phone to make it shine. Tap to flip.</p>
       </div>
       {a.family ? (
         <a href={`/api/card/${a.id}`} download className="flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] hover:border-gold">

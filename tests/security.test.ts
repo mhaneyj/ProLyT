@@ -1490,6 +1490,18 @@ describe("operations", () => {
   });
 });
 
+describe("card seen", () => {
+  it("each viewer's last-seen card is theirs alone; only family or coaches can record it", async () => {
+    await as(db, PARENT_A, () => db.query(`select mark_card_seen($1, 70, '{"40yd": 5.4}')`, [jordan]));
+    await as(db, PARENT_A, () => db.query(`select mark_card_seen($1, 72, '{"40yd": 5.3}')`, [jordan]));
+    expect((await as(db, PARENT_A, () => db.query<{ ovr: number }>("select ovr from card_seen where athlete_id = $1", [jordan]))).rows).toEqual([{ ovr: 72 }]);
+    await expect(as(db, PARENT_B, () => db.query(`select mark_card_seen($1, 99, '{}')`, [jordan]))).rejects.toThrow(/Not your athlete/);
+    expect((await as(db, PARENT_B, () => db.query("select * from card_seen where athlete_id = $1", [jordan]))).rows).toEqual([]);
+    await as(db, COACH, () => db.query(`select mark_card_seen($1, 72, '{}')`, [jordan]));
+    expect((await as(db, COACH, () => db.query("select * from card_seen"))).rows).toHaveLength(1); // only their own row
+  });
+});
+
 describe("ranks", () => {
   it("shows an athlete only their own place in their age group, the top mark and the mark to pass; never a name; 3+ only", async () => {
     const peer = async (age: number, broad: number | null, cone: number | null) => {

@@ -14,6 +14,8 @@ import { cardAttrs, loadPlayerCard } from "@/lib/cards";
 import { CardBack, PlayerCard } from "@/components/player-card";
 import { FlipCard } from "@/components/autograph-pad";
 import { rankLine } from "@/components/ranks";
+import { TiltCard } from "@/components/tilt-card";
+import { UpgradeReveal } from "@/components/upgrade-reveal";
 import { Challenges } from "@/components/challenges";
 import { TrainingTile } from "@/components/training-tile";
 import { loadTraining } from "@/lib/training";
@@ -93,6 +95,8 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
   const goal = card?.goal ?? null;
   const ovr = card?.rating.ovr ?? null;
   const photo = a.has_photo ? `/api/photo/${a.id}` : null;
+  const frontCard = card ? <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={ovr}
+    attrs={cardAttrs(card)} tier="player" series="ProLyt" trench={card.rating.trench} foil={card.plus} team={card.team} number={card.jersey} firstCard /> : null;
   const btn = "mt-3 flex min-h-12 items-center justify-center rounded-md bg-gold font-cond text-[17px] font-extrabold uppercase tracking-[1.5px] text-on-gold";
 
   // One thing to do next, picked in order of what matters most right now.
@@ -136,12 +140,12 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
       {cancelled ? <Notice tone="good">Cancelled. The trainer was told and any card payment is refunded.</Notice> : null}
       {error ? <Notice tone="bad">{error}</Notice> : null}
 
+      {card?.upgrade && frontCard ? <UpgradeReveal up={card.upgrade} card={<TiltCard finish="gold">{frontCard}</TiltCard>} first={a.first_name} athleteId={a.id} ovr={card.rating.ovr} marks={card.marks} /> : null}
       {card ? (
         <div className="flex flex-col items-center gap-1.5">
           <div className="w-[68%] max-w-[300px]">
             <FlipCard label={`${a.first_name}'s Chrome card`}
-              front={<PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={ovr}
-                attrs={cardAttrs(card)} tier="player" series="ProLyt" trench={card.rating.trench} foil={card.plus} team={card.team} number={card.jersey} firstCard />}
+              front={<TiltCard finish={card.plus ? "chrome" : "base"}>{frontCard}</TiltCard>}
               back={<CardBack first={a.first_name} last={a.last_name} ovr={ovr} number={card.jersey} position={a.position} grad={a.grad_year} team={card.team}
                 attrs={cardAttrs(card)} tests={card.tests} stats={card.stats} band={card.band} cardNo={card.cardNo} highlight={card.highlight} career={card.career} nextUp={card.nextUp} tally={`${card.cards.filter((c) => c.tier === "champion").length} · ${card.cards.filter((c) => c.tier === "mvp").length} · ${card.cards.length + 1}`} />} />
           </div>
