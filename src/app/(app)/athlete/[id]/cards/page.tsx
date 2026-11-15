@@ -30,7 +30,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
   const attrs = cardAttrs(v);
   const unlocked = attrs !== null;
   const age = ageOn(a.birth_date);
-  const photo = a.has_photo ? `/api/photo/${a.id}` : null;
+  const photo = v.aiPhoto ?? (a.has_photo ? `/api/photo/${a.id}` : null);
   const cards = [...v.cards].sort((x, y) => TIER_ORDER[x.tier] - TIER_ORDER[y.tier] || y.awarded_at.localeCompare(x.awarded_at));
   const missing = rating.missing.map((k) => ATTRS.find((x) => x.key === k)!);
   const g = v.goal;
@@ -54,6 +54,12 @@ export default async function Cards({ params, searchParams }: { params: Promise<
             attrs={attrs} flex={null} tests={v.tests} stats={v.stats} band={v.band} cardNo={v.cardNo} highlight={v.highlight} career={v.career} nextUp={v.nextUp} tally={`${v.cards.filter((c) => c.tier === "champion").length} · ${v.cards.filter((c) => c.tier === "mvp").length} · ${v.cards.length + 1}`} />} />
         <p className="text-[12px] text-muted">Tilt your phone to make it shine. Tap to flip.</p>
       </div>
+      {a.family && a.has_photo ? (
+        <Link href={`/athlete/${a.id}/ai-photo`} className="flex min-h-12 items-center justify-between rounded-[14px] border border-line bg-panel px-4 hover:border-gold">
+          <span className="text-sm"><span className="font-semibold">{v.aiPhoto ? "Change the action shot" : "Make an AI action shot"}</span> <span className="text-muted">· you approve it</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
       {a.family ? (
         <a href={`/api/card/${a.id}`} download className="flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] hover:border-gold">
           Save card to share

@@ -68,6 +68,7 @@ export type PlayerCardView = {
   marks: Record<string, number>;
   upgrade: Upgrade | null;
   power: { sport: string; band: string; grp: string; ovr: number; rank: number; of_n: number } | null;
+  aiPhoto: string | null;
   slots: Slot[];
   packs: { id: string; slot_no: number; title: string; rarity: "base" | "chrome" | "gold" | "black" }[];
 };
@@ -85,6 +86,7 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
     const cards = await q<Collected>("select award_id, tier, team_name, awarded_at, series, tagline, color, accent, sponsor, event_id, event_name, starts_on::text, host, total_awarded from athlete_cards($1)", [athleteId]);
     const [id] = await q<{ team: string | null; jersey: string | null; autograph: string | null }>("select team, jersey, autograph from card_identity($1)", [athleteId]);
     const [sp] = await q<{ s: string | null }>("select card_sponsor($1) s", [athleteId]);
+    const [ai] = await q<{ id: string }>("select id from athlete_ai_photos where athlete_id = $1 and status = 'approved'", [athleteId]);
     const ranks = (await q<Rank>("select org_name, band, metric, value::float value, rank, of_n, top_value::float top_value, next_value::float next_value from athlete_ranks($1)", [athleteId]));
     const [power] = await q<NonNullable<PlayerCardView["power"]>>("select sport, band, grp, ovr, rank, of_n from my_power($1)", [athleteId]);
     const challenges = await q<Challenge>("select id, kind, metric, target::float target, baseline::float baseline, sessions, progress, status, done_total, streak from weekly_challenges($1)", [athleteId]);
@@ -143,7 +145,7 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
       slots: binderSlots({ ovr: rating.ovr, autograph: id?.autograph ?? null, testCount: input.tests.length,
         challengesDone: Math.max(0, ...challenges.map((c) => c.done_total)), bestStreak: Math.max(0, ...challenges.map((c) => c.streak)),
         bestRank: ranks.length ? Math.min(...ranks.map((r) => r.rank)) : null, tiers: cards.map((c) => c.tier) }),
-      power: power ?? null, packs: [] as PlayerCardView["packs"] };
+      aiPhoto: ai ? `/api/ai-photo/${ai.id}` : null, power: power ?? null, packs: [] as PlayerCardView["packs"] };
   });
   if (!view) return null;
   // Each card an athlete has earned becomes one pack, granted once. Then the unopened ones are listed for the family.

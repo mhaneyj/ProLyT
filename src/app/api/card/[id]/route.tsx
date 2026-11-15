@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
-import { get } from "@vercel/blob";
 import { getMe } from "@/lib/auth";
 import { asService, asUser } from "@/lib/db";
 import { cardAttrs, loadPlayerCard } from "@/lib/cards";
+import { approvedAiPhoto, readAthletePhoto } from "@/lib/photo-data";
 
 // The Player Card as a 1080×1350 PNG the family saves and posts (Instagram/TikTok size).
 // Family only: the family decides what goes public. Nothing here is a public link.
@@ -14,18 +14,11 @@ const fonts = Promise.all([font("anton/files/anton-latin-400-normal.woff"), font
 const isId = (s: string) => /^[0-9a-f-]{36}$/.test(s);
 
 async function photoData(id: string): Promise<string | null> {
-  const [row] = await asService((q) => q<{ photo_path: string | null; photo_data: Buffer | null; photo_mime: string | null }>(
-    "select photo_path, photo_data, photo_mime from athletes where id = $1", [id]));
-  if (!row?.photo_path) return null;
-  let buf: Buffer | null = null, mime = row.photo_mime ?? "image/jpeg";
-  if (row.photo_path.startsWith("db:") && row.photo_data) buf = Buffer.from(row.photo_data);
-  else if (row.photo_path.startsWith("blob:")) {
-    const b = await get(row.photo_path.slice(5), { access: "private" }).catch(() => null);
-    if (b && b.statusCode === 200) { buf = Buffer.from(await new Response(b.stream).arrayBuffer()); mime = b.blob.contentType; }
-  }
+  // An approved AI action shot wins; otherwise the real photo.
+  const pic = (await approvedAiPhoto(id)) ?? (await readAthletePhoto(id));
   // The image renderer reads JPEG and PNG.
-  if (!buf || !/jpe?g|png/.test(mime)) return null;
-  return `data:${mime};base64,${buf.toString("base64")}`;
+  if (!pic || !/jpe?g|png/.test(pic.mime)) return null;
+  return `data:${pic.mime};base64,${pic.buf.toString("base64")}`;
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

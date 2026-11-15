@@ -1703,3 +1703,28 @@ describe("packs and power rankings", () => {
     await expect(as(db, PARENT_A, () => db.query("select set_leaderboard($1, true)", [pa]))).rejects.toThrow(/13/);
   });
 });
+
+describe("ai photos", () => {
+  it("needs consent, a photo and a parent; limits 3 a month; only approved shots count; images never leave through the table", async () => {
+    const a = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date, photo_path) values ('Ava','Ai', current_date - interval '14 years', 'db:x') returning id")).rows[0].id;
+    await db.query("insert into guardians (athlete_id, user_id, is_primary) values ($1,$2,true)", [a, PARENT_A]);
+    await expect(as(db, PARENT_A, () => db.query("select start_ai_photo($1)", [a]))).rejects.toThrow(/terms/);
+    await expect(as(db, PARENT_B, () => db.query("select give_ai_consent($1)", [a]))).rejects.toThrow(/parent/);
+    await as(db, PARENT_A, () => db.query("select give_ai_consent($1)", [a]));
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const id = (await as(db, PARENT_A, () => db.query<{ id: string }>("select start_ai_photo($1) id", [a]))).rows[0].id; ids.push(id);
+      await db.query("select finish_ai_photo($1, decode('ffd8','hex'), 'image/jpeg', true, null)", [id]);
+    }
+    await expect(as(db, PARENT_A, () => db.query("select start_ai_photo($1)", [a]))).rejects.toThrow(/3 action shots/);
+    await expect(as(db, PARENT_A, () => db.query("select finish_ai_photo($1, null, null, false, 'x')", [ids[0]]))).rejects.toThrow(/permission denied/);
+    await expect(as(db, PARENT_A, () => db.query("select image from athlete_ai_photos"))).rejects.toThrow(/permission denied/);
+    await expect(as(db, PARENT_B, () => db.query("select decide_ai_photo($1, true)", [ids[0]]))).rejects.toThrow(/parent/);
+    await as(db, PARENT_A, () => db.query("select decide_ai_photo($1, true)", [ids[0]]));
+    await as(db, PARENT_A, () => db.query("select decide_ai_photo($1, true)", [ids[1]])); // replaces the first
+    expect((await db.query<{ n: number }>("select count(*)::int n from athlete_ai_photos where athlete_id = $1 and status = 'approved'", [a])).rows[0].n).toBe(1);
+    expect((await as(db, PARENT_A, () => db.query<{ s: string }>("select ai_photo_access($1) s", [ids[1]]))).rows[0].s).toBe("family");
+    await as(db, PARENT_A, () => db.query("select withdraw_ai_consent($1)", [a]));
+    expect((await db.query<{ n: number }>("select count(*)::int n from athlete_ai_photos where athlete_id = $1 and status = 'approved'", [a])).rows[0].n).toBe(0);
+  });
+});

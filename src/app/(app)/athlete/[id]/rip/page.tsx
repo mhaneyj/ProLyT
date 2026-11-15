@@ -31,7 +31,7 @@ export default async function Rip({ params, searchParams }: { params: Promise<{ 
   }
   const rarity: Rarity = preview ?? pack!.rarity;
   const attrs = cardAttrs(v);
-  const photo = a.has_photo ? `/api/photo/${a.id}` : null;
+  const photo = v.aiPhoto ?? (a.has_photo ? `/api/photo/${a.id}` : null);
   const pr40 = v.tests.find((t) => /40/.test(t.label))?.value ?? null;
   const tier = rarity === "black" ? "mvp" : rarity === "gold" ? "champion" : "player";
   const reason = pack ? `New card · ${pack.slot_no} of ${v.slots.length} · ${pack.title}`
