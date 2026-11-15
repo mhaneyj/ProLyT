@@ -1830,3 +1830,20 @@ describe("card info", () => {
     expect((await as(db, PARENT_A, () => db.query<{ jersey: string | null }>("select jersey from card_identity($1)", [jordan]))).rows[0].jersey).not.toBe("88");
   });
 });
+
+describe("pack notices", () => {
+  it("announces new packs once, and expiring credits once, server only", async () => {
+    await db.query("delete from card_packs where athlete_id = $1", [jordan]);
+    await db.query("select grant_packs($1, $2::jsonb)", [jordan, JSON.stringify([{ no: 2, title: "Signed", rarity: "base" }, { no: 3, title: "Tested", rarity: "chrome" }])]);
+    await expect(as(db, PARENT_A, () => db.query("select * from claim_new_packs($1)", [jordan]))).rejects.toThrow(/permission/);
+    const first = (await db.query<{ fresh: number }>("select fresh from claim_new_packs($1)", [jordan])).rows;
+    expect(first.map((r) => r.fresh)).toEqual([2]);
+    expect((await db.query("select * from claim_new_packs($1)", [jordan])).rows).toHaveLength(0); // already announced
+    await expect(as(db, PARENT_A, () => db.query("select * from claim_expiring_credits()"))).rejects.toThrow(/permission/);
+    const pack = (await db.query<{ id: string }>("insert into session_packs (org_id, name, sessions, price_cents) values ($1,'Notice pack',5,40000) returning id", [ORG])).rows[0].id;
+    await db.query("insert into pack_purchases (pack_id, org_id, buyer, sessions_total, price_cents, status, paid_at, expires_at) values ($1,$2,$3,5,40000,'paid', now(), now() + interval '3 days')", [pack, ORG, PARENT_A]);
+    const due = (await db.query<{ buyer: string; remaining: number }>("select buyer, remaining from claim_expiring_credits()")).rows;
+    expect(due).toEqual([{ buyer: PARENT_A, remaining: 5 }]);
+    expect((await db.query("select * from claim_expiring_credits()")).rows).toHaveLength(0); // once per purchase
+  });
+});

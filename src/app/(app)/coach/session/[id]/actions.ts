@@ -1,7 +1,9 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { offerNext } from "@/lib/waitlist";
+import { notifyPacks } from "@/lib/pack-notices";
 import { requireRole } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
 import { BOUNDS, METRICS } from "@/lib/domain/metrics";
@@ -51,6 +53,7 @@ async function save(form: FormData): Promise<ActionState> {
     return { error: dbMessage(e) };
   }
   revalidatePath(`/coach/session/${d.session}`);
+  after(() => notifyPacks(me.id, [d.athlete]));
   return { ok: `Saved ${m.label}: ${d.value} ${m.unit}` };
 }
 
@@ -110,6 +113,7 @@ export async function saveBatch(_: BatchState, form: FormData): Promise<BatchSta
     return { error: dbMessage(err), values };
   }
   revalidatePath(session ? `/coach/session/${session}` : "/coach/testing");
+  after(() => notifyPacks(me.id, entries.map((e) => e.athlete).filter((a) => z.guid().safeParse(a).success)));
   return { ok: `Saved ${entries.length} ${m.label} result${entries.length > 1 ? "s" : ""}. Families see them now.` };
 }
 
@@ -175,6 +179,7 @@ export async function saveVoice(input: z.infer<typeof voiceSchema>): Promise<{ o
     return { error: dbMessage(e) };
   }
   revalidatePath(`/coach/session/${session}`);
+  after(() => notifyPacks(me.id, items.filter((i) => i.value !== null).map((i) => i.athleteId)));
   const parts = [results ? `${results} result${results > 1 ? "s" : ""}` : null, notes ? `${notes} note${notes > 1 ? "s" : ""}` : null].filter(Boolean);
   return { ok: `Saved ${parts.join(" and ")}. Families see them now.` };
 }
