@@ -14,7 +14,8 @@ export function actionPrompt(position: string | null, sport: string | null) {
   const pose = POSE[positionGroup(position, sport)] ?? POSE.ATH;
   const game = isHockey(sport) ? "ice hockey" : "football";
   return `Photorealistic sports trading card action photo of this same young ${game} player, ${pose}. Keep the person's face, hair, skin tone and build exactly the same. `
-    + `Stadium lights at night, dramatic rim lighting, shallow depth of field. Plain generic uniform in solid colors. No logos, no text, no numbers, no school or team names, no brand marks.`;
+    + `Stadium lights at night, dramatic rim lighting, shallow depth of field. Plain generic uniform in solid colors. No logos, no text, no numbers, no school or team names, no brand marks. `
+    + `Background: soft-focus stadium, no other recognizable people, no readable lettering on the field or stands, no school or team colors.`;
 }
 
 type Result = { ok: true; image: Buffer; mime: string } | { ok: false; note: string };

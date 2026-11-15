@@ -14,6 +14,7 @@ describe("action shot", () => {
     expect(p).toMatch(/three-point/);
     expect(p).toMatch(/exactly the same/);
     expect(p).toMatch(/No logos, no text, no numbers, no school or team names/);
+    expect(p).toMatch(/no other recognizable people/);
     expect(actionPrompt("Goalie", "hockey")).toMatch(/goalie gear/);
     expect(actionPrompt(null, "football")).toMatch(/sprinting/);
   });
