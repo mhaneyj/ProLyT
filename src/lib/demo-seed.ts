@@ -161,4 +161,9 @@ from generate_series(1, 8) w;
 insert into payments (org_id, membership_id, amount_cents, status, created_at)
 select '${ORG_ID}', m.id, p.price_cents, 'paid', now() - (k || ' days')::interval
 from memberships m join plans p on p.id = m.plan_id cross join (values (3), (33)) k(k);
+
+insert into session_packs (id, org_id, name, sessions, price_cents, valid_days) values
+  ('e0000000-0000-0000-0000-000000000001', '${ORG_ID}', '5-session pack', 5, 42500, 90);
+insert into pack_purchases (pack_id, org_id, buyer, sessions_total, price_cents, status, paid_at, expires_at) values
+  ('e0000000-0000-0000-0000-000000000001', '${ORG_ID}', 'd0000000-0000-0000-0000-000000000004', 5, 42500, 'paid', now() - interval '5 days', now() + interval '85 days');
 `;

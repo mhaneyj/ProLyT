@@ -1790,3 +1790,30 @@ describe("waitlist", () => {
     await expect(as(db, PARENT_A, () => db.query("select * from missed_nudges()"))).rejects.toThrow(/permission/);
   });
 });
+
+describe("session packs", () => {
+  it("owner sells packs; a family buys, spends credits on covered sessions only, and a coach removal gives one back", async () => {
+    await expect(as(db, PARENT_A, () => db.query("select save_pack($1, null, 'Nope', 5, 40000, null, 90)", [ORG]))).rejects.toThrow(/owner/);
+    const pack = (await as(db, OWNER, () => db.query<{ id: string }>("select save_pack($1, null, '3-pack', 3, 24000, 10000, 90) id", [ORG]))).rows[0].id;
+    const buy = await as(db, PARENT_A, () => db.query<{ purchase_id: string }>("select * from start_pack_purchase($1, 200)", [pack]));
+    const pid = buy.rows[0].purchase_id;
+    expect((await as(db, PARENT_A, () => db.query("select * from my_packs()"))).rows).toHaveLength(0); // not paid yet
+    await expect(as(db, PARENT_A, () => db.query("select complete_pack_purchase($1,'cs_1')", [pid]))).rejects.toThrow(/permission/);
+    expect((await db.query<{ ok: boolean }>("select complete_pack_purchase($1,'cs_1') ok", [pid])).rows[0].ok).toBe(true);
+    expect((await db.query<{ ok: boolean }>("select complete_pack_purchase($1,'cs_1') ok", [pid])).rows[0].ok).toBe(false); // replay is harmless
+    expect((await db.query("select 1 from payments where pack_purchase_id = $1", [pid])).rows).toHaveLength(1);
+    const mk = async (price: number) => (await db.query<{ id: string }>("insert into sessions (org_id, kind, program, title, starts_at, ends_at, price_cents) values ($1,'one_on_one','1on1','1-on-1', now() + interval '3 days', now() + interval '3 days 1 hour', $2) returning id", [ORG, price])).rows[0].id;
+    const cheap = await mk(8000), dear = await mk(15000);
+    expect((await as(db, PARENT_A, () => db.query<{ remaining: number }>("select remaining from my_packs()"))).rows[0].remaining).toBe(3);
+    await expect(as(db, PARENT_A, () => db.query("select book_with_credit($1,$2)", [dear, jordan]))).rejects.toThrow(/No pack credit covers/);
+    await expect(as(db, PARENT_B, () => db.query("select book_with_credit($1,$2)", [cheap, jordan]))).rejects.toThrow(/parent/);
+    await as(db, PARENT_A, () => db.query("select book_with_credit($1,$2)", [cheap, jordan]));
+    expect((await as(db, PARENT_A, () => db.query<{ remaining: number }>("select remaining from my_packs()"))).rows[0].remaining).toBe(2);
+    await expect(as(db, PARENT_A, () => db.query("select book_with_credit($1,$2)", [cheap, jordan]))).rejects.toThrow(/Already booked/);
+    await expect(as(db, PARENT_A, () => db.query("select release_pack_credit($1,$2)", [cheap, jordan]))).rejects.toThrow(/staff/);
+    await db.query("delete from session_athletes where session_id = $1 and athlete_id = $2", [cheap, jordan]);
+    await as(db, COACH, () => db.query("select release_pack_credit($1,$2)", [cheap, jordan]));
+    expect((await as(db, PARENT_A, () => db.query<{ remaining: number }>("select remaining from my_packs()"))).rows[0].remaining).toBe(3);
+    await expect(as(db, PARENT_A, () => db.query("select * from pack_uses"))).rejects.toThrow(/permission/);
+  });
+});

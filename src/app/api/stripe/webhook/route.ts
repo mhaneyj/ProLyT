@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
           await q("select complete_session_payment($1, $2)", [s.metadata.session_payment_id, s.id]);
           break;
         }
+        if (s.metadata?.pack_purchase_id && s.payment_status === "paid") {
+          await q("select complete_pack_purchase($1, $2)", [s.metadata.pack_purchase_id, s.id]);
+          break;
+        }
         if (s.metadata?.trainer_booking_id && s.payment_status === "paid") {
           await q("update trainer_bookings set status = 'confirmed', paid_at = coalesce(paid_at, now()), stripe_checkout_id = $2 where id = $1 and status in ('pending_payment', 'confirmed')",
             [s.metadata.trainer_booking_id, s.id]);

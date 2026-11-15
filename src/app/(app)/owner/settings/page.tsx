@@ -69,6 +69,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </Link>
       ) : null}
       {can(me, "billing.manage") ? (
+        <Link href="/owner/packs" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
+          <span><span className="block font-semibold">Session packs</span><span className="block text-[12px] text-muted">Prepaid bundles, like 10 sessions at a discount</span></span>
+          <span aria-hidden="true" className="text-gold">→</span>
+        </Link>
+      ) : null}
+      {can(me, "billing.manage") ? (
         <Link href="/owner/billing" className="flex min-h-14 items-center justify-between rounded-[14px] border border-line px-4 hover:border-gold">
           <span><span className="block font-semibold">Your ProLyt plan</span><span className="block text-[12px] text-muted">Starter or Club, and what each includes</span></span>
           <span aria-hidden="true" className="text-gold">→</span>

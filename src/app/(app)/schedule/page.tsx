@@ -2,7 +2,7 @@ import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { TZ, money, time } from "@/lib/domain/format";
 import { Card, Empty, Notice, Pill, Title } from "@/components/ui";
-import { book, cancel, joinWaitlist, leaveWaitlist } from "./actions";
+import { book, cancel, joinWaitlist, leaveWaitlist, bookWithCredit } from "./actions";
 import { stripeConfigured } from "@/lib/stripe";
 
 export const metadata = { title: "Schedule" };
@@ -14,12 +14,12 @@ type S = {
 type Use = { athlete_id: string; org_id: string; week: string; plan: string; per_week: number | null; booked: number; plan_limit: "allow" | "block" | "charge"; extra_price_cents: number | null };
 type Kid = { id: string; first_name: string; org_id: string };
 
-export default async function Schedule({ searchParams }: { searchParams: Promise<{ error?: string; paid?: string }> }) {
-  const { error, paid: justPaid } = await searchParams;
+export default async function Schedule({ searchParams }: { searchParams: Promise<{ error?: string; paid?: string; pack?: string }> }) {
+  const { error, paid: justPaid, pack: sp_pack } = await searchParams;
   const me = await requireMe();
   const payOnline = stripeConfigured && me.features.payments;
   const isFamily = me.roles.includes("guardian") && !me.roles.includes("coach") && !me.roles.includes("owner");
-  const { sessions, kids, usage, paidExtras, wl } = await asUser(me.id, async (q) => {
+  const { sessions, kids, usage, paidExtras, wl, credits, packs } = await asUser(me.id, async (q) => {
     const sessions = await q<S>(`
       select s.id, s.org_id, s.title, s.starts_at, s.ends_at, s.location, p.full_name coach, s.price_cents, coalesce(spots_left_held(s.id), spots_left(s.id)) spots,
         s.kind::text kind, week_start(s.starts_at)::text week,
@@ -35,8 +35,12 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
     const usage = isFamily ? await q<Use>("select athlete_id, org_id, week::text, plan, per_week, booked, plan_limit, extra_price_cents from family_plan_usage()") : [];
     const paidExtras = isFamily ? (await q<{ k: string }>("select session_id || ':' || athlete_id k from session_payments where extra and status = 'paid'")).map((r) => r.k) : [];
     const wl = isFamily ? await q<{ session_id: string; athlete_id: string; status: string; place: number; offer_expires_at: string | null }>("select * from my_waitlist()") : [];
-    return { sessions, kids, usage, paidExtras, wl };
+    const credits = isFamily ? await q<{ org_id: string; name: string; remaining: number; cap_cents: number | null }>("select org_id, name, remaining, cap_cents from my_packs()") : [];
+    const packs = isFamily && payOnline ? await q<{ id: string; org_id: string; name: string; sessions: number; price_cents: number; cap_cents: number | null; valid_days: number }>(
+      "select id, org_id, name, sessions, price_cents, cap_cents, valid_days from session_packs where active order by price_cents") : [];
+    return { sessions, kids, usage, paidExtras, wl, credits, packs };
   });
+  const creditFor = (org: string, price: number) => credits.find((c) => c.org_id === org && (c.cap_cents === null || price <= c.cap_cents));
   const use = (athlete: string, org: string, week: string) => usage.find((u) => u.athlete_id === athlete && u.org_id === org && u.week === week);
   const thisWeek = usage.filter((u) => u.week === usage.map((x) => x.week).sort()[0] && u.per_week);
 
@@ -52,6 +56,23 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
       <Title sub={isFamily ? (me.features.booking ? "Tap Book to save a spot. Next 3 weeks." : "Next 3 weeks. Your coach books sessions for you.") : "All sessions, next 3 weeks."}>Schedule</Title>
       {justPaid ? <Notice tone="good">Paid. The booking shows here as soon as the payment clears (a few seconds).</Notice> : null}
       {error ? <Notice tone="bad">{error}</Notice> : null}
+      {sp_pack ? <Notice tone="good">Pack bought. Your credits show up here as soon as the payment clears (a few seconds).</Notice> : null}
+      {credits.length ? <Notice tone="good">{credits.map((c) => `${c.remaining} credit${c.remaining === 1 ? "" : "s"} left in ${c.name}`).join(" · ")}</Notice> : null}
+      {packs.filter((p) => kids.some((k) => k.org_id === p.org_id)).length ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">Save with a pack</h2>
+          {packs.filter((p) => kids.some((k) => k.org_id === p.org_id)).map((p) => (
+            <Card key={p.id} className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{p.name}</div>
+                <div className="text-[12px] text-muted">{p.sessions} sessions · {money(Math.round(p.price_cents / p.sessions))} each · good for {p.valid_days} days · shared across your athletes{p.cap_cents ? ` · sessions up to ${money(p.cap_cents)}` : ""}</div>
+              </div>
+              <form action="/api/stripe/pack" method="post"><input type="hidden" name="pack" value={p.id} />
+                <button aria-label={`Buy ${p.name}`} className="min-h-11 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold">{money(p.price_cents)}</button></form>
+            </Card>
+          ))}
+        </section>
+      ) : null}
       {thisWeek.length ? (
         <div className="flex flex-col gap-2">
           {thisWeek.map((u) => {
@@ -101,6 +122,15 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                   <div className="flex flex-col gap-2">
                     {myKids.map((k) => {
                       const booked = s.booked.includes(k.id);
+                      const cr = paid && !booked ? creditFor(s.org_id, s.price_cents!) : undefined;
+                      if (cr) return (
+                        <form key={k.id} action={bookWithCredit} className="flex items-center justify-between gap-3">
+                          <input type="hidden" name="session" value={s.id} /><input type="hidden" name="athlete" value={k.id} />
+                          <span className="text-sm text-soft">{k.first_name}<span className="block text-[12px] text-gold">{cr.remaining} credit{cr.remaining === 1 ? "" : "s"} left</span></span>
+                          <button disabled={s.spots === 0} aria-label={`Use a pack credit to book ${k.first_name}`}
+                            className="min-h-11 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold disabled:opacity-40">Use 1 credit</button>
+                        </form>
+                      );
                       if (paid && !booked) return payOnline ? (
                         <form key={k.id} action="/api/stripe/session" method="post" className="flex items-center justify-between gap-3">
                           <input type="hidden" name="session" value={s.id} /><input type="hidden" name="athlete" value={k.id} />
@@ -115,6 +145,15 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                       const over = !booked && u && u.per_week !== null && u.booked >= u.per_week;
                       if (booked && paidExtras.includes(`${s.id}:${k.id}`)) return (
                         <div key={k.id} className="flex items-center justify-between gap-3"><Pill tone="good">{k.first_name} is booked ✓</Pill><span className="text-xs text-muted">Paid extra · contact coach to cancel</span></div>
+                      );
+                      const crx = over && u.plan_limit === "charge" && u.extra_price_cents ? creditFor(s.org_id, u.extra_price_cents) : undefined;
+                      if (crx) return (
+                        <form key={k.id} action={bookWithCredit} className="flex items-center justify-between gap-3">
+                          <input type="hidden" name="session" value={s.id} /><input type="hidden" name="athlete" value={k.id} />
+                          <span className="text-sm text-soft">{k.first_name}<span className="block text-[12px] text-gold">Extra session · {crx.remaining} credit{crx.remaining === 1 ? "" : "s"} left</span></span>
+                          <button disabled={s.spots === 0} aria-label={`Use a pack credit for an extra session for ${k.first_name}`}
+                            className="min-h-11 rounded-md bg-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-on-gold disabled:opacity-40">Use 1 credit</button>
+                        </form>
                       );
                       if (over && u.plan_limit === "charge" && u.extra_price_cents) return payOnline ? (
                         <form key={k.id} action="/api/stripe/session" method="post" className="flex items-center justify-between gap-3">

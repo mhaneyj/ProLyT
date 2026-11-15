@@ -71,6 +71,7 @@ export async function removeFromSession(form: FormData) {
   await asUser(me.id, (q) => q(
     "delete from session_athletes sa where session_id = $1 and athlete_id = $2 and not exists (select 1 from attendance a where a.session_id = sa.session_id and a.athlete_id = sa.athlete_id)",
     [session, athlete]));
+  await asUser(me.id, (q) => q("select release_pack_credit($1, $2)", [session, athlete])).catch(() => {});
   await offerNext(session).catch((e) => console.error("[waitlist] offer failed:", e));
   revalidatePath(`/coach/session/${session}`);
 }
