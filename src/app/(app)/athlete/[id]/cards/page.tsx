@@ -42,6 +42,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
       {switcher}
       <Link href={`/athlete/${a.id}`} className="min-h-11 py-3 text-sm text-muted hover:text-cream">← {a.first_name}</Link>
       <Title sub="Earned, not bought. Only verified tests and coach ratings move it.">Player Card</Title>
+      {a.family ? <Link href={`/athlete/${a.id}/card-info`} className="-mt-1 inline-flex min-h-11 items-center self-start text-sm font-semibold text-gold">Edit card info: number, team, position →</Link> : null}
       {sp.ok === "rated" ? <Notice tone="good">Ratings saved. {a.first_name}&apos;s card is updated.</Notice> : null}
       {sp.ok === "asked" ? <Notice tone="good">Sent. Your parent got a notification to unlock your full card.</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
@@ -77,7 +78,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
         </Link>
       ) : null}
       {v.power ? (
-        <Link href={`/rankings?sport=${v.power.sport}&band=${v.power.band}&group=${v.power.grp}`} className="flex min-h-14 items-center justify-between rounded-[14px] border border-line bg-panel px-4 hover:border-gold">
+        <Link href={`/feed?tab=rankings&sport=${v.power.sport}&band=${v.power.band}&group=${v.power.grp}`} className="flex min-h-14 items-center justify-between rounded-[14px] border border-line bg-panel px-4 hover:border-gold">
           <span><span className="block font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">Power ranking</span><span className="text-sm">#{v.power.rank} of {v.power.of_n} · {v.power.band} {v.power.grp}</span></span>
           <span aria-hidden="true" className="text-gold">→</span>
         </Link>

@@ -6,7 +6,7 @@ import { asUser, dbMessage } from "@/lib/db";
 
 export type PostState = { error?: string; ok?: number };
 const isId = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
-const back = (form: FormData) => { const b = String(form.get("back") ?? ""); return /^\/[a-z0-9/_?=&-]*$/i.test(b) && !b.startsWith("//") ? b : "/feed"; };
+const back = (form: FormData) => { const b = String(form.get("back") ?? ""); return /^\/[a-z0-9/_?=&-]*$/i.test(b) && !b.startsWith("//") ? b : "/feed?tab=following"; };
 
 export async function createPost(_: PostState, form: FormData): Promise<PostState> {
   const me = await requireMe();
@@ -38,7 +38,7 @@ export async function deletePost(form: FormData) {
   if (!isId(id)) return;
   await asUser(me.id, (q) => q("select delete_post($1)", [id]));
   const b = back(form);
-  redirect(b.startsWith("/post/") ? "/feed" : b);
+  redirect(b.startsWith("/post/") ? "/feed?tab=following" : b);
 }
 
 export async function reportPost(form: FormData) {

@@ -10,5 +10,5 @@ export async function setLeaderboard(form: FormData) {
   if (!/^[0-9a-f-]{36}$/.test(id)) return;
   let err = "";
   try { await asUser(me.id, (q) => q("select set_leaderboard($1, $2)", [id, form.get("on") === "1"])); } catch (e) { err = dbMessage(e); }
-  redirect(`/rankings${err ? `?error=${encodeURIComponent(err)}` : ""}`);
+  redirect(`/feed?tab=rankings${err ? `&error=${encodeURIComponent(err)}` : ""}`);
 }

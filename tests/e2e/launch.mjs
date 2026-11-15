@@ -394,8 +394,10 @@ let coachLink = "";
 // ── 11. ProLyt network: a parent posts, a coach comments, an outside member can follow and give Props but not comment
 {
   const p = await signIn("gamefit-loomis", "parent@family.test");
-  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Feed" }).click();
+  await p.page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Arena" }).click();
   await p.page.waitForURL(/\/feed/);
+  await p.page.getByRole("navigation", { name: "Arena" }).getByRole("link", { name: "Following" }).click();
+  await p.page.waitForURL(/tab=following/);
   check("family sees Avery's automatic 'joined' post", await seen(p.page.getByText(/Avery joined/)));
   await p.page.getByLabel("Post").click();
   await p.page.getByLabel("Post").fill("First week of In The Trenches. Footwork is coming along.");
@@ -405,7 +407,7 @@ let coachLink = "";
   await p.ctx.close();
 
   const c = await signIn("gamefit-loomis", "lem@gamefit.test");
-  await c.page.goto(url("gamefit-loomis", "/feed"));
+  await c.page.goto(url("gamefit-loomis", "/feed?tab=following"));
   await c.page.getByRole("article").filter({ hasText: "First week of In The Trenches" }).getByRole("link", { name: /Comment/ }).click();
   await c.page.waitForURL(/\/post\//);
   await c.page.getByLabel("Comment").fill("Huge week. Keep stacking reps.");
@@ -418,7 +420,7 @@ let coachLink = "";
   check("outside member finds Avery in Discover", await seen(s.page.getByRole("link", { name: /Avery Real/ })));
   await s.page.getByRole("button", { name: "Follow" }).first().click();
   check("follows Avery", await seen(s.page.getByRole("button", { name: "Following" })));
-  await s.page.goto(url("gamefit-loomis", "/feed"));
+  await s.page.goto(url("gamefit-loomis", "/feed?tab=following"));
   const post = s.page.getByRole("article").filter({ hasText: "First week of In The Trenches" });
   check("followed athlete's post shows in Following", await seen(post));
   await post.getByRole("button", { name: /Props/ }).click();
@@ -566,7 +568,7 @@ let coachLink = "";
     await page.waitForURL((u) => u.pathname === "/family", { timeout: 15000 });
     return { ctx, page, errors };
   })();
-  await p.page.goto(url("gamefit-loomis", "/feed"));
+  await p.page.goto(url("gamefit-loomis", "/feed?tab=following"));
   await p.page.locator('input[type=file][accept="image/*"]').setInputFiles(["public/icon-512.png", "public/apple-icon.png"]);
   check("photo previews show before posting", await seen(p.page.getByRole("img", { name: "Photo 2" })));
   await p.page.getByLabel("Post").fill("Camp day two");
@@ -733,7 +735,7 @@ let coachLink = "";
   const peek = await fetchIn(h2.page, docUrl);
   check("document opens for the host", peek.status === 200 && peek.cache.includes("no-store"), JSON.stringify(peek));
   // Coaches never see documents
-  const rc = await signIn("gamefit-loomis", "coach@rocklin.test", "/login?next=/feed");
+  const rc = await signIn("gamefit-loomis", "coach@rocklin.test", "/login?next=/feed?tab=following");
   check("coach can't open the document", (await fetchIn(rc.page, docUrl)).status === 404);
   await h2.page.getByRole("button", { name: "Approve" }).click();
   check("host approves", await seen(h2.page.getByText(/Verified\. The document is deleted/)));

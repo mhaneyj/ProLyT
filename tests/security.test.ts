@@ -1817,3 +1817,16 @@ describe("session packs", () => {
     await expect(as(db, PARENT_A, () => db.query("select * from pack_uses"))).rejects.toThrow(/permission/);
   });
 });
+
+describe("card info", () => {
+  it("the family sets number, team and position; strangers can't; bad input is refused; it shows on the card", async () => {
+    await as(db, PARENT_A, () => db.query("select save_card_info($1, 'OL', 2029, '88', 'Loomis Wolverines', 'Loomis, CA')", [jordan]));
+    const id = (await as(db, PARENT_A, () => db.query<{ team: string; jersey: string }>("select team, jersey from card_identity($1)", [jordan]))).rows[0];
+    expect(id).toMatchObject({ team: "Loomis Wolverines", jersey: "88" });
+    await expect(as(db, PARENT_B, () => db.query("select save_card_info($1, 'QB', 2029, '1', 'Nope', null)", [jordan]))).rejects.toThrow(/athlete or a parent/);
+    await expect(as(db, PARENT_A, () => db.query("select save_card_info($1, 'OL', 2029, '7x', null, null)", [jordan]))).rejects.toThrow(/Jersey/);
+    await expect(as(db, PARENT_A, () => db.query("select save_card_info($1, 'OL', 1999, '7', null, null)", [jordan]))).rejects.toThrow(/Class of/);
+    await as(db, PARENT_A, () => db.query("select save_card_info($1, 'OL', 2029, null, null, null)", [jordan])); // cleared: falls back to the program
+    expect((await as(db, PARENT_A, () => db.query<{ jersey: string | null }>("select jersey from card_identity($1)", [jordan]))).rows[0].jersey).not.toBe("88");
+  });
+});

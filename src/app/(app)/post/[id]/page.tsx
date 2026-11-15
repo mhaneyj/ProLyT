@@ -29,7 +29,7 @@ export default async function Post({ params, searchParams }: { params: Promise<{
   const back = `/post/${id}`;
   return (
     <>
-      <Link href="/feed" className="min-h-11 py-3 text-sm text-muted hover:text-cream">← Feed</Link>
+      <Link href="/feed?tab=following" className="min-h-11 py-3 text-sm text-muted hover:text-cream">← Arena</Link>
       {sp.reported ? <Notice tone="good">Thanks. ProLyt&apos;s safety team will review it.</Notice> : null}
       <PostCard p={p} back={back} full />
       <section id="comments" className="flex flex-col gap-3">

@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items: NavItem[] = [];
   const staff = me.roles.includes("coach") || me.roles.includes("owner");
   const chat = me.features.messaging;
-  const feed: NavItem = { href: "/feed", label: "Feed", icon: "feed", match: "/feed" };
+  const feed: NavItem = { href: "/feed", label: "Arena", icon: "feed", match: "/feed" };
   const msgs: NavItem | null = chat ? { href: "/messages", label: "Messages", icon: "chat", badge: await unreadCount(me.id) } : null;
   if (staff) {
     if (me.roles.includes("owner")) items.push({ href: "/owner", label: "Dashboard", icon: "dashboard" });
