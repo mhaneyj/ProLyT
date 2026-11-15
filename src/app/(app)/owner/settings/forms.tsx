@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState } from "react";
-import { saveBranding, saveCoachPay, inviteCoach, type FormState } from "./actions";
+import { saveBranding, saveSponsor, saveCoachPay, inviteCoach, type FormState } from "./actions";
 import { checkBrandColor, themeVars } from "@/lib/domain/brand";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
@@ -99,6 +99,21 @@ export function InviteForm() {
       </fieldset>
       <Status s={state} />
       <button disabled={pending} className={btn}>{pending ? "Saving…" : "Invite coach"}</button>
+    </form>
+  );
+}
+
+export function SponsorForm({ sponsor }: { sponsor: string }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(saveSponsor, {});
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <div>
+        <label htmlFor="sponsor" className="mb-1.5 block text-sm text-soft">Presented by</label>
+        <input id="sponsor" name="sponsor" maxLength={60} defaultValue={sponsor} placeholder="Loomis Tire & Auto" className={input} />
+        <p className="mt-1 text-xs text-muted">A local business that pays the program. Its name shows under &ldquo;Presented by&rdquo; on your athletes&apos; cards. No school names, uniforms or coaches.</p>
+      </div>
+      <Status s={state} />
+      <button disabled={pending} className={btn}>{pending ? "Saving…" : "Save sponsor"}</button>
     </form>
   );
 }

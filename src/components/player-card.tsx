@@ -119,6 +119,7 @@ function ChromeCard(p: CardProps & { kind: "player" | "champion" | "mvp" }) {
             <div className="absolute text-right font-cond font-extrabold" style={{ right: u(32), top: u(30), fontSize: u(24), letterSpacing: u(7), lineHeight: 1.15, maxWidth: u(380) }}>
               {set}
               {p.firstCard && p.kind === "player" ? <div style={{ fontSize: u(19), letterSpacing: u(6), color: "#ffe14a" }}>1ST CARD</div> : null}
+              {p.kind === "player" && p.sponsor ? <div style={{ fontSize: u(17), letterSpacing: u(4), color: "#cfd8e3" }}>PRESENTED BY {p.sponsor.toUpperCase()}</div> : null}
               {p.kind === "champion" && p.footer ? <div style={{ fontSize: u(19), letterSpacing: u(5), color: "#fff0b0" }}>{p.footer.toUpperCase()}</div> : null}
             </div>
 

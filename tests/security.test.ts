@@ -1647,3 +1647,16 @@ describe("nil (dark by default)", () => {
     expect((await db.query<{ enabled: boolean }>("select enabled from platform_flags where key = 'nil_payouts'")).rows[0].enabled).toBe(false);
   });
 });
+
+describe("card sponsor", () => {
+  it("a program can sell 'Presented by'; school, uniform and coach wording is refused; only the family and coaches see it on the card", async () => {
+    await expect(as(db, OWNER, () => db.query("update orgs set card_sponsor = 'Del Oro High School Boosters' where id = $1", [ORG]))).rejects.toThrow(/can't include/);
+    await expect(as(db, PARENT_A, () => db.query("update orgs set card_sponsor = 'Loomis Tire' where id = $1", [ORG]))).resolves.toBeDefined(); // no rows updated, no permission
+    expect((await db.query<{ card_sponsor: string | null }>("select card_sponsor from orgs where id = $1", [ORG])).rows[0].card_sponsor).toBeNull();
+    await as(db, OWNER, () => db.query("update orgs set card_sponsor = 'Loomis Tire & Auto' where id = $1", [ORG]));
+    expect((await as(db, PARENT_A, () => db.query<{ s: string }>("select card_sponsor($1) s", [jordan]))).rows[0].s).toBe("Loomis Tire & Auto");
+    expect((await as(db, PARENT_B, () => db.query<{ s: string | null }>("select card_sponsor($1) s", [jordan]))).rows[0]?.s ?? null).toBeNull();
+    await db.query("update card_series set sponsor = 'Loomis Tire' where false"); // series guard is the same trigger
+    await expect(db.query("insert into card_series (event_id, org_id, name, color, accent, sponsor, created_by) select id, org_id, 'S', '#000000', '#ffffff', 'Team uniform co', $1 from events limit 1", [OWNER])).rejects.toThrow(/can't include|violates|null/);
+  });
+});

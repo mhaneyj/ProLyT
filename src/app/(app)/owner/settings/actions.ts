@@ -182,3 +182,16 @@ export async function setSports(form: FormData) {
   revalidatePath("/owner/settings");
   redirect(`/owner/settings?ok=${encodeURIComponent("Sports saved. Testing Day and sign-up now match.")}#sports`);
 }
+
+export async function saveSponsor(_: FormState, form: FormData): Promise<FormState> {
+  const me = await requirePerm("brand.manage");
+  const name = String(form.get("sponsor") ?? "").trim();
+  if (name && (name.length < 2 || name.length > 60)) return { error: "Sponsor name should be 2 to 60 characters." };
+  try {
+    await asUser(me.id, (q) => q("update orgs set card_sponsor = $2 where id = $1", [me.orgId, name || null]));
+  } catch (e) {
+    return { error: dbMessage(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: name ? "Sponsor saved. It shows on your athletes' cards." : "Sponsor removed." };
+}

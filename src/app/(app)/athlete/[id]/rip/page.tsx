@@ -33,7 +33,7 @@ export default async function Rip({ params, searchParams }: { params: Promise<{ 
       </nav>
       <PackRip rarity={rarity} reason={reason} ovr={v.rating.ovr} program={v.team ?? "ProLyt"}
         front={<TiltCard finish={rarity}><PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={v.rating.ovr}
-          attrs={attrs} tier={tier} series={tier === "champion" ? `40 YD${pr40 ? ` · ${pr40}` : ""}` : "ProLyt"} badge={tier === "champion" ? "PR" : undefined} trench={v.rating.trench} foil={rarity !== "base"} team={v.team} number={v.jersey}
+          attrs={attrs} tier={tier} series={tier === "champion" ? `40 YD${pr40 ? ` · ${pr40}` : ""}` : "ProLyt"} badge={tier === "champion" ? "PR" : undefined} trench={v.rating.trench} foil={rarity !== "base"} team={v.team} sponsor={v.sponsor} number={v.jersey}
           serial={rarity === "black" ? "1/1" : null} /></TiltCard>}
         back={<CardBack first={a.first_name} last={a.last_name} ovr={v.rating.ovr} number={v.jersey} position={a.position} grad={a.grad_year} team={v.team}
           attrs={attrs} stats={v.stats} band={v.band} cardNo={v.cardNo} highlight={v.highlight} career={v.career} nextUp={v.nextUp} />}

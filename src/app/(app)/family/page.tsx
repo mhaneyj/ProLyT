@@ -96,7 +96,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
   const ovr = card?.rating.ovr ?? null;
   const photo = a.has_photo ? `/api/photo/${a.id}` : null;
   const frontCard = card ? <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={ovr}
-    attrs={cardAttrs(card)} tier="player" series="ProLyt" trench={card.rating.trench} foil={card.plus} team={card.team} number={card.jersey} firstCard /> : null;
+    attrs={cardAttrs(card)} tier="player" series="ProLyt" trench={card.rating.trench} foil={card.plus} team={card.team} sponsor={card.sponsor} number={card.jersey} firstCard /> : null;
   const btn = "mt-3 flex min-h-12 items-center justify-center rounded-md bg-gold font-cond text-[17px] font-extrabold uppercase tracking-[1.5px] text-on-gold";
 
   // One thing to do next, picked in order of what matters most right now.

@@ -6,7 +6,7 @@ import { CopyLink } from "@/app/(app)/athlete/[id]/share-card";
 import { archiveTeam, coachInviteLink, coachPerms, createTeam, removeCoach, turnOffInvite } from "./actions";
 import { asUser } from "@/lib/db";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
-import { BrandingForm, CoachPayForm, InviteForm } from "./forms";
+import { BrandingForm, CoachPayForm, InviteForm, SponsorForm } from "./forms";
 import { isProgramAdmin } from "@/lib/perms";
 import { feePercent } from "@/lib/fees";
 import { money } from "@/lib/domain/format";
@@ -22,8 +22,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const me = await requireRole("owner");
   const staffOk = can(me, "staff.manage");
   const d = await asUser(me.id, async (q) => {
-    const [org] = await q<{ name: string; slug: string; brand_color: string; has_logo: boolean; share: number; grp: number; sports: string[] }>(
-      "select name, slug, brand_color, logo_url is not null has_logo, one_on_one_coach_share_bps share, group_session_rate_cents grp, sports from orgs where id = $1", [me.orgId]);
+    const [org] = await q<{ name: string; slug: string; brand_color: string; has_logo: boolean; share: number; grp: number; sports: string[]; sponsor: string | null }>(
+      "select name, slug, brand_color, logo_url is not null has_logo, one_on_one_coach_share_bps share, group_session_rate_cents grp, sports, card_sponsor sponsor from orgs where id = $1", [me.orgId]);
     const staff = await q<{ name: string; email: string | null; pay_type: string | null; payouts_enabled: boolean; coach_verified: boolean }>(`
       select p.full_name name, p.email, m.pay_type, m.payouts_enabled, m.coach_verified
       from org_members m join profiles p on p.id = m.user_id where m.org_id = $1 and m.role = 'coach' order by p.full_name`, [me.orgId]);
@@ -51,6 +51,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         {([
           ["#payouts", "Get paid", can(me, "billing.manage")],
           ["#branding", "Branding", can(me, "brand.manage")],
+          ["#sponsor", "Sponsor", can(me, "brand.manage")],
           ["#sports", "Sports", can(me, "brand.manage")],
           ["#staff", "Coaches", true],
           ["#teams", "Teams", can(me, "roster.manage")],
@@ -115,6 +116,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <SectionLabel>Branding</SectionLabel>
         <p className="mb-3 mt-1 text-xs text-muted">Shown to your families and coaches everywhere in the app, with a small &ldquo;Powered by ProLyt.&rdquo;</p>
         <BrandingForm name={d.org.name} color={d.org.brand_color} hasLogo={d.org.has_logo} />
+      </Card> : null}
+
+      {can(me, "brand.manage") ? <Card id="sponsor">
+        <SectionLabel>Card sponsor</SectionLabel>
+        <p className="mb-3 mt-1 text-xs text-muted">Sell &ldquo;Presented by&rdquo; to a local business. The money goes to your program, never to an athlete.</p>
+        <SponsorForm sponsor={d.org.sponsor ?? ""} />
       </Card> : null}
 
       {can(me, "brand.manage") ? <Card id="sports">

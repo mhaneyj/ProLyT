@@ -35,7 +35,7 @@ export default async function Cards({ params, searchParams }: { params: Promise<
   const g = v.goal;
 
   const front = <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
-    attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} number={v.jersey} firstCard />;
+    attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} sponsor={v.sponsor} number={v.jersey} firstCard />;
   return (
     <>
       {switcher}
