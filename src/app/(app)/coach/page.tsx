@@ -112,16 +112,18 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
         </>
       ) : null}
       {me.perms.includes("sessions.post") || me.perms.includes("sessions.manage_all") ? <LinkButton href="/coach/new" kind="ghost">+ New session</LinkButton> : null}
-      <nav aria-label="Coach tools" className="grid grid-cols-3 gap-2">
+      <nav aria-label="Coach tools" className="grid grid-cols-2 gap-2">
         {[
           me.features.messaging ? ["/messages/new", "Message"] : null,
+          me.perms.includes("results.log") ? ["/coach/roster", "Roster board"] : null,
+          ["/rankings", "Power rankings"],
           me.perms.includes("film.manage") ? ["/coach/film", "Team film"] : null,
           me.perms.includes("roster.manage") ? ["/rosters", "Rosters"] : null,
           ["/host", "Events"],
-          ["/trainer", "My coach page"],
+          ["/trainer", "Coach profile"],
           ["/coach/testing", "Testing Day"],
           ["/help", "Help"],
-          me.roles.includes("owner") && me.roles.includes("coach") ? ["/coach/earnings", "Earnings"] : null,
+          me.roles.includes("coach") ? ["/coach/earnings", "Earnings"] : null,
         ].filter((x): x is string[] => Boolean(x)).map(([href, label]) => (
           <Link key={href} href={href} className="flex min-h-12 items-center justify-center rounded-[10px] border border-line bg-panel px-2 text-center text-[14px] font-semibold hover:border-gold">{label}</Link>
         ))}

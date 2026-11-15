@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireMe } from "@/lib/auth";
-import { asUser } from "@/lib/db";
-import { BANDS, GROUPS } from "@/lib/power";
+import { asUser, isDemo } from "@/lib/db";
+import { BANDS, GROUPS, refreshPower } from "@/lib/power";
 import { Card, Notice, Title } from "@/components/ui";
 import { setLeaderboard } from "./actions";
 
@@ -13,6 +13,7 @@ const chip = (on: boolean) => `flex min-h-11 flex-none items-center rounded-full
 export default async function Rankings({ searchParams }: { searchParams: Promise<{ sport?: string; band?: string; group?: string; error?: string }> }) {
   const sp = await searchParams;
   const me = await requireMe();
+  if (isDemo) await refreshPower(); // demo has no nightly job
   const mine = await asUser(me.id, (q) => q<{ id: string; first_name: string; age: number; opt_in: boolean; power: { sport: string; band: string; grp: string; rank: number; of_n: number } | null }>(
     `select a.id, a.first_name, date_part('year', age(current_date, a.birth_date))::int age, a.leaderboard_opt_in opt_in,
       (select to_jsonb(p) from (select sport, band, grp, rank, of_n from my_power(a.id)) p) power

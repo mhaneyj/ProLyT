@@ -1728,3 +1728,11 @@ describe("ai photos", () => {
     expect((await db.query<{ n: number }>("select count(*)::int n from athlete_ai_photos where athlete_id = $1 and status = 'approved'", [a])).rows[0].n).toBe(0);
   });
 });
+
+describe("coach board", () => {
+  it("shows the program roster to staff who log results, and nobody else", async () => {
+    const staff = (await as(db, COACH, () => db.query("select * from coach_board($1)", [ORG]))).rows;
+    expect(staff.length).toBeGreaterThan(0);
+    expect((await as(db, PARENT_A, () => db.query("select * from coach_board($1)", [ORG]))).rows).toHaveLength(0);
+  });
+});
