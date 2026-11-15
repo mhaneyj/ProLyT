@@ -5,7 +5,7 @@ import { lastMonth, reportLines, type MonthReport } from "./report";
 import { programOrigin } from "./invite";
 import { pushTo } from "./push";
 
-type Due = { kind: "reminder" | "comeback" | "plan_left" | "challenges"; org_id: string; athlete_id: string; ref: string; detail: Record<string, unknown> };
+type Due = { kind: "reminder" | "comeback" | "plan_left" | "challenges" | "missed"; org_id: string; athlete_id: string; ref: string; detail: Record<string, unknown> };
 type Who = { user_id: string; email: string; has_push: boolean; slug: string; custom_domain: string | null; org_name: string };
 
 const time = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
@@ -18,6 +18,8 @@ export function nudgeCopy(d: Due, program: string) {
       return { title: `${x.first} has training tomorrow`, body: `${x.title} · ${time(x.starts_at)}${x.location ? ` · ${x.location}` : ""}`, url: "/schedule", cta: "See the schedule", email: true };
     case "comeback":
       return { title: `We miss ${x.first} at ${program}`, body: `${x.plan}${x.per_week ? ` includes ${x.per_week} session${x.per_week === 1 ? "" : "s"} a week` : " is active"}. Book one this week and keep ${x.first}'s card moving.`, url: "/schedule", cta: "Book a session", email: true };
+    case "missed":
+      return { title: `We missed ${x.first} at ${x.title}`, body: "Life happens. Pick another session this week and keep the momentum going.", url: "/schedule", cta: "Rebook", email: true };
     case "plan_left":
       return { title: `${x.first} has ${x.left} plan session${x.left === 1 ? "" : "s"} left this week`, body: "Open spots are still on the schedule.", url: "/schedule", cta: "Book now", email: false };
     case "challenges":
@@ -27,7 +29,11 @@ export function nudgeCopy(d: Due, program: string) {
 
 /** Finds and sends every follow-up that's due. Safe to run more than once: each nudge is claimed before it's sent. */
 export async function runAutopilot(now?: Date) {
-  const due = await asService((q) => q<Due>("select kind, org_id, athlete_id, ref, detail from due_nudges(coalesce($1::timestamptz, now()))", [now?.toISOString() ?? null]));
+  const at = now?.toISOString() ?? null;
+  const due = [
+    ...(await asService((q) => q<Due>("select kind, org_id, athlete_id, ref, detail from due_nudges(coalesce($1::timestamptz, now()))", [at]))),
+    ...(await asService((q) => q<Due>("select kind, org_id, athlete_id, ref, detail from missed_nudges(coalesce($1::timestamptz, now()))", [at]))),
+  ];
   const sent: Record<string, number> = {};
   for (const d of due) {
     const who = await asService((q) => q<Who>("select * from claim_nudge($1, $2, $3, $4, $5::jsonb)", [d.kind, d.org_id, d.athlete_id, d.ref, JSON.stringify(d.detail)]));

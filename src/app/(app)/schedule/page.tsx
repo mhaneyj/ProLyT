@@ -2,7 +2,7 @@ import { requireMe } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { TZ, money, time } from "@/lib/domain/format";
 import { Card, Empty, Notice, Pill, Title } from "@/components/ui";
-import { book, cancel } from "./actions";
+import { book, cancel, joinWaitlist, leaveWaitlist } from "./actions";
 import { stripeConfigured } from "@/lib/stripe";
 
 export const metadata = { title: "Schedule" };
@@ -19,7 +19,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
   const me = await requireMe();
   const payOnline = stripeConfigured && me.features.payments;
   const isFamily = me.roles.includes("guardian") && !me.roles.includes("coach") && !me.roles.includes("owner");
-  const { sessions, kids, usage, paidExtras } = await asUser(me.id, async (q) => {
+  const { sessions, kids, usage, paidExtras, wl } = await asUser(me.id, async (q) => {
     const sessions = await q<S>(`
       select s.id, s.org_id, s.title, s.starts_at, s.ends_at, s.location, p.full_name coach, s.price_cents, coalesce(spots_left_held(s.id), spots_left(s.id)) spots,
         s.kind::text kind, week_start(s.starts_at)::text week,
@@ -34,7 +34,8 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
       where g.user_id = $1 order by a.first_name`, [me.id]);
     const usage = isFamily ? await q<Use>("select athlete_id, org_id, week::text, plan, per_week, booked, plan_limit, extra_price_cents from family_plan_usage()") : [];
     const paidExtras = isFamily ? (await q<{ k: string }>("select session_id || ':' || athlete_id k from session_payments where extra and status = 'paid'")).map((r) => r.k) : [];
-    return { sessions, kids, usage, paidExtras };
+    const wl = isFamily ? await q<{ session_id: string; athlete_id: string; status: string; place: number; offer_expires_at: string | null }>("select * from my_waitlist()") : [];
+    return { sessions, kids, usage, paidExtras, wl };
   });
   const use = (athlete: string, org: string, week: string) => usage.find((u) => u.athlete_id === athlete && u.org_id === org && u.week === week);
   const thisWeek = usage.filter((u) => u.week === usage.map((x) => x.week).sort()[0] && u.per_week);
@@ -134,13 +135,25 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                           <span className="text-right text-xs text-muted">{u.per_week} of {u.per_week} booked this week.<br />Ask your coach about an extra.</span>
                         </div>
                       );
+                      const w = wl.find((x) => x.session_id === s.id && x.athlete_id === k.id);
+                      const held = w?.status === "offered" && w.offer_expires_at && new Date(w.offer_expires_at).getTime() > now;
+                      if (!booked && s.spots === 0 && !held) return (
+                        <form key={k.id} action={w?.status === "waiting" ? leaveWaitlist : joinWaitlist} className="flex items-center justify-between gap-3">
+                          <input type="hidden" name="session" value={s.id} /><input type="hidden" name="athlete" value={k.id} />
+                          {w?.status === "waiting" ? <Pill tone="gold">{k.first_name} · waitlist #{w.place}</Pill> : <span className="text-sm text-soft">{k.first_name}</span>}
+                          <button aria-label={`${w?.status === "waiting" ? "Leave the waitlist for" : "Join the waitlist for"} ${k.first_name}`}
+                            className={w?.status === "waiting" ? "min-h-11 px-2 text-xs text-muted hover:text-cream" : "min-h-11 rounded-md border border-gold px-4 font-cond text-[15px] font-extrabold uppercase tracking-[1.5px] text-gold"}>
+                            {w?.status === "waiting" ? "Leave" : "Join waitlist"}
+                          </button>
+                        </form>
+                      );
                       return (
                         <form key={k.id} action={booked ? cancel : book} className="flex items-center justify-between gap-3">
                           <input type="hidden" name="session" value={s.id} />
                           <input type="hidden" name="athlete" value={k.id} />
-                          {booked ? <Pill tone="good">{k.first_name} is booked ✓</Pill> : <span className="text-sm text-soft">{k.first_name}{over ? <span className="ml-2 text-[12px] text-warn">Extra session</span> : null}</span>}
+                          {booked ? <Pill tone="good">{k.first_name} is booked ✓</Pill> : <span className="text-sm text-soft">{k.first_name}{held ? <span className="ml-2 text-[12px] text-gold">Spot held until {time(w!.offer_expires_at!)}</span> : null}{over ? <span className="ml-2 text-[12px] text-warn">Extra session</span> : null}</span>}
                           <button
-                            disabled={!booked && s.spots === 0}
+                            disabled={!booked && s.spots === 0 && !held}
                             aria-label={`${booked ? "Cancel" : "Book"} ${k.first_name}`}
                             className={booked
                               ? "min-h-11 px-2 text-xs text-muted hover:text-cream"

@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { offerNext } from "@/lib/waitlist";
 import { requireRole } from "@/lib/auth";
 import { asUser, dbMessage } from "@/lib/db";
 import { BOUNDS, METRICS } from "@/lib/domain/metrics";
@@ -70,6 +71,7 @@ export async function removeFromSession(form: FormData) {
   await asUser(me.id, (q) => q(
     "delete from session_athletes sa where session_id = $1 and athlete_id = $2 and not exists (select 1 from attendance a where a.session_id = sa.session_id and a.athlete_id = sa.athlete_id)",
     [session, athlete]));
+  await offerNext(session).catch((e) => console.error("[waitlist] offer failed:", e));
   revalidatePath(`/coach/session/${session}`);
 }
 

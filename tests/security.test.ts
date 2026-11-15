@@ -1751,3 +1751,42 @@ describe("goals", () => {
     expect((await as(db, PARENT_A, () => db.query("select * from athlete_goals_for($1)", [jordan]))).rows).toHaveLength(1);
   });
 });
+
+describe("waitlist", () => {
+  it("holds a freed spot for the next family, and only that family can take it", async () => {
+    const kid = (first: string) => db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ($1,'Wait', current_date - interval '14 years') returning id", [first]).then((r) => r.rows[0].id);
+    const a = await kid("Ann"), b = await kid("Bo"), c = await kid("Cy");
+    for (const k of [a, b, c]) await db.query("insert into program_athletes (org_id, athlete_id) values ($1,$2) on conflict do nothing", [ORG, k]);
+    for (const [k, u] of [[a, PARENT_A], [b, PARENT_B], [c, PARENT_B]] as const) await db.query("insert into guardians (athlete_id, user_id) values ($1,$2) on conflict do nothing", [k, u]);
+    const s = (await db.query<{ id: string }>("insert into sessions (org_id, kind, program, title, starts_at, ends_at, capacity) values ($1,'group','football','Cap 1', now() + interval '2 days', now() + interval '2 days 1 hour', 1) returning id", [ORG])).rows[0].id;
+    await as(db, PARENT_A, () => db.query("select book_session($1,$2)", [s, a]));
+    await expect(as(db, PARENT_B, () => db.query("select join_waitlist($1,$2)", [s, b]))).resolves.toBeDefined();
+    await as(db, PARENT_B, () => db.query("select join_waitlist($1,$2)", [s, c]));
+    expect((await as(db, PARENT_B, () => db.query<{ athlete_id: string; place: number }>("select athlete_id, place from my_waitlist() order by place"))).rows.map((r) => r.place)).toEqual([1, 2]);
+    await expect(as(db, PARENT_A, () => db.query("select waitlist_next($1)", [s]))).rejects.toThrow(/permission/);
+    await as(db, PARENT_A, () => db.query("select cancel_booking($1,$2)", [s, a]));
+    const offer = (await db.query<{ athlete_id: string }>("select athlete_id from waitlist_next($1)", [s])).rows;
+    expect(offer.map((o) => o.athlete_id)).toEqual([b]);                       // first in line only
+    expect((await db.query("select * from waitlist_next($1)", [s])).rows).toHaveLength(0); // no double offer
+    await expect(as(db, PARENT_B, () => db.query("select book_session($1,$2)", [s, c]))).rejects.toThrow(/held/); // not the held family's kid
+    await as(db, PARENT_B, () => db.query("select book_session($1,$2)", [s, b]));
+    expect((await db.query<{ status: string }>("select status from session_waitlist where athlete_id = $1 and session_id = $2", [b, s])).rows[0].status).toBe("booked");
+    // an offer that lapses passes to the next family
+    await as(db, PARENT_B, () => db.query("select cancel_booking($1,$2)", [s, b]));
+    await db.query("select * from waitlist_next($1)", [s]);
+    await db.query("update session_waitlist set offer_expires_at = now() - interval '1 minute' where athlete_id = $1 and session_id = $2", [c, s]);
+    expect((await db.query<{ athlete_id: string }>("select athlete_id from waitlist_next($1)", [s])).rows).toEqual([]); // c expired, nobody left
+    expect((await db.query<{ status: string }>("select status from session_waitlist where athlete_id = $1 and session_id = $2", [c, s])).rows[0].status).toBe("expired");
+  });
+  it("sends a missed-session nudge only for a marked absence, once", async () => {
+    const kid = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ('Mia','Miss', current_date - interval '13 years') returning id")).rows[0].id;
+    await db.query("insert into program_athletes (org_id, athlete_id) values ($1,$2) on conflict do nothing", [ORG, kid]);
+    await db.query("update orgs set autopilot = true where id = $1", [ORG]);
+    const s = (await db.query<{ id: string }>("insert into sessions (org_id, kind, program, title, starts_at, ends_at) values ($1,'group','football','Missed one', now() - interval '1 day', now() - interval '23 hours') returning id", [ORG])).rows[0].id;
+    await db.query("insert into attendance (session_id, athlete_id, status) values ($1,$2,'absent')", [s, kid]);
+    expect((await db.query("select 1 from missed_nudges() where athlete_id = $1", [kid])).rows).toHaveLength(1);
+    await db.query("update attendance set status = 'present' where session_id = $1", [s]);
+    expect((await db.query("select 1 from missed_nudges() where athlete_id = $1", [kid])).rows).toHaveLength(0); // came after all
+    await expect(as(db, PARENT_A, () => db.query("select * from missed_nudges()"))).rejects.toThrow(/permission/);
+  });
+});
