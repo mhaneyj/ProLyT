@@ -1589,3 +1589,61 @@ describe("ranks", () => {
   });
 });
 
+
+describe("nil (dark by default)", () => {
+  const NADMIN = "10000000-0000-0000-0000-0000000000b9";
+  const BRAND = "10000000-0000-0000-0000-0000000000b8";
+  let kid: string, little: string;
+  beforeAll(async () => {
+    await addUser(db, NADMIN, "nil-admin@prolyt.test"); await db.query("insert into platform_admins values ($1)", [NADMIN]);
+    await addUser(db, BRAND, "brand@prolyt.test");
+    kid = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ('Nia','Lee', current_date - interval '15 years 3 months') returning id")).rows[0].id;
+    little = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ('Tiny','Lee', current_date - interval '10 years 3 months') returning id")).rows[0].id;
+    await db.query("insert into guardians (athlete_id, user_id, is_primary) values ($1,$2,true), ($3,$2,true)", [kid, PARENT_A, little]);
+  });
+
+  it("does nothing until an admin flips the switch; payouts need a recorded legal sign-off", async () => {
+    await expect(as(db, PARENT_A, () => db.query("select set_nil_profile($1, true, '{apparel}')", [kid]))).rejects.toThrow(/not open/);
+    await expect(as(db, PARENT_A, () => db.query("select set_platform_flag('nil_marketplace', true)"))).rejects.toThrow(/admins only/);
+    await expect(as(db, NADMIN, () => db.query("select set_platform_flag('nil_payouts', true)"))).rejects.toThrow(/marketplace on first/);
+    await as(db, NADMIN, () => db.query("select set_platform_flag('nil_marketplace', true)"));
+    await expect(as(db, NADMIN, () => db.query("select set_platform_flag('nil_payouts', true)"))).rejects.toThrow(/sign-off/);
+  });
+
+  it("opens a profile only for a parent, only for 13+, and the athlete's program staff never see deals", async () => {
+    await expect(as(db, COACH, () => db.query("select set_nil_profile($1, true, '{apparel}')", [kid]))).rejects.toThrow(/parent/);
+    await expect(as(db, PARENT_A, () => db.query("select set_nil_profile($1, true, '{apparel}')", [little]))).rejects.toThrow(/13/);
+    await as(db, PARENT_A, () => db.query("select set_nil_profile($1, true, '{apparel,food}')", [kid]));
+
+    const brand = (await as(db, BRAND, () => db.query<{ id: string }>("select register_nil_brand('Loomis Cleats','hi@cleats.test','') id"))).rows[0].id;
+    await expect(as(db, BRAND, () => db.query("select offer_nil_deal($1,$2,'Social post','Post a photo with our cleats','product',0)", [kid, brand]))).rejects.toThrow(/approved/);
+    await as(db, NADMIN, () => db.query("select review_nil_brand($1, true)", [brand]));
+
+    // School, uniform and coach words are blocked; the athlete must be open to offers.
+    await expect(as(db, BRAND, () => db.query("select offer_nil_deal($1,$2,'Ad','Wear your Del Oro uniform in the shoot','product',0)", [kid, brand]))).rejects.toThrow(/uniform/);
+    await expect(as(db, BRAND, () => db.query("select offer_nil_deal($1,$2,'Ad','Tell your coach to post this','product',0)", [kid, brand]))).rejects.toThrow(/coach/);
+    await expect(as(db, BRAND, () => db.query("select offer_nil_deal($1,$2,'Ad','Post a photo with our cleats','product',0)", [little, brand]))).rejects.toThrow(/open to offers/);
+
+    const deal = (await as(db, BRAND, () => db.query<{ id: string }>("select offer_nil_deal($1,$2,'Cleat post','Post a photo with our cleats','cash',5000) id", [kid, brand]))).rows[0].id;
+    expect((await as(db, PARENT_A, () => db.query("select id from nil_deals"))).rows).toHaveLength(1);
+    expect((await as(db, COACH, () => db.query("select id from nil_deals"))).rows).toHaveLength(0);
+    expect((await as(db, OWNER, () => db.query("select id from nil_deals"))).rows).toHaveLength(0);
+    expect((await as(db, PARENT_B, () => db.query("select id from nil_deals"))).rows).toHaveLength(0);
+
+    // Only a parent decides. A cash deal then waits for court approval and the second switch.
+    await expect(as(db, BRAND, () => db.query("select decide_nil_deal($1, true)", [deal]))).rejects.toThrow(/parent/);
+    await as(db, PARENT_A, () => db.query("select decide_nil_deal($1, true)", [deal]));
+    await expect(as(db, PARENT_A, () => db.query("select decide_nil_deal($1, false)", [deal]))).rejects.toThrow(/already/);
+    expect((await db.query<{ court_approval: string; payout_status: string }>("select court_approval, payout_status from nil_deals where id = $1", [deal])).rows[0]).toEqual({ court_approval: "needed", payout_status: "on_hold" });
+    await expect(as(db, NADMIN, () => db.query("select release_nil_payout($1)", [deal]))).rejects.toThrow(/locked/);
+
+    await as(db, NADMIN, () => db.query("select record_nil_signoff('Pat Counsel','Counsel LLP','OK to proceed')"));
+    await as(db, NADMIN, () => db.query("select set_platform_flag('nil_payouts', true)"));
+    await expect(as(db, NADMIN, () => db.query("select release_nil_payout($1)", [deal]))).rejects.toThrow(/court approval/);
+    await db.query("update nil_deals set court_approval = 'approved' where id = $1", [deal]);
+    await as(db, NADMIN, () => db.query("select release_nil_payout($1)", [deal]));
+    // Turning the marketplace off locks payouts again.
+    await as(db, NADMIN, () => db.query("select set_platform_flag('nil_marketplace', false)"));
+    expect((await db.query<{ enabled: boolean }>("select enabled from platform_flags where key = 'nil_payouts'")).rows[0].enabled).toBe(false);
+  });
+});

@@ -147,6 +147,17 @@ async function signIn(sub, userName) {
   await page.getByRole("button", { name: "Create program" }).click();
   check("duplicate web address refused", await seen(page.getByText(/taken|Enter the owner/)));
   await shot(page, "p06-admin");
+  // NIL ships dark: the page is there, the switches are off, payouts can't be turned on without a sign-off.
+  await page.goto(url("", "/admin/nil"));
+  check("NIL admin page loads, switches off", (await seen(page.getByText("NIL marketplace"))) && (await page.getByText("Off", { exact: true }).count()) >= 2);
+  await shot(page, "p06b-admin-nil");
+  await page.getByRole("button", { name: "Turn on" }).first().click();
+  check("admin can switch NIL on", await seen(page.getByText("Switched on")));
+  await page.getByRole("button", { name: "Turn on" }).first().click();
+  check("payouts refuse without a sign-off", await seen(page.getByText(/legal sign-off is recorded/)));
+  await page.getByRole("button", { name: "Turn off" }).first().click();
+  check("admin can switch NIL back off", await seen(page.getByText("Switched off")));
+  await page.goBack().catch(() => {}); await page.goto(url("", "/admin"));
   await page.getByRole("link", { name: /Game-Fit Loomis/ }).first().click();
   await page.waitForURL(/\/admin\/programs\//);
   check("admin sees program controls", await seen(page.getByText("Features")) && await seen(page.getByRole("button", { name: "Pause program" })));
