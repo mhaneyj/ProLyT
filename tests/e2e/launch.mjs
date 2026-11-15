@@ -183,7 +183,8 @@ let coachLink = "";
 // ── 5. Coach Lem taps the coach link → coach
 {
   const { ctx, page, errors } = await joinVia(coachLink, "lem@gamefit.test");
-  check("invited coach lands on coach screen", page.url().endsWith("/coach"), page.url());
+  check("invited coach lands on the get-set-up screen", page.url().endsWith("/coach/start") && (await seen(page.getByRole("button", { name: /Set up payouts/ }))), page.url());
+  await page.goto(url("gamefit-loomis", "/coach"));
   check("coach can post sessions by default", await seen(page.getByRole("link", { name: "+ New session" })));
   await page.goto(url("gamefit-loomis", "/coach/earnings"));
   check("contractor coach asked to set up payouts", await seen(page.getByRole("button", { name: /Set up payouts/ })));

@@ -55,6 +55,7 @@ export default async function RosterBoard({ searchParams }: { searchParams: Prom
               <Pill tone={r.due ? "warn" : "good"}>{ago(r.last_tested)}</Pill>
               <Pill tone="gold">{r.here_30} sessions / 30d</Pill>
               {r.packs ? <Pill tone="gold">{r.packs} pack{r.packs > 1 ? "s" : ""} unopened</Pill> : null}
+              <Link href={`/athlete/${r.athlete_id}/goals`} className="inline-flex min-h-8 items-center rounded-full border border-line px-2.5 text-[12px] font-semibold text-gold">Goals</Link>
             </div>
           </div>
         </Card>

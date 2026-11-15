@@ -63,6 +63,7 @@ export default async function Progress({ params, searchParams }: { params: Promi
         <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-muted">{[`${a.first_name} ${a.last_name}`, a.position].filter(Boolean).join(" · ")}</div>
         <h1 className="font-display text-[34px] uppercase leading-none">Progress</h1>
         <Link href={`/athlete/${a.id}/report`} className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-gold">Last month&apos;s report →</Link>
+        <Link href={`/athlete/${a.id}/goals`} className="mt-1 ml-4 inline-flex min-h-11 items-center text-sm font-semibold text-gold">Goals →</Link>
       </div>
 
       {metrics.length === 0 ? (

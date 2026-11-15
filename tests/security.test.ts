@@ -1736,3 +1736,18 @@ describe("coach board", () => {
     expect((await as(db, PARENT_A, () => db.query("select * from coach_board($1)", [ORG]))).rows).toHaveLength(0);
   });
 });
+
+describe("goals", () => {
+  it("coaches set them, the family reads them, strangers and goal leaks are blocked", async () => {
+    await as(db, COACH, () => db.query("select set_goal($1, '40yd', 5.2, null, 'Hands inside')", [jordan]));
+    const fam = (await as(db, PARENT_A, () => db.query<{ metric: string; target: string }>("select metric, target from athlete_goals_for($1)", [jordan]))).rows;
+    expect(fam).toHaveLength(1);
+    expect((await as(db, PARENT_B, () => db.query("select * from athlete_goals_for($1)", [jordan]))).rows).toHaveLength(0);
+    await expect(as(db, PARENT_A, () => db.query("select set_goal($1, '40yd', 5.0)", [jordan]))).rejects.toThrow(/coaches/);
+    await expect(as(db, PARENT_A, () => db.query("select * from athlete_goals"))).rejects.toThrow(/permission denied/);
+    await expect(as(db, COACH, () => db.query("select set_goal($1, '40yd', 1.0)", [jordan]))).rejects.toThrow(/range/);
+    // same test again replaces the open goal instead of stacking
+    await as(db, COACH, () => db.query("select set_goal($1, '40yd', 5.1)", [jordan]));
+    expect((await as(db, PARENT_A, () => db.query("select * from athlete_goals_for($1)", [jordan]))).rows).toHaveLength(1);
+  });
+});

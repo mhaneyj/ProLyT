@@ -60,6 +60,10 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
   const due = me.orgId && me.perms.includes("results.log")
     ? await asUser(me.id, async (q) => (await q<{ due: number; total: number }>("select count(*) filter (where due)::int due, count(*)::int total from testing_roster($1)", [me.orgId]))[0])
     : null;
+  const [pay] = me.roles.includes("coach") && me.orgId
+    ? await asUser(me.id, (q) => q<{ pay_type: string | null; ready: boolean }>("select pay_type, payouts_enabled ready from org_members where user_id = $1 and org_id = $2 and role = 'coach' limit 1", [me.id, me.orgId]))
+    : [];
+  const needsPayout = Boolean(pay && pay.pay_type !== "employee" && !pay.ready);
   const today = mine.filter((s) => isSameLocalDay(s.starts_at));
   const later = mine.filter((s) => !isSameLocalDay(s.starts_at));
   // The session happening now, or the next one today, gets the big card.
@@ -83,6 +87,12 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
       <Title sub={me.name && me.name !== me.email ? me.name : undefined}>Today</Title>
       {posted ? <Notice tone="good">{posted === "1" ? "Session posted." : `${posted} weekly sessions posted.`} Families see it on their schedule.</Notice> : null}
       
+      {needsPayout ? (
+        <Link href="/coach/start" className="flex items-center gap-3 rounded-[14px] border border-gold/50 bg-gold/[0.07] p-4 hover:border-gold">
+          <span className="min-w-0 flex-1 text-sm"><span className="block font-semibold">Set up your payouts</span><span className="block text-[12px] text-muted">About 5 minutes on Stripe. Your sessions can&apos;t pay out until it&apos;s done.</span></span>
+          <span className="flex-none text-sm font-bold text-gold">Start →</span>
+        </Link>
+      ) : null}
       {focus ? (
         <Link href={`/coach/session/${focus.id}`} className="block">
           <Hero kicker={new Date(focus.starts_at).getTime() <= Date.now() ? "On now" : "Up next"} title={focus.title}

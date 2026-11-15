@@ -35,7 +35,7 @@ async function handle(request: NextRequest) {
     account: accountId,
     type: "account_onboarding",
     refresh_url: `${base}/api/stripe/connect`,
-    return_url: `${base}/coach/earnings?setup=done`,
+    return_url: `${base}/coach/${(request.nextUrl.searchParams.get("from") ?? "") === "start" ? "start" : "earnings"}?setup=done`,
   });
   return NextResponse.redirect(link.url, 303);
 }

@@ -16,12 +16,13 @@ async function accept(form: FormData) {
   const token = String(form.get("token") ?? "");
   const me = await getMe();
   if (!me) redirect(`/login?next=${encodeURIComponent(`/join/${token}`)}`);
+  const [prev] = await asService((q) => q<{ role: string }>("select role from invite_preview($1)", [inviteHash(token)]));
   try {
     await asUser(me.id, (q) => q("select accept_invite($1)", [inviteHash(token)]));
   } catch (e) {
     redirect(`/join/${token}?error=${encodeURIComponent(dbMessage(e))}`);
   }
-  redirect("/home");
+  redirect(prev?.role === "coach" ? "/coach/start" : "/home");
 }
 
 export default async function Join({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string }> }) {
