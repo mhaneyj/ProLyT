@@ -1502,6 +1502,33 @@ describe("card seen", () => {
   });
 });
 
+describe("hockey", () => {
+  it("programs pick sports; one-sport programs set the athlete's sport; ranks only compare the same sport", async () => {
+    await expect(as(db, PARENT_A, () => db.query("select set_org_sports($1, '{hockey}')", [ORG]))).rejects.toThrow(/owner/);
+    await expect(as(db, OWNER, () => db.query("select set_org_sports($1, '{curling}')", [ORG]))).rejects.toThrow();
+    const rink = (await db.query<{ id: string }>("insert into orgs (name, slug, sports) values ('Loomis Ice', 'loomis-ice', '{hockey}') returning id")).rows[0].id;
+    const kid = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date) values ('Avery','Ice', current_date - interval '12 years 2 months') returning id")).rows[0].id;
+    await db.query("insert into program_athletes (org_id, athlete_id) values ($1,$2)", [rink, kid]);
+    expect((await db.query<{ sport: string }>("select sport from athletes where id = $1", [kid])).rows[0].sport).toBe("hockey");
+    // Three hockey skaters and a football player the same age, all in the rink program.
+    const add = async (sport: string, v: number) => {
+      const id = (await db.query<{ id: string }>("insert into athletes (first_name, last_name, birth_date, sport) values ('P','Q', current_date - interval '12 years 5 months', $1) returning id", [sport])).rows[0].id;
+      await db.query("insert into program_athletes (org_id, athlete_id) values ($1,$2)", [rink, id]);
+      await db.query("update athletes set sport = $2 where id = $1", [id, sport]); // a football player who also skates here
+      await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'skate_fwd',$2,'s','coach_logged')", [id, v]);
+      return id;
+    };
+    await add("hockey", 5.2); await add("hockey", 5.9); await add("football", 4.0);
+    await db.query("insert into guardians (athlete_id, user_id, is_primary) values ($1,$2,false)", [kid, PARENT_A]);
+    await db.query("insert into results (athlete_id, metric, value, unit, source) values ($1,'skate_fwd',5.5,'s','coach_logged')", [kid]);
+    const r = (await as(db, PARENT_A, () => db.query<{ metric: string; rank: number; of_n: number }>("select metric, rank, of_n from athlete_ranks($1)", [kid]))).rows;
+    expect(r).toEqual([{ metric: "skate_fwd", rank: 2, of_n: 3 }]); // the football player isn't in the hockey field
+    await as(db, PARENT_A, () => db.query("select set_athlete_sport($1, 'Hockey')", [kid]));
+    await expect(as(db, PARENT_B, () => db.query("select set_athlete_sport($1, 'football')", [kid]))).rejects.toThrow(/parent/);
+    expect((await db.query<{ step: number }>("select challenge_step('shot_speed')::float step")).rows[0].step).toBe(2);
+  });
+});
+
 describe("ranks", () => {
   it("shows an athlete only their own place in their age group, the top mark and the mark to pass; never a name; 3+ only", async () => {
     const peer = async (age: number, broad: number | null, cone: number | null) => {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireMe } from "@/lib/auth";
 import { loadPlayerCard, cardAttrs, cardDate } from "@/lib/cards";
-import { ATTRS } from "@/lib/domain/rating";
+import { attrLabel, ATTRS } from "@/lib/domain/rating";
 import { METRICS, formatValue, metricLabel } from "@/lib/domain/metrics";
 import { ageOn } from "@/lib/domain/format";
 import { CardBack, PlayerCard } from "@/components/player-card";
@@ -174,14 +174,14 @@ export default async function Cards({ params, searchParams }: { params: Promise<
       {v.canRate ? (
         <Card className="flex flex-col gap-2">
           <SectionLabel>Coach rating</SectionLabel>
-          <p className="text-[13px] text-muted">1 to 10. Technique and Football IQ come only from coaches. On the others, a test result counts more (70%) and your rating fills in until there&apos;s a test.</p>
+          <p className="text-[13px] text-muted">1 to 10. {attrLabel("tec", rating.group)} and {attrLabel("iq", rating.group)} come mostly from coaches. On the others, a test result counts more (70%) and your rating fills in until there&apos;s a test.</p>
           <form action={rateAthlete} className="flex flex-col gap-2">
             <input type="hidden" name="athlete" value={a.id} />
             <div className="grid grid-cols-2 gap-2">
               {ATTRS.map((m) => (
                 <label key={m.key} className="flex items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
-                  {m.label}
-                  <select name={m.key} defaultValue={v.coach[m.key] ?? ""} aria-label={`${m.label} rating`} className="min-h-9 rounded bg-panel px-1">
+                  {attrLabel(m.key, rating.group)}
+                  <select name={m.key} defaultValue={v.coach[m.key] ?? ""} aria-label={`${attrLabel(m.key, rating.group)} rating`} className="min-h-9 rounded bg-panel px-1">
                     <option value="">–</option>
                     {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>

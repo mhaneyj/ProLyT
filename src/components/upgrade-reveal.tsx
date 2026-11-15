@@ -35,11 +35,11 @@ export function UpgradeReveal({ up, card, first, athleteId, ovr, marks }: {
   return (
     <div role="dialog" aria-modal="true" aria-label={`${first}'s card was upgraded`} className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-[#050505] px-5 pb-8 pt-10">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(circle at 50% 35%, rgba(248,196,10,.35), transparent 60%)" }} />
-      <span className="up-in relative font-cond text-[14px] font-extrabold uppercase tracking-[4px] text-gold">New personal best</span>
-      <h2 className="up-in relative font-display text-[40px] uppercase leading-none" style={{ animationDelay: "120ms" }}>{first}&apos;s card upgraded</h2>
+      <span className="up-in relative font-cond text-[14px] font-extrabold uppercase tracking-[4px] text-gold">{up.ovrFrom === null ? "First rating" : up.lines.length ? "New personal best" : "Rating up"}</span>
+      <h2 className="up-in relative font-display text-[40px] uppercase leading-none" style={{ animationDelay: "120ms" }}>{up.ovrFrom === null ? <>{first}&apos;s card is rated</> : <>{first}&apos;s card upgraded</>}</h2>
       <div className="relative mt-5 w-[64%] max-w-[260px]">
         <div className="up-card">{card}</div>
-        {step >= 3 ? <div aria-hidden="true" className="up-stamp absolute left-1/2 top-[42%] whitespace-nowrap rounded-md border-[5px] border-gold px-3 py-1 font-display text-[44px] leading-none text-gold">UPGRADED</div> : null}
+        {step >= 3 ? <div aria-hidden="true" className="up-stamp absolute left-1/2 top-[42%] whitespace-nowrap rounded-md border-[5px] border-gold px-3 py-1 font-display text-[44px] leading-none text-gold">{up.ovrFrom === null ? "RATED" : "UPGRADED"}</div> : null}
         {step >= 3 ? <div aria-hidden="true" className="pointer-events-none absolute inset-0">{Array.from({ length: 22 }, (_, i) => (
           <span key={i} className="rip-spark absolute left-1/2 top-[42%] size-1.5 rounded-full" style={{ background: i % 2 ? "#fff" : "#f8c40a", ["--a" as string]: `${(360 / 22) * i}deg`, ["--d" as string]: `${110 + (i * 41) % 120}px` }} />
         ))}</div> : null}

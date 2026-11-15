@@ -10,7 +10,7 @@
 // Safety: bodyweight and cones only, no weights. Jump volume is capped by age. Every workout says to stop if
 // something hurts. Nothing here touches the rating: only coach-verified tests do.
 
-import { ATTRS, positionGroup, WEIGHTS, type Attr, type Rating } from "./rating";
+import { attrLabel, positionGroup, WEIGHTS, type Attr, type Rating } from "./rating";
 
 export type Drill = {
   id: string; name: string; attr: Attr | "pos" | "core" | "warm";
@@ -20,7 +20,7 @@ export type Drill = {
   /** Dose by level: [sets, reps or seconds]. */
   dose: string[];
   cue: string;
-  needs?: "cones" | "wall" | "ball" | "partner";
+  needs?: "cones" | "wall" | "ball" | "partner" | "stick";
   jumps?: number; // foot contacts per set, for the age cap
 };
 
@@ -73,13 +73,24 @@ export const DRILLS: Drill[] = [
   D({ id: "db-pedal", name: "Backpedal and break", attr: "pos", groups: ["DB", "LB"], level: 1, minAge: 9, dose: ["3 × 10 yd", "4 × 10 yd", "4 × 15 yd"], cue: "Low, weight over your toes, arms pump. Plant and drive on the break.", needs: "cones" }),
   D({ id: "lb-fit", name: "Read step and fit", attr: "pos", groups: ["LB"], level: 2, minAge: 11, dose: ["3 × 5", "4 × 5", "4 × 6"], cue: "Short read step, stay square, shuffle and fit with your hips low." }),
   D({ id: "rb-ball", name: "Ball security drill", attr: "pos", groups: ["RB", "QB", "ATH"], level: 1, minAge: 8, dose: ["3 × 20 yd", "4 × 20 yd", "4 × 25 yd"], cue: "Five points of pressure: fingers, palm, forearm, bicep, chest. Switch arms on cuts.", needs: "ball" }),
+  // Hockey (dryland: off the ice, at home)
+  D({ id: "hk-figure8", name: "Stickhandling figure 8", attr: "pos", groups: ["F", "D"], level: 1, minAge: 8, dose: ["3 × 30 sec", "4 × 30 sec", "4 × 45 sec"], cue: "Ball around two shoes, soft hands, head up every few touches.", needs: "stick" }),
+  D({ id: "hk-wrist", name: "Wrist shots at a target", attr: "pos", groups: ["F", "D"], level: 1, minAge: 8, dose: ["3 × 10 shots", "4 × 10 shots", "5 × 10 shots"], cue: "Back foot to front foot, roll the wrists, follow through and point at the target.", needs: "stick" }),
+  D({ id: "hk-toedrag", name: "Toe drags", attr: "pos", groups: ["F"], level: 2, minAge: 10, dose: ["3 × 20", "4 × 20", "4 × 30"], cue: "Pull the ball across with the toe of the blade, then push it back out. Keep it in front of you.", needs: "stick" }),
+  D({ id: "hk-onetimer", name: "Quick-release shots", attr: "pos", groups: ["F"], level: 3, minAge: 12, dose: ["3 × 8", "4 × 8", "5 × 8"], cue: "Catch and release in one motion. Hands away from the body.", needs: "stick" }),
+  D({ id: "hk-d-pivot", name: "Backward shuffle and pivot", attr: "pos", groups: ["D"], level: 1, minAge: 9, dose: ["3 × 10 yd", "4 × 10 yd", "4 × 15 yd"], cue: "Shuffle backward low, open the hips and pivot to sprint. Eyes stay forward.", needs: "cones" }),
+  D({ id: "hk-d-pass", name: "Wall passes, both sides", attr: "pos", groups: ["D"], level: 2, minAge: 10, dose: ["3 × 20", "4 × 20", "4 × 30"], cue: "Forehand then backhand off the wall. Receive soft, move it quick.", needs: "stick" }),
+  D({ id: "hk-g-shuffle", name: "Goalie lateral shuffles", attr: "pos", groups: ["G"], level: 1, minAge: 8, dose: ["3 × 20 sec", "4 × 20 sec", "4 × 30 sec"], cue: "Stance wide and low, push off the inside edge, stay square to the shooter." }),
+  D({ id: "hk-g-butterfly", name: "Butterfly drops and recover", attr: "pos", groups: ["G"], level: 1, minAge: 9, dose: ["3 × 6", "3 × 8", "4 × 8"], cue: "Knees together on the drop, hands up and out, recover on one leg at a time.", jumps: 0 }),
+  D({ id: "hk-g-reaction", name: "Reaction ball catches", attr: "pos", groups: ["G"], level: 2, minAge: 10, dose: ["3 × 20 catches", "4 × 20 catches", "4 × 30 catches"], cue: "Bounce it off the wall and track it all the way into your glove hand.", needs: "wall" }),
   D({ id: "qb-drop", name: "Drops and set", attr: "pos", groups: ["QB"], level: 1, minAge: 9, dose: ["3 × 5", "4 × 5", "4 × 6"], cue: "3- and 5-step drops, last step plants and sets. Ball high, eyes downfield." }),
 ];
 
 export const WARMUP = ["Jog 2 minutes", "Leg swings, 10 each way", "Walking knee hugs, 10 yd", "Skips, 2 × 15 yd", "Lateral shuffle, 2 × 10 yd"];
 
 const TRAINABLE: Attr[] = ["spd", "agi", "exp", "str"];
-const label = (a: Attr) => ATTRS.find((x) => x.key === a)!.label;
+const label = (a: Attr, group?: string) => attrLabel(a, group);
+const GROUP_NAME: Record<string, string> = { F: "Forwards", D: "Defensemen", G: "Goalies", ATH: "Athletes" };
 
 /** Jump foot-contacts allowed per workout, by age. Conservative for young athletes. */
 export const jumpCap = (age: number) => (age <= 10 ? 40 : age <= 13 ? 60 : 80);
@@ -100,8 +111,8 @@ export function pickFocus(rating: Rating, age: number): { focus: Focus[]; person
       personalized: true,
       focus: scored.slice(0, 2).map((x) => ({
         attr: x.a, value: x.v,
-        why: x.v! < 70 ? `${label(x.a)} is ${x.v}, under the typical ${age}-year-old (70). Biggest jump on your card.`
-          : `${label(x.a)} is ${x.v}. ${w[x.a] >= 2 ? `It's a big part of ${group === "ATH" ? "your" : `${["OL", "LB", "RB"].includes(group) ? "an" : "a"} ${group}'s`} overall, so gains here move the card most.` : "Room to grow here, and it adds to your overall."}`,
+        why: x.v! < 70 ? `${label(x.a, group)} is ${x.v}, under the typical ${age}-year-old (70). Biggest jump on your card.`
+          : `${label(x.a, group)} is ${x.v}. ${w[x.a] >= 2 ? `It's a big part of ${group === "ATH" ? "your" : GROUP_NAME[group] ? `a ${GROUP_NAME[group].toLowerCase().replace(/s$/, "")}'s` : `${["OL", "LB", "RB"].includes(group) ? "an" : "a"} ${group}'s`} overall, so gains here move the card most.` : "Room to grow here, and it adds to your overall."}`,
       })),
     };
   }
@@ -111,7 +122,7 @@ export function pickFocus(rating: Rating, age: number): { focus: Focus[]; person
   const picks = known ? [known, ...byPos.filter((a) => a !== known)].slice(0, 2) : byPos.slice(0, 2);
   return {
     personalized: false,
-    focus: picks.map((a) => ({ attr: a, value: rating.attrs.find((x) => x.key === a)?.value ?? null, why: `${group === "ATH" ? "Athletes" : `${group}s`} lean on ${label(a).toLowerCase()}. Get tested to make this plan yours.` })),
+    focus: picks.map((a) => ({ attr: a, value: rating.attrs.find((x) => x.key === a)?.value ?? null, why: `${GROUP_NAME[group] ?? `${group}s`} lean on ${label(a, group).toLowerCase()}. Get tested to make this plan yours.` })),
   };
 }
 
@@ -126,11 +137,11 @@ function pick<T>(list: T[], seed: number, k: number): T[] {
 }
 
 /** One week of training. `week` is any number that changes weekly (weeks since epoch); it rotates the drills. */
-export function buildPlan(o: { rating: Rating; age: number; done: number; week: number; has?: { cones?: boolean; partner?: boolean; ball?: boolean } }): Plan {
+export function buildPlan(o: { rating: Rating; age: number; done: number; week: number; has?: { cones?: boolean; partner?: boolean; ball?: boolean; stick?: boolean } }): Plan {
   const { focus, personalized } = pickFocus(o.rating, o.age);
   const level = levelFor(o.age, o.done);
   const group = positionGroup(o.rating.group);
-  const ok = (d: Drill) => d.minAge <= o.age && d.level <= level && (!d.needs || d.needs === "wall" || o.has?.[d.needs as "cones" | "partner" | "ball"] !== false);
+  const ok = (d: Drill) => d.minAge <= o.age && d.level <= level && (!d.needs || d.needs === "wall" || o.has?.[d.needs as "cones" | "partner" | "ball" | "stick"] !== false);
   const pool = (a: Drill["attr"]) => {
     const all = DRILLS.filter((d) => d.attr === a && ok(d) && (a !== "pos" || d.groups?.includes(group)));
     const top = all.filter((d) => d.level === level); // lean on the current level, keep easier ones in the mix
@@ -150,7 +161,7 @@ export function buildPlan(o: { rating: Rating; age: number; done: number; week: 
     const kept = main.filter((d) => { total += sets(d); return total <= cap || !d.drill.jumps; });
     const core = pick(pool("core"), seed, 1)[0];
     return {
-      n, title: n === 3 ? `${label(mix[0])} + ${label(mix[1])}` : `${label(mix[0])} day`,
+      n, title: n === 3 ? `${label(mix[0], group)} + ${label(mix[1], group)}` : `${label(mix[0], group)} day`,
       minutes: 8 + kept.length * 4 + 3, drills: kept, core: { drill: core, dose: dose(core) },
     };
   };

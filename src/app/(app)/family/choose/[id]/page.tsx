@@ -5,7 +5,7 @@ import { asUser } from "@/lib/db";
 import { loadPlayerCard } from "@/lib/cards";
 import { money } from "@/lib/domain/format";
 import { formatValue, metricLabel, METRICS } from "@/lib/domain/metrics";
-import { ATTRS } from "@/lib/domain/rating";
+import { attrLabel } from "@/lib/domain/rating";
 import { feePercent } from "@/lib/fees";
 import { stripeConfigured } from "@/lib/stripe";
 import { Notice } from "@/components/ui";
@@ -62,8 +62,8 @@ export default async function Training({ params, searchParams }: { params: Promi
           <span className="min-w-0 text-sm">
             {goal ? (
               <>
-                <span className="block font-semibold">Next level: {METRICS[goal.metric]?.lowerIsBetter ? "run" : "hit"} {formatValue(goal.metric, goal.target)} in the {metricLabel(goal.metric).toLowerCase()}</span>
-                <span className="block text-[13px] text-muted">{ATTRS.find((x) => x.key === goal.attr)!.label} up 5 on {a.first_name}&apos;s Player Card. Coaches log every test.</span>
+                <span className="block font-semibold">Next level: {METRICS[goal.metric]?.lowerIsBetter ? (METRICS[goal.metric]?.sport === "hockey" ? "skate" : "run") : "hit"} {formatValue(goal.metric, goal.target)} in the {metricLabel(goal.metric).toLowerCase()}</span>
+                <span className="block text-[13px] text-muted">{attrLabel(goal.attr, card.rating.group)} up {goal.gain} on {a.first_name}&apos;s Player Card. Coaches log every test.</span>
               </>
             ) : (
               <>

@@ -10,7 +10,7 @@ import { BrandingForm, CoachPayForm, InviteForm } from "./forms";
 import { isProgramAdmin } from "@/lib/perms";
 import { feePercent } from "@/lib/fees";
 import { money } from "@/lib/domain/format";
-import { setFeePaidBy } from "./actions";
+import { setFeePaidBy, setSports } from "./actions";
 
 export const metadata = { title: "Program settings" };
 
@@ -22,8 +22,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const me = await requireRole("owner");
   const staffOk = can(me, "staff.manage");
   const d = await asUser(me.id, async (q) => {
-    const [org] = await q<{ name: string; slug: string; brand_color: string; has_logo: boolean; share: number; grp: number }>(
-      "select name, slug, brand_color, logo_url is not null has_logo, one_on_one_coach_share_bps share, group_session_rate_cents grp from orgs where id = $1", [me.orgId]);
+    const [org] = await q<{ name: string; slug: string; brand_color: string; has_logo: boolean; share: number; grp: number; sports: string[] }>(
+      "select name, slug, brand_color, logo_url is not null has_logo, one_on_one_coach_share_bps share, group_session_rate_cents grp, sports from orgs where id = $1", [me.orgId]);
     const staff = await q<{ name: string; email: string | null; pay_type: string | null; payouts_enabled: boolean; coach_verified: boolean }>(`
       select p.full_name name, p.email, m.pay_type, m.payouts_enabled, m.coach_verified
       from org_members m join profiles p on p.id = m.user_id where m.org_id = $1 and m.role = 'coach' order by p.full_name`, [me.orgId]);
@@ -51,6 +51,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         {([
           ["#payouts", "Get paid", can(me, "billing.manage")],
           ["#branding", "Branding", can(me, "brand.manage")],
+          ["#sports", "Sports", can(me, "brand.manage")],
           ["#staff", "Coaches", true],
           ["#teams", "Teams", can(me, "roster.manage")],
           ["#coach-pay", "Coach pay", can(me, "billing.manage")],
@@ -114,6 +115,23 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <SectionLabel>Branding</SectionLabel>
         <p className="mb-3 mt-1 text-xs text-muted">Shown to your families and coaches everywhere in the app, with a small &ldquo;Powered by ProLyt.&rdquo;</p>
         <BrandingForm name={d.org.name} color={d.org.brand_color} hasLogo={d.org.has_logo} />
+      </Card> : null}
+
+      {can(me, "brand.manage") ? <Card id="sports">
+        <SectionLabel>Sports</SectionLabel>
+        <p className="mb-3 mt-1 text-xs text-muted">Sets the Testing Day stations, the tests on Player Cards, and what families pick at sign-up.</p>
+        <form action={setSports} className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {["football", "hockey", "flag football", "basketball", "baseball", "softball", "soccer", "lacrosse", "volleyball", "track and field", "wrestling"].map((x) => (
+              <label key={x} className="cursor-pointer">
+                <input type="checkbox" name="sport" value={x} defaultChecked={d.org.sports.includes(x)} className="peer sr-only" />
+                <span className="flex min-h-11 items-center rounded-full border-2 border-line px-4 text-sm font-semibold capitalize peer-checked:border-gold peer-checked:bg-gold/10 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-gold">{x}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-[12px] text-muted">Player Card ratings, ranks and Testing Day are built for football and hockey today. Other sports get profiles, booking and payments.</p>
+          <button className="min-h-11 rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Save sports</button>
+        </form>
       </Card> : null}
 
       {staffOk ? (

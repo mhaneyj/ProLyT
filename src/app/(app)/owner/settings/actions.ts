@@ -173,3 +173,12 @@ export async function setFeePaidBy(form: FormData) {
   revalidatePath("/owner/settings");
   redirect(`/owner/settings?ok=${encodeURIComponent(who === "family" ? "Families now see the fee added at checkout." : "Your program now covers the fee.")}#payouts`);
 }
+
+export async function setSports(form: FormData) {
+  const me = await requirePerm("brand.manage");
+  const sports = form.getAll("sport").map(String).filter((x) => /^[a-z ]{3,20}$/.test(x));
+  try { await asUser(me.id, (q) => q("select set_org_sports($1, $2::text[])", [me.orgId, sports])); }
+  catch (e) { redirect(`/owner/settings?error=${encodeURIComponent(dbMessage(e))}#sports`); }
+  revalidatePath("/owner/settings");
+  redirect(`/owner/settings?ok=${encodeURIComponent("Sports saved. Testing Day and sign-up now match.")}#sports`);
+}

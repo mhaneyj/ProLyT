@@ -5,7 +5,7 @@ import { METRICS, SHOWCASE_ORDER } from "@/lib/domain/metrics";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 const label = "mb-1.5 block text-sm text-soft";
-const SPORTS = ["Football", "Basketball", "Baseball", "Softball", "Soccer", "Volleyball", "Track and field", "Lacrosse", "Wrestling", "Flag football", "Other"];
+const SPORTS = ["Football", "Hockey", "Basketball", "Baseball", "Softball", "Soccer", "Volleyball", "Track and field", "Lacrosse", "Wrestling", "Flag football", "Other"];
 const THEMES = [["#F8C40A", "Gold"], ["#E03A3E", "Red"], ["#2F80ED", "Blue"], ["#27AE60", "Green"], ["#9B51E0", "Purple"], ["#F2994A", "Orange"], ["#E0E0E0", "Silver"]];
 
 export type ProfileValues = {

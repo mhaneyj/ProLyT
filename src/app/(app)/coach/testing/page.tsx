@@ -8,8 +8,8 @@ import { QuickEntry } from "../session/[id]/quick-entry";
 export const metadata = { title: "Testing Day" };
 
 // The tests that move the Player Card, in station order.
-const STATIONS = ["40yd", "10yd", "pro_agility", "three_cone", "vertical", "broad"] as const;
-const DEFAULT = ["40yd", "pro_agility", "vertical"];
+const FOOTBALL = ["40yd", "10yd", "pro_agility", "three_cone", "vertical", "broad"];
+const HOCKEY = ["skate_fwd", "skate_bwd", "weave_agility", "transition_agility", "shot_speed", "shot_accuracy"];
 
 type R = { athlete_id: string; name: string; band: string; last_tested: string | null; best: Record<string, number>; due: boolean };
 type S = { id: string; title: string; starts_at: string };
@@ -18,6 +18,11 @@ export default async function TestingDay({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const me = await requireRole("coach", "owner");
   if (!me.orgId || !me.perms.includes("results.log")) return <Notice>Ask your program owner for permission to log results.</Notice>;
+  const [org] = await asUser(me.id, (q) => q<{ sports: string[] }>("select sports from orgs where id = $1", [me.orgId]));
+  const sports = org?.sports ?? ["football"];
+  const hockey = sports.includes("hockey"), field = sports.some((x) => x !== "hockey");
+  const STATIONS = [...(hockey ? HOCKEY : []), ...(field || !hockey ? FOOTBALL : [])];
+  const DEFAULT = hockey && !field ? ["skate_fwd", "weave_agility", "shot_speed"] : ["40yd", "pro_agility", "vertical"];
   const raw = Array.isArray(sp.tests) ? sp.tests : sp.tests?.split(",") ?? [];
   const tests = STATIONS.filter((t) => raw.includes(t));
   const chosen = tests.length ? tests : null;
@@ -58,14 +63,19 @@ export default async function TestingDay({ searchParams }: { searchParams: Promi
         <form method="get" action="/coach/testing" className="flex flex-col gap-4">
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 font-semibold">Stations</legend>
-            <div className="flex flex-wrap gap-2">
-              {STATIONS.map((t) => (
-                <label key={t} className="cursor-pointer">
-                  <input type="checkbox" name="tests" value={t} defaultChecked={DEFAULT.includes(t)} className="peer sr-only" />
-                  <span className="flex min-h-11 items-center rounded-full border-2 border-line px-4 text-sm font-semibold peer-checked:border-gold peer-checked:bg-gold/10 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-gold">{METRICS[t].label}</span>
-                </label>
-              ))}
-            </div>
+            {([["On the ice", STATIONS.filter((t) => HOCKEY.includes(t))], [hockey ? "Off the ice" : "", STATIONS.filter((t) => !HOCKEY.includes(t))]] as const).filter(([, list]) => list.length).map(([name, list]) => (
+              <div key={name} className="flex flex-col gap-1.5">
+                {name ? <span className="text-[12px] font-bold uppercase tracking-[1.5px] text-muted">{name}</span> : null}
+                <div className="flex flex-wrap gap-2">
+                  {list.map((t) => (
+                    <label key={t} className="cursor-pointer">
+                      <input type="checkbox" name="tests" value={t} defaultChecked={DEFAULT.includes(t)} className="peer sr-only" />
+                      <span className="flex min-h-11 items-center rounded-full border-2 border-line px-4 text-sm font-semibold peer-checked:border-gold peer-checked:bg-gold/10 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-gold">{METRICS[t].label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
           </fieldset>
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 font-semibold">Who</legend>
@@ -84,6 +94,7 @@ export default async function TestingDay({ searchParams }: { searchParams: Promi
 
   // Step 2: stations.
   const station: string = chosen.find((t) => t === sp.station) ?? chosen[0];
+  const onIce = METRICS[station]?.sport === "hockey";
   const idx = chosen.findIndex((t) => t === station);
   const m = METRICS[station];
   const doneAt = (t: string) => today.find((x) => x.metric === t)?.n ?? 0;
@@ -112,7 +123,7 @@ export default async function TestingDay({ searchParams }: { searchParams: Promi
           ))}
         </nav>
       ) : null}
-      <p className="text-[13px] text-soft"><span className="font-semibold text-cream">{m.label}.</span> Enter each athlete&apos;s best try in {m.unit}. Blank boxes are skipped. Not tested in 30 days are listed first.</p>
+      <p className="text-[13px] text-soft"><span className="font-semibold text-cream">{m.label}.</span> Enter each athlete&apos;s best {station === "shot_accuracy" ? "score (10 forehand + 10 backhand, top corners 3, five-hole 2, bottom corners 1)" : station === "shot_speed" ? "radar reading" : `try in ${m.unit === "s" ? "seconds" : m.unit}`}{onIce && station.startsWith("skate") ? " from the goal line" : ""}. Blank boxes are skipped. Not tested in 30 days are listed first.</p>
       {ordered.length === 0 ? <Empty title="Nobody to test">Pick the whole roster, or a session with athletes booked.</Empty> : (
         <QuickEntry session={session ?? ""} metric={station} unit={m.unit}
           athletes={ordered.map((r) => ({ id: r.athlete_id, name: r.name,

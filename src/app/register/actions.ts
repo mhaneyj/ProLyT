@@ -17,6 +17,7 @@ const schema = z.object({
   birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the athlete's birth date"),
   grad_year: z.coerce.number().int().min(2026).max(2040).optional().or(z.literal("").transform(() => undefined)),
   position: z.string().trim().max(20).optional(),
+  sport: z.string().trim().max(40).optional(),
   school: z.string().trim().max(120).optional(),
   plan: z.union([z.guid(), z.literal("")]).optional(),
   emergency_name: z.string().trim().min(1, "Add an emergency contact"),
@@ -64,6 +65,7 @@ async function register(form: FormData): Promise<RegisterState | void> {
         [org.id, d.first, d.last, d.birth, d.grad_year ?? null, d.position || null, d.school || null, d.plan || null, d.signer,
          d.media === "on", age < 13 && d.verify === "on", d.emergency_name, d.emergency_phone, d.allergies || null, d.conditions || null],
       );
+      if (d.sport) await q("select set_athlete_sport($1, $2)", [r.id, d.sport]);
       return r.id;
     });
   } catch (e) {

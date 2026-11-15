@@ -1,12 +1,13 @@
 import "server-only";
 import { asUser } from "@/lib/db";
 import { formatValue, metricLabel } from "@/lib/domain/metrics";
-import { ATTRS, computeRating, nextGoal, type Attr, type Rating } from "@/lib/domain/rating";
+import { ATTRS, attrLabel, computeRating, isHockey, nextGoal, type Attr, type Rating } from "@/lib/domain/rating";
 import { METRICS } from "@/lib/domain/metrics";
 import type { BackStats } from "@/components/player-card";
 
 /** Columns on the card back, in order. Only tests the athlete has show up. */
 const BACK_COLS = [["40yd", "40"], ["10yd", "10"], ["pro_agility", "SHTL"], ["three_cone", "3-CN"], ["vertical", "VERT"], ["broad", "BRD"]] as const;
+const HOCKEY_COLS = [["skate_fwd", "FWD"], ["skate_bwd", "BWD"], ["weave_agility", "WEAVE"], ["transition_agility", "TRANS"], ["shot_speed", "SHOT"], ["shot_accuracy", "ACC"], ["vertical", "VERT"]] as const;
 const plain = (metric: string, v: number) => {
   const m = METRICS[metric];
   return m?.unit === "s" ? v.toFixed(2) : m?.unit === "in" && metric === "broad" ? `${Math.floor(v / 12)}'${Math.round(v % 12)}"` : m?.unit === "in" ? `${v}"` : String(v);
@@ -72,7 +73,10 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
     const [row] = await q<{ d: CardData | null; plus: boolean; can_rate: boolean }>(
       "select player_card_data($1) d, athlete_plus($1) plus, perm_for_athlete($1, 'results.log') can_rate", [athleteId]);
     if (!row?.d) return null;
-    const input = { age: row.d.age, position: row.d.position, tests: row.d.tests.map((t) => ({ metric: t.metric, value: Number(t.value) })), coach: row.d.coach };
+    const [who] = await q<{ sport: string | null; band: string | null }>("select sport, age_band(birth_date) band from athletes where id = $1", [athleteId]);
+    const sport = who?.sport ?? "football";
+    const input = { age: row.d.age, position: row.d.position, sport, tests: row.d.tests.map((t) => ({ metric: t.metric, value: Number(t.value) })), coach: row.d.coach };
+    const COLS = isHockey(sport) ? HOCKEY_COLS : BACK_COLS;
     const cards = await q<Collected>("select award_id, tier, team_name, awarded_at, series, tagline, color, accent, sponsor, event_id, event_name, starts_on::text, host, total_awarded from athlete_cards($1)", [athleteId]);
     const [id] = await q<{ team: string | null; jersey: string | null; autograph: string | null }>("select team, jersey, autograph from card_identity($1)", [athleteId]);
     const ranks = (await q<Rank>("select org_name, band, metric, value::float value, rank, of_n, top_value::float top_value, next_value::float next_value from athlete_ranks($1)", [athleteId]));
@@ -84,8 +88,8 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
         r.metric, (case when m.lower_is_better then min(r.value) else max(r.value) end)::float v, m.lower_is_better lib
       from results r join metrics m on m.key = r.metric
       where r.athlete_id = $1 and r.source <> 'self_reported' and r.voided_at is null and r.metric = any($2::text[])
-      group by 1, 2, r.metric, m.lower_is_better order by 2`, [athleteId, BACK_COLS.map((c) => c[0])]);
-    const [b] = await q<{ band: string | null }>("select age_band(birth_date) band from athletes where id = $1", [athleteId]);
+      group by 1, 2, r.metric, m.lower_is_better order by 2`, [athleteId, COLS.map((c) => c[0])]);
+    const b = who;
     // Career line: sessions attended, personal bests set, events, challenges done.
     const [cr] = await q<{ sessions: number; prs: number; challenges: number }>(`select
       (select count(*)::int from attendance where athlete_id = $1 and status = 'present') sessions,
@@ -97,7 +101,7 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
          where r.athlete_id = $1 and r.source <> 'self_reported' and r.voided_at is null) x
        where (lib and value < prev_min) or (not lib and value > prev_max)) prs,
       (select count(*)::int from challenges where athlete_id = $1 and status = 'done') challenges`, [athleteId]);
-    const cols = BACK_COLS.filter(([k]) => hist.some((h) => h.metric === k)).slice(0, 4).map(([key, short]) => ({ key, short }));
+    const cols = (COLS as readonly (readonly [string, string])[]).filter(([k]) => hist.some((h) => h.metric === k)).slice(0, 4).map(([key, short]) => ({ key, short }));
     const seasons: BackStats["seasons"] = [];
     for (const h of hist) {
       let row = seasons.find((x) => x.season === h.season);
@@ -119,7 +123,7 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
       await q("select mark_card_seen($1, $2, $3::jsonb)", [athleteId, rating.ovr, JSON.stringify(marks)]);
     }
     // Best verified times for the back of the card, fastest first among the headline tests.
-    const tests = input.tests.filter((t) => ["40yd", "pro_agility", "vertical", "10yd", "broad"].includes(t.metric)).slice(0, 2)
+    const tests = input.tests.filter((t) => ["40yd", "pro_agility", "vertical", "10yd", "broad", "skate_fwd", "weave_agility", "shot_speed"].includes(t.metric)).slice(0, 2)
       .map((t) => ({ label: metricLabel(t.metric), value: formatValue(t.metric, t.value), by: "VERIFIED" }));
     return { marks, upgrade, rating, goal: nextGoal(input), coach: row.d.coach, plus: row.plus, canRate: row.can_rate, cards, ratedAt: row.d.rated_at,
       team: id?.team ?? null, jersey: id?.jersey ?? null, autograph: id?.autograph ?? null, tests, ranks, challenges,
@@ -127,7 +131,7 @@ export async function loadPlayerCard(uid: string, athleteId: string): Promise<Pl
       highlight: ranks[0] ? `#${ranks[0].rank} of ${ranks[0].of_n} in ${ranks[0].band} ${METRICS[ranks[0].metric]?.label.toLowerCase() ?? ranks[0].metric} at ${ranks[0].org_name}`
         : cards.length ? `Earned ${cards.length} event card${cards.length === 1 ? "" : "s"} this season` : null,
       nextUp: (() => { const g = nextGoal(input); if (!g) return null; const m = METRICS[g.metric];
-        return `${m?.lowerIsBetter ? "Run" : "Hit"} ${formatValue(g.metric, g.target)} in the ${metricLabel(g.metric).toLowerCase()} and ${ATTRS.find((x) => x.key === g.attr)?.label ?? g.attr} goes up ${g.gain}.`; })(),
+        return `${m?.lowerIsBetter ? (m?.sport === "hockey" ? "Skate" : "Run") : "Hit"} ${formatValue(g.metric, g.target)} in the ${metricLabel(g.metric).toLowerCase()} and ${attrLabel(g.attr, rating.group)} goes up ${g.gain}.`; })(),
       career: [["Sessions", cr?.sessions ?? 0], ["PRs", cr?.prs ?? 0], ["Events", cards.length], ["Challenges", cr?.challenges ?? 0]] };
   });
 }

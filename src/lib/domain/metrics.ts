@@ -1,7 +1,7 @@
 export type Source = "coach_logged" | "verified_event" | "self_reported";
 
 // Mirrors the `metrics` table (db/migrations/0008). A test keeps the two in sync.
-type Metric = { label: string; short: string; unit: string; lowerIsBetter: boolean; decimals: number; lo: number; hi: number; kind: "performance" | "body" };
+type Metric = { label: string; short: string; unit: string; lowerIsBetter: boolean; decimals: number; lo: number; hi: number; kind: "performance" | "body"; sport?: "hockey" };
 export const METRICS: Record<string, Metric> = {
   "40yd": { label: "40-yard dash", short: "40 yd", unit: "s", lowerIsBetter: true, decimals: 2, lo: 3.8, hi: 9, kind: "performance" },
   "100m": { label: "100-meter dash", short: "100m", unit: "s", lowerIsBetter: true, decimals: 2, lo: 9.5, hi: 20, kind: "performance" },
@@ -16,6 +16,13 @@ export const METRICS: Record<string, Metric> = {
   bench_max: { label: "Bench press max", short: "Bench max", unit: "lb", lowerIsBetter: false, decimals: 0, lo: 45, hi: 600, kind: "performance" },
   squat_max: { label: "Squat max", short: "Squat", unit: "lb", lowerIsBetter: false, decimals: 0, lo: 45, hi: 900, kind: "performance" },
   clean_max: { label: "Power clean max", short: "Clean", unit: "lb", lowerIsBetter: false, decimals: 0, lo: 45, hi: 500, kind: "performance" },
+  // Hockey (Hockey Canada skills-test stations, plus radar shot speed)
+  skate_fwd: { label: "Forward speed (100 ft)", short: "Fwd skate", unit: "s", lowerIsBetter: true, decimals: 2, lo: 2.8, hi: 12, kind: "performance", sport: "hockey" },
+  skate_bwd: { label: "Backward speed (100 ft)", short: "Bwd skate", unit: "s", lowerIsBetter: true, decimals: 2, lo: 3.5, hi: 14, kind: "performance", sport: "hockey" },
+  weave_agility: { label: "Agility weave", short: "Weave", unit: "s", lowerIsBetter: true, decimals: 2, lo: 7, hi: 30, kind: "performance", sport: "hockey" },
+  transition_agility: { label: "Transition agility", short: "Transition", unit: "s", lowerIsBetter: true, decimals: 2, lo: 8, hi: 40, kind: "performance", sport: "hockey" },
+  shot_accuracy: { label: "Shot accuracy (of 30)", short: "Accuracy", unit: "pts", lowerIsBetter: false, decimals: 0, lo: 0, hi: 30, kind: "performance", sport: "hockey" },
+  shot_speed: { label: "Shot speed", short: "Shot", unit: "mph", lowerIsBetter: false, decimals: 0, lo: 10, hi: 110, kind: "performance", sport: "hockey" },
   wingspan_in: { label: "Wingspan", short: "Wingspan", unit: "in", lowerIsBetter: false, decimals: 1, lo: 48, hi: 96, kind: "body" },
   height_in: { label: "Height", short: "Height", unit: "in", lowerIsBetter: false, decimals: 1, lo: 48, hi: 90, kind: "body" },
   weight_lb: { label: "Weight", short: "Weight", unit: "lb", lowerIsBetter: false, decimals: 0, lo: 60, hi: 400, kind: "body" },
@@ -23,6 +30,13 @@ export const METRICS: Record<string, Metric> = {
 
 /** Tests shown on coach screens and progress (body measurements live on the profile header). */
 export const PERFORMANCE = Object.keys(METRICS).filter((k) => METRICS[k].kind === "performance");
+
+/** The tests that fit a sport: hockey gets its on-ice tests plus the off-ice ones; everything else skips the ice. */
+export function performanceFor(sport: string | null | undefined) {
+  const hockey = /hockey/i.test(sport ?? "") && !/field/i.test(sport ?? "");
+  const offIce = ["10yd", "pro_agility", "vertical", "broad"];
+  return PERFORMANCE.filter((k) => (hockey ? METRICS[k].sport === "hockey" || offIce.includes(k) : METRICS[k].sport !== "hockey"));
+}
 
 /** Plausible ranges, to catch typos and mishears (52.1 for 5.21). */
 export const BOUNDS: Record<string, [number, number]> = Object.fromEntries(Object.entries(METRICS).map(([k, m]) => [k, [m.lo, m.hi]]));

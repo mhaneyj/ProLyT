@@ -3,7 +3,7 @@ import { requireMe } from "@/lib/auth";
 import { loadPlayerCard } from "@/lib/cards";
 import { loadTraining } from "@/lib/training";
 import { ageOn } from "@/lib/domain/format";
-import { ATTRS } from "@/lib/domain/rating";
+import { attrLabel, type Attr } from "@/lib/domain/rating";
 import { WARMUP } from "@/lib/domain/trainer";
 import { Notice } from "@/components/ui";
 import { loadAthlete } from "../header";
@@ -11,7 +11,7 @@ import { logWorkout } from "./actions";
 
 export const metadata = { title: "Training" };
 
-const NEEDS = { cones: "Cones", wall: "Wall", ball: "Ball", partner: "Partner" } as const;
+const NEEDS = { cones: "Cones", wall: "Wall", ball: "Ball", partner: "Partner", stick: "Stick + ball" } as const;
 
 export default async function Train({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ done?: string; error?: string }> }) {
   const { id } = await params;
@@ -26,7 +26,7 @@ export default async function Train({ params, searchParams }: { params: Promise<
   const open = card.plus || card.canRate; // free: workout 1; ProLyt+: all three
   const canLog = a.family;
   const next = plan.workouts.find((w) => !t.thisWeek.includes(w.n))?.n ?? null;
-  const label = (k: string) => ATTRS.find((x) => x.key === k)!.label;
+  const label = (k: string) => attrLabel(k as Attr, card.rating.group);
   const focusKeys = plan.focus.map((f) => f.attr).join(",");
 
   return (

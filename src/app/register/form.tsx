@@ -26,7 +26,11 @@ function under13(birth: string) {
   return a < 13;
 }
 
-export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean }) {
+const PLACEHOLDER: Record<string, string> = { hockey: "C, LW, RW, D, G", football: "OL, WR, QB…" };
+const title = (x: string) => x.replace(/\b\w/g, (c) => c.toUpperCase());
+
+export function RegisterForm({ plans, stripe, sports = ["football"] }: { plans: Plan[]; stripe: boolean; sports?: string[] }) {
+  const [sport, setSport] = useState(sports[0]);
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAthlete, {});
   const [birth, setBirth] = useState(state.values?.birth ?? "");
   const [plan, setPlan] = useState(state.values?.plan ?? ""); // "" = free for now
@@ -44,8 +48,15 @@ export function RegisterForm({ plans, stripe }: { plans: Plan[]; stripe: boolean
         <Field id="birth" text="Birth date">
           <input id="birth" name="birth" type="date" className={input} required value={birth} onChange={(e) => setBirth(e.target.value)} />
         </Field>
+        {sports.length > 1 ? (
+          <Field id="sport" text="Sport">
+            <select id="sport" name="sport" value={sport} onChange={(e) => setSport(e.target.value)} className={input}>
+              {sports.map((x) => <option key={x} value={x}>{title(x)}</option>)}
+            </select>
+          </Field>
+        ) : <input type="hidden" name="sport" value={sports[0]} />}
         <div className="grid grid-cols-2 gap-3">
-          <Field id="position" text="Position"><input id="position" name="position" defaultValue={v.position} placeholder="OL, WR, QB…" className={input} /></Field>
+          <Field id="position" text="Position"><input id="position" name="position" defaultValue={v.position} placeholder={PLACEHOLDER[sport] ?? "Position"} className={input} /></Field>
           <Field id="grad_year" text="Class of"><input id="grad_year" name="grad_year" defaultValue={v.grad_year} inputMode="numeric" placeholder="2030" className={input} /></Field>
         </div>
         <Field id="school" text="School" hint="Only coaches see this. It's never shown publicly."><input id="school" name="school" defaultValue={v.school} className={input} /></Field>

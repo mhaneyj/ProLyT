@@ -24,7 +24,8 @@ export default async function Register() {
       </main>
     );
   }
-  const { plans, existing } = await asUser(me.id, async (q) => ({
+  const { plans, existing, sports } = await asUser(me.id, async (q) => ({
+    sports: (await q<{ sports: string[] }>("select sports from orgs where id = $1", [brand.id]))[0]?.sports ?? ["football"],
     plans: await q<{ id: string; name: string; price_cents: number; sessions_per_week: number | null }>(
       "select id, name, price_cents, sessions_per_week from plans where org_id = $1 and active order by price_cents", [brand.id]),
     // This family's athletes who already have a ProLyt profile but don't train here yet
@@ -60,7 +61,7 @@ export default async function Register() {
         <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-soft">{existing.length ? "Or add a new athlete" : "New athlete"}</h2>
         <p className="mt-1 text-sm text-muted">About 3 minutes. Their ProLyt profile belongs to your family and goes with them to any program.</p>
       </div>
-      <RegisterForm plans={plans} stripe={stripeConfigured && (me?.features.payments ?? true)} />
+      <RegisterForm plans={plans} sports={sports} stripe={stripeConfigured && (me?.features.payments ?? true)} />
       <div className="text-center"><PoweredBy /></div>
     </main>
   );

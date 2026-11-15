@@ -32,6 +32,24 @@ const BENCH: Record<string, { attr: Attr; lower: boolean; pts: [number, number, 
   clean_max: { attr: "str", lower: false, pts: [[12, 65, 105], [14, 105, 165], [16, 155, 225], [18, 185, 265]] },
   sled_lb: { attr: "str", lower: false, pts: [[10, 90, 180], [12, 140, 260], [14, 220, 380], [16, 300, 500], [18, 360, 600]] },
 };
+
+/**
+ * Hockey. On-ice tests follow the Hockey Canada skills-test stations (100 ft forward and backward speed from the
+ * goal line, forward agility weave, transition agility, 10+10 shot accuracy out of 30) plus shot speed off a radar.
+ * Typical values for ages 10/12/14 come from Hockey Canada's 2006 national skills-test averages (Atom, PeeWee,
+ * Bantam); 17 is set between their U18 and junior numbers. Elite marks, backward speed for 10-year-olds, and all
+ * shot-speed numbers are STARTING ESTIMATES to tune with real program data. Off-ice tests reuse the football ones.
+ */
+const HOCKEY: typeof BENCH = {
+  skate_fwd: { attr: "spd", lower: true, pts: [[10, 6.4, 5.4], [12, 5.5, 4.7], [14, 5.0, 4.4], [17, 4.4, 3.95]] },
+  skate_bwd: { attr: "spd", lower: true, pts: [[10, 8.0, 6.6], [12, 6.9, 5.8], [14, 6.2, 5.3], [17, 5.4, 4.9]] },
+  weave_agility: { attr: "agi", lower: true, pts: [[10, 16.1, 13.0], [12, 13.0, 11.0], [14, 12.1, 10.4], [17, 10.7, 9.2]] },
+  transition_agility: { attr: "agi", lower: true, pts: [[10, 18.5, 15.5], [12, 15.9, 13.0], [14, 14.4, 12.2], [17, 12.3, 11.0]] },
+  shot_accuracy: { attr: "tec", lower: false, pts: [[10, 3, 9], [12, 6, 15], [14, 9, 19], [17, 13, 23]] },
+  shot_speed: { attr: "str", lower: false, pts: [[10, 30, 40], [12, 38, 50], [14, 48, 62], [17, 60, 78]] },
+};
+Object.assign(BENCH, HOCKEY);
+export const HOCKEY_METRICS = Object.keys(HOCKEY);
 export const RATED_METRICS = Object.keys(BENCH);
 
 /** How much each attribute counts toward OVR, by position. */
@@ -45,11 +63,32 @@ export const WEIGHTS: Record<string, Record<Attr, number>> = {
   LB: { spd: 2, agi: 2, exp: 2, str: 2, tec: 1.5, iq: 2 },
   DB: { spd: 3, agi: 3, exp: 2, str: 0.5, tec: 2, iq: 1.5 },
   ATH: { spd: 2, agi: 2, exp: 2, str: 1.5, tec: 1.5, iq: 1.5 },
+  // Hockey: forwards, defense, goalies.
+  F: { spd: 3, agi: 2.5, exp: 1.5, str: 1.5, tec: 3, iq: 2 },
+  D: { spd: 2, agi: 2.5, exp: 1.5, str: 2.5, tec: 2, iq: 2.5 },
+  G: { spd: 0.5, agi: 3, exp: 2, str: 1, tec: 3, iq: 2.5 },
 };
 
+export const isHockey = (sport: string | null | undefined) => (sport ?? "").toLowerCase().includes("hockey") && !(sport ?? "").toLowerCase().includes("field");
+export const HOCKEY_GROUPS = ["F", "D", "G"];
+
+/** Attribute names in the sport's own words (a hockey card says Puck skills and Hockey IQ). */
+export function attrLabel(key: Attr, group?: string) {
+  const hockey = HOCKEY_GROUPS.includes(group ?? "");
+  if (hockey) return ({ spd: "Skating speed", agi: "Edges & agility", exp: "Explosiveness", str: "Power", tec: "Puck skills", iq: "Hockey IQ" } as const)[key];
+  return ATTRS.find((a) => a.key === key)!.label;
+}
+
 /** Position group from free-text positions ("WR/DB", "Center", "OLB"). The first recognized one wins. */
-export function positionGroup(position: string | null | undefined): keyof typeof WEIGHTS {
-  const p = (position ?? "").toUpperCase();
+export function positionGroup(position: string | null | undefined, sport?: string | null): keyof typeof WEIGHTS {
+  const p = (position ?? "").toUpperCase().trim();
+  if (isHockey(sport)) {
+    if (/GOAL|\bG\b|\bGK\b|TENDER/.test(p)) return "G";
+    if (/DEF|\bD\b|\bLD\b|\bRD\b/.test(p)) return "D";
+    return "F"; // C, LW, RW, W, F, forward, or blank
+  }
+  // Already a group (e.g. a rating's group passed back in).
+  if (HOCKEY_GROUPS.includes(p) || ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "ATH"].includes(p)) return p;
   const rules: [RegExp, keyof typeof WEIGHTS][] = [
     [/\bQB|QUARTERBACK/, "QB"], [/\bRB|RUNNING|HALFBACK|FULLBACK|\bFB\b|\bHB\b/, "RB"], [/\bWR|RECEIVER|SLOT/, "WR"], [/\bTE\b|TIGHT/, "TE"],
     [/\bOL\b|\bOT\b|\bOG\b|TACKLE|GUARD|CENTER|\bC\b|OFFENSIVE LINE/, "OL"], [/\bDL\b|\bDT\b|\bDE\b|NOSE|DEFENSIVE LINE|END/, "DL"],
@@ -59,7 +98,7 @@ export function positionGroup(position: string | null | undefined): keyof typeof
   return hits[0]?.g ?? "ATH";
 }
 
-export const isTrench = (position: string | null | undefined) => ["OL", "DL"].includes(positionGroup(position));
+export const isTrench = (position: string | null | undefined, sport?: string | null) => ["OL", "DL"].includes(positionGroup(position, sport));
 
 const clamp = (n: number) => Math.max(40, Math.min(99, Math.round(n)));
 
@@ -95,6 +134,7 @@ export const scoreCoach = (s: number) => clamp(40 + ((Math.max(1, Math.min(10, s
 export type RatingInput = {
   age: number;
   position: string | null;
+  sport?: string | null;
   /** Best verified result per metric. */
   tests: { metric: string; value: number }[];
   /** Latest coach rating per attribute, 1–10. */
@@ -110,7 +150,7 @@ export type Rating = {
 };
 
 export function computeRating(input: RatingInput): Rating {
-  const group = positionGroup(input.position);
+  const group = positionGroup(input.position, input.sport);
   const fromTests: Partial<Record<Attr, number[]>> = {};
   for (const t of input.tests) {
     const b = BENCH[t.metric];

@@ -46,8 +46,23 @@ describe("ProLyt Trainer", () => {
     expect(ids(buildPlan({ rating, age: 14, done: 3, week: 101 }))).not.toEqual(ids(a));
   });
 
+  it("hockey: on-ice tests rate the card, positions map to F/D/G, and the plan uses hockey drills", () => {
+    const rating = computeRating({ age: 12, position: "LW", sport: "Hockey", tests: [{ metric: "skate_fwd", value: 5.5 }, { metric: "weave_agility", value: 13.0 }, { metric: "shot_speed", value: 44 }], coach: {} });
+    expect(rating.group).toBe("F");
+    expect(rating.attrs.find((a) => a.key === "spd")!.value).toBe(70); // typical PeeWee forward speed rates 70
+    expect(rating.ovr).not.toBeNull();
+    expect(computeRating({ age: 12, position: "D", sport: "hockey", tests: [], coach: {} }).group).toBe("D");
+    expect(computeRating({ age: 12, position: "Goalie", sport: "hockey", tests: [], coach: {} }).group).toBe("G");
+    expect(computeRating({ age: 12, position: "C", sport: "football", tests: [], coach: {} }).group).toBe("OL"); // a football center is still a lineman
+    const plan = buildPlan({ rating, age: 12, done: 0, week: 3 });
+    const pos = plan.workouts.flatMap((w) => w.drills).filter((d) => d.drill.attr === "pos");
+    expect(pos.length).toBeGreaterThan(0);
+    expect(pos.every((d) => d.drill.id.startsWith("hk-"))).toBe(true);
+    expect(plan.focus[0].why).not.toMatch(/Football/);
+  });
+
   it("uses no weights: every drill is bodyweight, cones, a ball, a wall or a partner", () => {
-    for (const d of DRILLS) expect([undefined, "cones", "wall", "ball", "partner"]).toContain(d.needs);
+    for (const d of DRILLS) expect([undefined, "cones", "wall", "ball", "partner", "stick"]).toContain(d.needs);
     expect(DRILLS.every((d) => d.dose.length === 3)).toBe(true);
   });
 });

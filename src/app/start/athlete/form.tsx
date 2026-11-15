@@ -4,7 +4,7 @@ import { startAthlete, type StartState } from "./actions";
 
 const input = "min-h-12 w-full rounded-md border border-[#333] bg-[#111] px-3 text-cream";
 const label = "mb-1.5 block text-sm text-soft";
-const SPORTS = ["Football", "Basketball", "Baseball", "Softball", "Soccer", "Volleyball", "Track and field", "Lacrosse", "Wrestling", "Flag football", "Other"];
+const SPORTS = ["Football", "Hockey", "Basketball", "Baseball", "Softball", "Soccer", "Volleyball", "Track and field", "Lacrosse", "Wrestling", "Flag football", "Other"];
 
 function ageOf(birth: string) {
   if (!birth) return null;

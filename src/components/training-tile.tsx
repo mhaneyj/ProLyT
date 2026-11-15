@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { ATTRS } from "@/lib/domain/rating";
+import { attrLabel } from "@/lib/domain/rating";
 import type { TrainingView } from "@/lib/training";
 
 /** Home-screen entry to the ProLyt Trainer: this week's progress and the next workout. */
 export function TrainingTile({ t, athleteId, first }: { t: TrainingView; athleteId: string; first: string }) {
   const next = t.plan.workouts.find((w) => !t.thisWeek.includes(w.n));
-  const focus = t.plan.focus.map((f) => ATTRS.find((x) => x.key === f.attr)!.label).join(" + ");
+  const focus = t.plan.focus.map((f) => attrLabel(f.attr, t.group)).join(" + ");
   return (
     <Link href={`/athlete/${athleteId}/train${next ? `#w${next.n}` : ""}`} className="flex items-center gap-3 rounded-[14px] border border-line bg-panel p-4 hover:border-gold">
       <span className="flex flex-none gap-1" aria-hidden="true">

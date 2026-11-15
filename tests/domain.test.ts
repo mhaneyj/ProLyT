@@ -101,9 +101,10 @@ describe("metric catalog", () => {
   it("code matches the database catalog", async () => {
     const { readFileSync } = await import("node:fs");
     const { METRICS } = await import("../src/lib/domain/metrics");
-    const sql = ["0008_athlete_record.sql", "0014_showcase.sql"].map((f) => readFileSync(`db/migrations/${f}`, "utf8")).join("\n");
+    const sql = ["0008_athlete_record.sql", "0014_showcase.sql", "0040_hockey.sql"].map((f) => readFileSync(`db/migrations/${f}`, "utf8")).join("\n");
     for (const [k, m] of Object.entries(METRICS)) {
-      const row = new RegExp(`\\('${k}', '${m.label}', '${m.short}', '${m.unit}', ${m.lowerIsBetter}, ${m.decimals}, ${m.lo}, ${m.hi}, '${m.kind}'`);
+      const esc = (x: string | number) => String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const row = new RegExp(`\\('${esc(k)}', '${esc(m.label)}', '${esc(m.short)}', '${esc(m.unit)}', ${m.lowerIsBetter}, ${m.decimals}, ${esc(m.lo)}, ${esc(m.hi)}, '${m.kind}'`);
       expect(sql, k).toMatch(row);
     }
   });

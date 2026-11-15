@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { Challenge, Rank } from "@/lib/cards";
 import { formatValue, METRICS } from "@/lib/domain/metrics";
 
-const VERB: Record<string, string> = { "40yd": "Run", "10yd": "Run", pro_agility: "Run", three_cone: "Run", vertical: "Jump", broad: "Jump" };
+const VERB: Record<string, string> = { "40yd": "Run", "10yd": "Run", pro_agility: "Run", three_cone: "Run", vertical: "Jump", broad: "Jump",
+  skate_fwd: "Skate", skate_bwd: "Skate", weave_agility: "Skate", transition_agility: "Skate", shot_speed: "Shoot", shot_accuracy: "Score" };
 
 function copy(c: Challenge, ranks: Rank[], athleteId: string) {
   if (c.kind === "test" && c.metric && c.target !== null) {
@@ -11,7 +12,7 @@ function copy(c: Challenge, ranks: Rank[], athleteId: string) {
     const passes = r && r.next_value !== null && (m?.lowerIsBetter ? c.target <= r.next_value : c.target >= r.next_value);
     return {
       title: `${VERB[c.metric] ?? "Hit"} ${formatValue(c.metric, c.target)} in the ${m?.label.toLowerCase() ?? c.metric}`,
-      sub: `${passes ? `That moves you up to #${r!.rank - 1} in ${r!.band}. ` : ""}Best: ${c.baseline !== null ? formatValue(c.metric, c.baseline) : "--"}. Ask a coach to time you at any session.`,
+      sub: `${passes ? `That moves you up to #${r!.rank - 1} in ${r!.band}. ` : ""}Best: ${c.baseline !== null ? formatValue(c.metric, c.baseline) : "--"}. Ask a coach to ${m?.sport === "hockey" && c.metric.startsWith("shot") ? "test you" : "time you"} at any session.`,
     };
   }
   if (c.kind === "attend") return { title: `Make ${c.sessions} session${c.sessions === 1 ? "" : "s"} this week`, sub: "Counts when a coach checks you in.", href: "/schedule", cta: "Schedule" };
