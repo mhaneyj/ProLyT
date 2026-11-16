@@ -836,6 +836,35 @@ let coachLink = "";
   await fam.page.goto(url("gamefit-loomis", `/pass/${passCode}`));
   check("the family's pass turns to Checked in", await seen(fam.page.getByText("Checked in", { exact: true })));
 
+  // Booth testing: staff type results for checked-in athletes; they land on the card as verified at the event
+  await fam.page.goto(url("gamefit-loomis", `/day/${eventId}/booth`));
+  check("a parent can't open the booth screen", await seen(fam.page.getByText(/This page could not be found|404/)));
+  await vol.page.goto(url("gamefit-loomis", `/day/${eventId}`));
+  await vol.page.getByRole("link", { name: "Booth testing" }).click();
+  await vol.page.waitForURL(/\/booth/);
+  check("booth lists the checked-in athlete", await seen(vol.page.getByText("Drew Newcomer")) && await seen(vol.page.getByText("0/1 tested")));
+  const drewBox = vol.page.getByLabel("Drew Newcomer result");
+  await drewBox.fill("51");
+  await vol.page.getByRole("button", { name: "Save", exact: true }).click();
+  check("booth refuses an unbelievable time", await seen(vol.page.getByText(/40-yard dash should be/)));
+  const beforeBooth = logLines();
+  await drewBox.fill("512");
+  await vol.page.getByRole("button", { name: "Save", exact: true }).click();
+  check("booth saves 512 as 5.12 seconds", await seen(vol.page.getByText("5.12 s").or(vol.page.getByText("5.12s")).or(vol.page.getByText(/^5\.12/))));
+  check("Drew's family hears about the result", await pushed("Drew: 40-yard dash", beforeBooth - 1));
+  await vol.page.goto(url("gamefit-loomis", `/day/${eventId}/booth?station=40yd`));
+  check("the result is still there after a reload", await seen(vol.page.getByText("1/1 tested")));
+  await fam.page.goto(url("gamefit-loomis", "/family"));
+  const drewId = (await fam.page.locator('a[href^="/athlete/"]').first().getAttribute("href")).split("/")[2];
+  await fam.page.goto(url("gamefit-loomis", `/athlete/${drewId}/cards`));
+  check("the card shows the booth time", await seen(fam.page.getByText(/5\.12/).first()));
+  await vol.page.screenshot({ path: `${OUT}/booth.png`, fullPage: true });
+  await vol.page.getByRole("button", { name: "Undo" }).click();
+  await vol.page.waitForTimeout(1200);
+  check("undo removes the entry", (await vol.page.getByText(/^5\.12/).count()) === 0);
+  await vol.page.reload();
+  check("…and it stays removed", await seen(vol.page.getByText("0/1 tested")));
+
   // Live scoring: pool game, then the championship
   const score = async (team) => {
     await vol.page.goto(url("gamefit-loomis", `/day/${eventId}#scores`));

@@ -34,6 +34,7 @@ export default async function Day({ params, searchParams }: { params: Promise<{ 
       {sp.final ? <Notice tone="good">Final saved. The bracket and standings updated.</Notice> : null}
 
       <Link href={`/day/${id}/scan`} className="flex min-h-16 items-center justify-center gap-2 rounded-md bg-gold text-lg font-bold text-on-gold">Scan a pass</Link>
+      <Link href={`/day/${id}/booth`} className="flex min-h-14 items-center justify-center gap-2 rounded-md border-2 border-gold text-lg font-bold text-gold">Booth testing</Link>
       <div className="grid grid-cols-2 gap-2 text-center">
         <div className="rounded-xl border border-line p-3"><div className="font-display text-[28px]">{inCount}/{board.length}</div><div className="text-[11px] uppercase text-muted">Checked in</div></div>
         <div className="rounded-xl border border-line p-3"><div className="font-display text-[28px]">{games.filter((g) => g.status === "final").length}/{games.length}</div><div className="text-[11px] uppercase text-muted">Games final</div></div>
