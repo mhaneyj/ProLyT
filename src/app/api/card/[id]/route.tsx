@@ -11,6 +11,16 @@ import { approvedAiPhoto, readAthletePhoto } from "@/lib/photo-data";
 const font = (p: string) => readFile(join(process.cwd(), "node_modules/@fontsource", p)).catch(() => null);
 const fonts = Promise.all([font("anton/files/anton-latin-400-normal.woff"), font("barlow-condensed/files/barlow-condensed-latin-800-normal.woff")]);
 
+// The in-app card has a sunburst behind the athlete. The image renderer has no conic gradients, so draw the rays as an SVG.
+const RAYS = (() => {
+  const cx = 415, cy = 430, r = 1600, wedges: string[] = [];
+  for (let a = 0; a < 360; a += 12) {
+    const p = (deg: number) => `${(cx + r * Math.cos((deg * Math.PI) / 180)).toFixed(1)},${(cy + r * Math.sin((deg * Math.PI) / 180)).toFixed(1)}`;
+    wedges.push(`<polygon points="${cx},${cy} ${p(a)} ${p(a + 4)}" fill="rgba(255,255,255,0.09)"/>`);
+  }
+  return `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="830" height="1130" viewBox="0 0 830 1130">${wedges.join("")}</svg>`).toString("base64")}`;
+})();
+
 const isId = (s: string) => /^[0-9a-f-]{36}$/.test(s);
 
 async function photoData(id: string): Promise<string | null> {
@@ -47,14 +57,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   void gold; void base; void attrs; void trench;
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#050505", fontFamily: "Barlow Condensed" }}>
-        <div style={{ display: "flex", width: 900, height: 1260, padding: 31, borderRadius: 36, background: "linear-gradient(135deg, #f8f8fb, #8d93a1 18%, #ffffff 32%, #6f7584 48%, #e9ebf1 62%, #9aa0ad 78%, #ffffff)" }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", fontFamily: "Barlow Condensed" }}>
+        <div style={{ display: "flex", width: 900, height: 1200, padding: 31, borderRadius: 36, background: "linear-gradient(135deg, #f8f8fb, #8d93a1 18%, #ffffff 32%, #6f7584 48%, #e9ebf1 62%, #9aa0ad 78%, #ffffff)" }}>
           <div style={{ display: "flex", width: "100%", height: "100%", padding: 4, borderRadius: 12, background: "linear-gradient(90deg, #ff2fa0, #35d4ff, #ffe14a, #39ff9f, #ff2fa0)" }}>
             <div style={{ display: "flex", position: "relative", width: "100%", height: "100%", borderRadius: 9, overflow: "hidden", background: "radial-gradient(circle at 50% 35%, #1d2a4a, #07080d 70%)", color: "#ffffff" }}>
               {photo
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={photo} alt="" width={830} height={1190} style={{ position: "absolute", left: 0, top: 0, width: 830, height: 1190, objectFit: "cover", objectPosition: "top" }} />
-                : <div style={{ display: "flex", position: "absolute", left: 0, right: 0, top: 260, justifyContent: "center", fontFamily: "Anton", fontSize: 300, color: "rgba(255,255,255,0.18)" }}>{`${a.first_name[0] ?? ""}${a.last_name[0] ?? ""}`.toUpperCase()}</div>}
+                ? <img src={photo} alt="" width={830} height={1130} style={{ position: "absolute", left: 0, top: 0, width: 830, height: 1130, objectFit: "cover", objectPosition: "top" }} />
+                  : <div style={{ display: "flex", position: "absolute", left: 0, right: 0, top: v.jersey ? 150 : 260, justifyContent: "center", fontFamily: "Anton", fontSize: v.jersey ? (v.jersey.length > 2 ? 420 : 560) : 300, color: "rgba(255,255,255,0.16)" }}>{v.jersey ? v.jersey : `${a.first_name[0] ?? ""}${a.last_name[0] ?? ""}`.toUpperCase()}</div>}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={RAYS} alt="" width={830} height={1130} style={{ position: "absolute", left: 0, top: 0, width: 830, height: 1130 }} />
+              <div style={{ display: "flex", position: "absolute", left: 0, right: 0, top: 0, bottom: 0, background: "radial-gradient(circle at 55% 32%, rgba(120,200,255,0.42), rgba(255,60,180,0.18) 40%, rgba(0,0,0,0) 72%)" }} />
               <div style={{ display: "flex", position: "absolute", left: 0, right: 0, top: 0, bottom: 0, background: "linear-gradient(120deg, rgba(255,0,170,0) 10%, rgba(255,0,170,0.22) 22%, rgba(0,220,255,0.22) 30%, rgba(255,240,0,0.16) 38%, rgba(0,0,0,0) 50%)" }} />
               <div style={{ display: "flex", position: "absolute", left: 0, right: 0, bottom: 0, height: 520, background: "linear-gradient(180deg, rgba(7,8,13,0), rgba(7,8,13,0.95) 68%)" }} />
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", position: "absolute", right: 40, top: 36, fontSize: 30, fontWeight: 800, letterSpacing: 8 }}>
@@ -74,6 +87,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             </div>
           </div>
         </div>
+        <div style={{ display: "flex", marginTop: 26, fontSize: 30, fontWeight: 800, letterSpacing: 8, color: "#8d93a1" }}>{`PROLYT.APP · #EARNEDNOTBOUGHT`}</div>
       </div>
     ),
     { width: 1080, height: 1350, fonts: loaded, headers: { "Content-Disposition": `attachment; filename="${a.first_name}-${a.last_name}-prolyt-card.png"`.replace(/[^\w ."=;:-]/g, ""), "Cache-Control": "private, no-store" } },

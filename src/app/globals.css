@@ -73,3 +73,8 @@ body { background: var(--color-ink); color: var(--color-cream); font-family: var
 .up-stamp { transform: translate(-50%, -50%) rotate(-12deg); background: rgba(10,10,10,.75); box-shadow: 0 0 30px rgba(248,196,10,.6); animation: up-stamp .45s cubic-bezier(.2,1.6,.4,1) both; }
 @keyframes up-stamp { from { transform: translate(-50%, -50%) rotate(-12deg) scale(3); opacity: 0; } to { transform: translate(-50%, -50%) rotate(-12deg) scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .up-in, .up-card, .up-stamp { animation: none; } }
+
+/* Marketing ticker */
+.marquee { animation: marquee 28s linear infinite; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .marquee { animation: none; } }

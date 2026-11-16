@@ -70,12 +70,12 @@ const CHROME = {
 const posShort = (p: string | null) => (p ?? "ATH").split(/[\/,]/)[0].trim().toUpperCase().slice(0, 4);
 const textFill = (bg: string): CSSProperties => ({ backgroundImage: bg, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
 
-function Photo({ src, initials, tint }: { src: string | null; initials: string; tint: string }) {
+function Photo({ src, initials, tint, number }: { src: string | null; initials: string; tint: string; number?: string | null }) {
   // eslint-disable-next-line @next/next/no-img-element
   if (src) return <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover object-top" />;
   return (
     <div className="absolute inset-0 grid place-items-center" style={{ background: `radial-gradient(circle at 50% 35%, ${tint}, #07080d 70%)` }}>
-      <span className="font-display" style={{ fontSize: u(260), color: "rgba(255,255,255,0.18)" }}>{initials}</span>
+      <span className="font-display" style={{ fontSize: number ? u(number.length > 2 ? 380 : 480) : u(260), lineHeight: 1, marginTop: u(-120), color: "rgba(255,255,255,0.16)" }}>{number || initials}</span>
     </div>
   );
 }
@@ -108,7 +108,7 @@ function ChromeCard(p: CardProps & { kind: "player" | "champion" | "mvp" }) {
       <div className="absolute inset-0" style={{ background: c.frame, padding: u(26) }}>
         <div className="h-full w-full" style={{ background: c.line, padding: u(3), borderRadius: u(10) }}>
           <div className="relative h-full w-full overflow-hidden" style={{ borderRadius: u(8), background: p.kind === "mvp" ? "#000" : "#07080d" }}>
-            <Photo src={p.photo} initials={initials} tint={p.kind === "champion" ? "#6b4d0c" : "#1d2a4a"} />
+            <Photo src={p.photo} initials={initials} number={p.number} tint={p.kind === "champion" ? "#6b4d0c" : "#1d2a4a"} />
             <div className="absolute inset-0" style={{ background: "repeating-conic-gradient(from 0deg at 50% 38%, rgba(255,255,255,0.08) 0 4deg, transparent 4deg 12deg)", mixBlendMode: "screen" }} />
             <div className="absolute inset-0" style={{ background: c.glow, mixBlendMode: "screen" }} />
             <div className={`absolute inset-0 ${p.foil || p.kind !== "player" ? "card-sheen" : ""}`} style={{ background: c.refr, mixBlendMode: "screen" }} />
