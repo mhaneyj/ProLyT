@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./db/**/*.sql"],
     "/api/card/[id]": ["./node_modules/@fontsource/anton/files/anton-latin-400-normal.woff", "./node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-800-normal.woff"],
+    "/api/card/[id]/print": ["./src/assets/cards/*.webp", "./node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-800-italic.woff", "./node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-600-italic.woff"],
   },
   poweredByHeader: false,
   async headers() {

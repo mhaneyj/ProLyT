@@ -66,6 +66,15 @@ export default async function Cards({ params, searchParams }: { params: Promise<
           Save card to share
         </a>
       ) : null}
+      {a.family ? (
+        <div className="grid grid-cols-2 gap-2">
+          {(["front", "back"] as const).map((side) => (
+            <a key={side} href={`/api/card/${a.id}/print?side=${side}`} download className="flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] hover:border-gold">
+              Print {side}
+            </a>
+          ))}
+        </div>
+      ) : null}
 
       <Link href={`/athlete/${a.id}/train`} className="flex min-h-12 items-center justify-between rounded-[14px] border border-gold/60 bg-gold/[0.06] px-4 hover:border-gold">
         <span className="text-sm"><span className="font-semibold">Train to move this card</span> <span className="text-muted">· ProLyt Trainer</span></span>
