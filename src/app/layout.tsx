@@ -5,6 +5,8 @@ import { RefCapture } from "@/components/ref-capture";
 export const metadata: Metadata = {
   title: { default: "ProLyt", template: "%s · ProLyt" },
   description: "Train it. Track it. ProLyt. The athlete development platform for programs, families and coaches.",
+  metadataBase: new URL(`https://${(process.env.NEXT_PUBLIC_ROOT_DOMAIN || "prolyt.app").toLowerCase()}`),
+  openGraph: { title: "ProLyt", description: "Train it. Track it. ProLyt. The athlete development platform for programs, families and coaches.", siteName: "ProLyt", type: "website" },
   icons: { icon: "/logo.png", apple: "/apple-icon.png" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "ProLyt" },
 };

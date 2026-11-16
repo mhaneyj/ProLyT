@@ -7,6 +7,7 @@ import { themeVars } from "@/lib/domain/brand";
 import { Kicker, LinkButton } from "@/components/ui";
 import { PoweredBy, ProgramLogo, ProLytMark } from "@/components/brand";
 import { PlayerCard } from "@/components/player-card";
+import { Marketing } from "@/components/marketing";
 
 type Ev = { id: string; name: string; starts_on: string; location: string | null; status: string };
 
@@ -25,6 +26,7 @@ export default async function Welcome() {
   const me = await getMe();
   if (me) redirect(homeFor(me));
   const brand = await brandBySlug(await currentOrgSlug());
+  if (!brand) return <Marketing />; // ProLyt's own address: the company site. Programs get their branded welcome below.
   // Upcoming public events from this program: a reason to come back, and a way in without an account.
   const events = brand ? await asService((q) => q<Ev>(`select id, name, starts_on::text, location, status from events
     where org_id = $1 and status in ('open', 'closed', 'live') and coalesce(ends_on, starts_on) >= current_date - 1 order by starts_on limit 3`, [brand.id])).catch(() => []) : [];
