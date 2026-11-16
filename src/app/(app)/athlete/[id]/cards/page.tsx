@@ -10,6 +10,7 @@ import { Card, Notice, SectionLabel, Title } from "@/components/ui";
 import { Ranks } from "@/components/ranks";
 import { Challenges } from "@/components/challenges";
 import { TiltCard } from "@/components/tilt-card";
+import { PrintCardPanel, type PrintTier } from "@/components/print-card-panel";
 import { Binder } from "@/components/binder";
 import { UpgradeReveal } from "@/components/upgrade-reveal";
 import { loadAthlete } from "../header";
@@ -34,6 +35,11 @@ export default async function Cards({ params, searchParams }: { params: Promise<
   const cards = [...v.cards].sort((x, y) => TIER_ORDER[x.tier] - TIER_ORDER[y.tier] || y.awarded_at.localeCompare(x.awarded_at));
   const missing = rating.missing.map((k) => ATTRS.find((x) => x.key === k)!);
   const g = v.goal;
+  const printTiers: PrintTier[] = [{ key: "player", label: "Player" },
+    ...(v.cards.some((c) => c.tier === "champion") ? [{ key: "champion" as const, label: "Champion" }] : []),
+    ...(v.cards.some((c) => c.tier === "mvp") ? [{ key: "mvp" as const, label: "MVP" }] : []),
+    ...(v.cards.some((c) => c.tier === "attendee") ? [{ key: "attendee" as const, label: "Event" }] : []),
+    ...(v.autograph && plus ? [{ key: "signed" as const, label: "Signed" }] : [])];
 
   const front = <PlayerCard first={a.first_name} last={a.last_name} position={a.position} grad={a.grad_year} photo={photo} ovr={rating.ovr}
     attrs={attrs} tier="player" series="ProLyt" trench={rating.trench} foil={plus} team={v.team} sponsor={v.sponsor} number={v.jersey} firstCard />;
@@ -63,18 +69,10 @@ export default async function Cards({ params, searchParams }: { params: Promise<
       ) : null}
       {a.family ? (
         <a href={`/api/card/${a.id}`} download className="flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] hover:border-gold">
-          Save card to share
+          Save share image
         </a>
       ) : null}
-      {a.family ? (
-        <div className="grid grid-cols-2 gap-2">
-          {(["front", "back"] as const).map((side) => (
-            <a key={side} href={`/api/card/${a.id}/print?side=${side}`} download className="flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] hover:border-gold">
-              Print {side}
-            </a>
-          ))}
-        </div>
-      ) : null}
+      {a.family ? <PrintCardPanel athleteId={a.id} first={a.first_name} tiers={printTiers} /> : null}
 
       <Link href={`/athlete/${a.id}/train`} className="flex min-h-12 items-center justify-between rounded-[14px] border border-gold/60 bg-gold/[0.06] px-4 hover:border-gold">
         <span className="text-sm"><span className="font-semibold">Train to move this card</span> <span className="text-muted">· ProLyt Trainer</span></span>

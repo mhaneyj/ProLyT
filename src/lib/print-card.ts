@@ -160,14 +160,15 @@ export function backItems(i: PrintInput): Item[] {
   const top = by + 34, avail = by2 - by - 68, step = Math.min(64, avail / Math.max(rows.length, 1));
   rows.forEach((r, n) => {
     const y = top + n * step;
-    out.push({ kind: "text", x: rx, y, w: 150, h: step, text: r.label, size: 34, color: sub, weight: 600, align: "left", spacing: 3 });
+    const lw = r.bar ? 150 : 250;
+    out.push({ kind: "text", x: rx, y, w: lw, h: step, text: r.label, size: 34, color: sub, weight: 600, align: "left", spacing: 3 });
     if (r.bar) {
       const trackX = rx + 160, trackW = rw - 160 - 84, ty = y + step / 2 - 9;
       out.push({ kind: "rect", x: trackX, y: ty, w: trackW, h: 18, color: b.dark ? "#2A303C" : "#D9D4C6", radius: 9 });
       out.push({ kind: "rect", x: trackX, y: ty, w: Math.round((trackW * Math.max(0, Math.min(99, r.value))) / 99), h: 18, color: GOLD, radius: 9 });
       out.push({ kind: "text", x: rx + rw - 76, y, w: 76, h: step, text: String(r.value), size: 42, color: ink, align: "right" });
     } else {
-      out.push({ kind: "text", x: rx + 160, y, w: rw - 160, h: step, text: String(r.value), size: 46, color: ink, align: "right" });
+      out.push({ kind: "text", x: rx + lw + 10, y, w: rw - lw - 10, h: step, text: String(r.value), size: 46, color: ink, align: "right" });
     }
   });
 
