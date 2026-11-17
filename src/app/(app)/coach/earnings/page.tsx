@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import { PayoutGuide } from "@/components/payout-guide";
 import { asUser } from "@/lib/db";
 import { money, shortDate } from "@/lib/domain/format";
 import { stripeConfigured } from "@/lib/stripe";
@@ -43,6 +44,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
               {m?.stripe_account_id ? "Finish payout setup" : "Set up payouts"}
             </button>
           </form>
+          <PayoutGuide />
           {!stripeConfigured ? <p className="mt-2 text-xs text-muted">Demo mode: Stripe isn&apos;t connected, so this button explains instead of opening Stripe.</p> : null}
         </Card>
       ) : null}

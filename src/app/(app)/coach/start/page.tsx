@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PayoutGuide } from "@/components/payout-guide";
 import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { stripeConfigured } from "@/lib/stripe";
@@ -37,6 +38,7 @@ export default async function CoachStart({ searchParams }: { searchParams: Promi
             <form action="/api/stripe/connect?from=start" method="post" className="mt-3">
               <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-on-gold">{m?.stripe_account_id ? "Finish payout setup" : "Set up payouts"}</button>
             </form>
+            <PayoutGuide />
             {!stripeConfigured ? <p className="mt-2 text-xs text-muted">Demo mode: Stripe isn&apos;t connected, so this button explains instead of opening Stripe.</p> : null}
           </>
         ))}
