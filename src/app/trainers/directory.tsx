@@ -36,6 +36,7 @@ export async function Directory({ s, q, coaches }: { s?: string; q?: string; coa
         {me ? <Link href="/trainer" className="min-h-11 py-3 text-sm font-semibold text-gold">{coaches ? "My coach page" : "I'm a trainer"}</Link> : <Link href={`/login?next=/${coaches ? "coaches" : "trainers"}`} className="min-h-11 py-3 text-sm font-semibold">Sign in</Link>}</div>
       <h1 className="font-display text-[40px] uppercase leading-none">{coaches ? "Coaches" : "Find a trainer"}</h1>
       <p className="-mt-2 text-soft">{coaches ? "Who coaches here, what they teach, and their open 1-on-1 times." : "Book a session in a couple of taps. Parents book for athletes under 18."}</p>
+      {coaches && programSlug ? <Link href="/coaches/apply" className="-mt-1 flex min-h-12 items-center justify-center rounded-md border-2 border-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-gold">Coach with us</Link> : null}
       <form className="flex gap-2">
         {spec ? <input type="hidden" name="s" value={spec} /> : null}
         <label htmlFor="tq" className="sr-only">Search trainers</label>

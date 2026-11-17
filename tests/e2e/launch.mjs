@@ -194,6 +194,37 @@ let coachLink = "";
   await ctx.close();
 }
 
+// ── 5b. "Coach with us": a visitor applies on the coaches page, the owner approves, the new coach signs in
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pg = await ctx.newPage();
+  await pg.goto(url("gamefit-loomis", "/coaches"));
+  check("coaches page offers Coach with us", await seen(pg.getByRole("link", { name: "Coach with us" })));
+  await pg.getByRole("link", { name: "Coach with us" }).click();
+  await pg.getByLabel("Your name").fill("Tara Tryout");
+  await pg.getByLabel(/^Email/).fill("tara@gamefit.test");
+  await pg.getByLabel(/What do you coach/).fill("Linebackers, 5 years");
+  await pg.getByRole("button", { name: "Send request" }).click();
+  check("visitor sees the request was sent", await seen(pg.getByText(/will review your request/)));
+  await pg.screenshot({ path: `${OUT}/l05b-apply.png`, fullPage: true });
+  await ctx.close();
+  const o = await signIn("gamefit-loomis", "josh.personal@gmail.test", "/login?next=/owner/settings");
+  check("owner sees the coach request", await seen(o.page.getByText("Coach requests (1)")) && await seen(o.page.getByText("Tara Tryout")));
+  await o.page.screenshot({ path: `${OUT}/l05b-requests.png`, fullPage: true });
+  await o.page.getByRole("button", { name: "Approve" }).click();
+  check("owner approves", await seen(o.page.getByText(/Approved\. Tara Tryout/)));
+  check("request leaves the list", (await o.page.getByText("Coach requests").count()) === 0);
+  await o.page.getByLabel("Works for").selectOption("5");
+  await o.page.getByLabel("Expires in").selectOption("14");
+  await o.page.getByRole("button", { name: "Create invite link" }).click();
+  await o.page.waitForURL(/link=/);
+  check("owner can make a capped, timed link", /\/join\//.test(await o.page.getByLabel("Invite link").inputValue()));
+  await o.ctx.close();
+  const t = await signIn("gamefit-loomis", "tara@gamefit.test", "/login?next=/coach/start");
+  check("approved applicant signs in as a coach", await seen(t.page.getByRole("heading", { name: /Get set up/i })), t.page.url());
+  await t.ctx.close();
+}
+
 // ── 6. Admin controls: limit Lem's permissions, pause and unpause the program
 {
   const { ctx, page } = await signIn("", "marcus@prolyt.test");

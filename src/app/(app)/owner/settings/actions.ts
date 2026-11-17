@@ -8,6 +8,7 @@ import { inviteHash, newInviteToken, programOrigin } from "@/lib/invite";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { asUser, dbMessage } from "@/lib/db";
+import { sendNudgeEmail } from "@/lib/email";
 import { checkBrandColor } from "@/lib/domain/brand";
 
 export type FormState = { ok?: string; error?: string };
@@ -99,6 +100,33 @@ export async function inviteCoach(_: FormState, form: FormData): Promise<FormSta
 const back = (msg: { ok?: string; error?: string }, extra = "") =>
   redirect(`/owner/settings?${msg.error ? `error=${encodeURIComponent(msg.error)}` : `ok=${encodeURIComponent(msg.ok ?? "Saved")}`}${extra}#staff`);
 
+/** A link lasts 1, 7, 14 or 30 days (default 7) and works for 1, 5, 10 or 25 people (default 1). Never unlimited. */
+const linkDays = (v: unknown) => ([1, 7, 14, 30].includes(Number(v)) ? Number(v) : 7);
+const linkUses = (v: unknown) => ([1, 5, 10, 25].includes(Number(v)) ? Number(v) : 1);
+
+export async function decideApplication(form: FormData) {
+  const me = await requirePerm("staff.manage");
+  const id = String(form.get("id") ?? ""), approve = form.get("decision") === "approve";
+  let who: { name: string; email: string } | undefined, program = "";
+  try {
+    await asUser(me.id, async (q) => {
+      const [r] = await q<{ applicant_name: string; applicant_email: string }>("select * from decide_coach_application($1, $2)", [id, approve]);
+      if (r) who = { name: r.applicant_name, email: r.applicant_email };
+      [{ name: program }] = await q<{ name: string }>("select name from orgs where id = $1", [me.orgId]);
+    });
+  } catch (e) {
+    back({ error: dbMessage(e) });
+  }
+  if (approve && who) {
+    const h = await headers();
+    const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0].trim();
+    const proto = (h.get("x-forwarded-proto") ?? "https").split(",")[0].trim();
+    await sendNudgeEmail(who.email, { subject: `You're on the ${program} coaching staff`, heading: "You're approved", body: `Sign in with this email address (${who.email}) and you're on the coaching staff.`, link: `${proto}://${host}/login?next=/coach/start`, cta: "Sign in", program });
+  }
+  revalidatePath("/owner/settings");
+  back({ ok: approve && who ? `Approved. ${who.name} is emailed and joins as a coach when they sign in with ${who.email}.` : "Declined." });
+}
+
 export async function coachInviteLink(form: FormData) {
   const me = await requirePerm("staff.manage");
   const token = newInviteToken();
@@ -106,7 +134,7 @@ export async function coachInviteLink(form: FormData) {
   try {
     await asUser(me.id, async (q) => {
       await q("select create_invite_link($1, 'coach', $2::text[], $3, $4, $5, $6)",
-        [me.orgId, readPerms(form), String(form.get("label") ?? ""), Number(form.get("days") ?? 7) || 7, form.get("uses") === "many" ? null : 1, inviteHash(token)]);
+        [me.orgId, readPerms(form), String(form.get("label") ?? ""), linkDays(form.get("days")), linkUses(form.get("uses")), inviteHash(token)]);
       const [o] = await q<{ slug: string; custom_domain: string | null }>("select slug, custom_domain from orgs where id = $1", [me.orgId]);
       slug = o.slug; custom = o.custom_domain;
     });

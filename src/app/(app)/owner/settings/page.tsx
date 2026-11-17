@@ -3,7 +3,7 @@ import { can, requireRole } from "@/lib/auth";
 import { shortDate } from "@/lib/domain/format";
 import { PermFields } from "@/components/perm-editor";
 import { CopyLink } from "@/app/(app)/athlete/[id]/share-card";
-import { archiveTeam, coachInviteLink, coachPerms, createTeam, removeCoach, turnOffInvite } from "./actions";
+import { archiveTeam, coachInviteLink, decideApplication, coachPerms, createTeam, removeCoach, turnOffInvite } from "./actions";
 import { asUser } from "@/lib/db";
 import { Card, Notice, Pill, SectionLabel, Title } from "@/components/ui";
 import { BrandingForm, CoachPayForm, InviteForm, SponsorForm } from "./forms";
@@ -33,11 +33,13 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       "select * from admin_program_staff($1) where role = 'coach'", [me.orgId]) : [];
     const links = staffOk ? await q<{ id: string; label: string | null; expires_at: string; max_uses: number | null; uses: number }>(
       "select id, label, expires_at, max_uses, uses from invite_links where org_id = $1 and role = 'coach' and revoked_at is null and expires_at > now() and (max_uses is null or uses < max_uses) order by created_at desc", [me.orgId]) : [];
+    const apps = staffOk ? await q<{ id: string; name: string; email: string; note: string | null; created_at: string }>(
+      "select id, name, email, note, created_at from coach_applications where org_id = $1 and status = 'pending' order by created_at", [me.orgId]) : [];
     const teams = can(me, "roster.manage") ? await q<{ id: string; name: string; level: string | null; season: string | null; n: number }>(`
       select t.id, t.name, t.level, t.season, (select count(*)::int from stints s where s.team_id = t.id and s.ended_on is null) n
       from teams t where t.org_id = $1 and t.active order by t.name`, [me.orgId]) : [];
     const payouts = can(me, "billing.manage") ? (await q<{ p: Payouts }>("select program_payouts($1) p", [me.orgId]))[0]?.p ?? null : null;
-    return { org, staff, invites, team, links, teams, payouts };
+    return { org, staff, invites, team, links, apps, teams, payouts };
   });
   const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
 
@@ -193,6 +195,27 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           </div>
         ) : null; })()}
 
+        {d.apps.length ? (
+          <div className="flex flex-col gap-2 rounded-lg border border-gold/60 bg-gold/5 p-3">
+            <div className="font-semibold">Coach requests ({d.apps.length})</div>
+            {d.apps.map((a) => (
+              <div key={a.id} className="flex flex-col gap-2 border-t border-line pt-2 first:border-0 first:pt-0">
+                <div><div className="font-semibold">{a.name}</div><div className="text-sm text-soft">{a.email}</div>{a.note ? <p className="mt-1 text-sm text-soft">&ldquo;{a.note}&rdquo;</p> : null}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <form action={decideApplication}>
+                    <input type="hidden" name="id" value={a.id} /><input type="hidden" name="decision" value="approve" />
+                    <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">Approve</button>
+                  </form>
+                  <form action={decideApplication}>
+                    <input type="hidden" name="id" value={a.id} /><input type="hidden" name="decision" value="decline" />
+                    <button className="min-h-12 w-full rounded-md border-2 border-[#3a3a3a] text-sm font-bold hover:border-gold">Decline</button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <form action={coachInviteLink} className="flex flex-col gap-2 rounded-lg border border-line p-3">
           <div className="font-semibold">Invite a coach</div>
           <label className="flex flex-col gap-1 text-sm text-soft">Who it&apos;s for (optional)
@@ -202,12 +225,20 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm font-semibold">Permissions</summary>
             <div className="pb-3"><PermFields value={[]} custom={false} role="coach" idPrefix="new" allowed={me.perms} /></div>
           </details>
-          <label className="flex min-h-11 items-center gap-3 text-sm">
-            <input type="checkbox" name="uses" value="many" className="size-5 accent-[var(--color-gold)]" /> Several coaches can use this link
-          </label>
-          <input type="hidden" name="days" value="7" />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1 text-sm text-soft">Works for
+              <select name="uses" defaultValue="1" className="min-h-11 rounded-md border border-[#333] bg-[#111] px-2 text-cream">
+                <option value="1">1 person</option><option value="5">Up to 5 people</option><option value="10">Up to 10 people</option><option value="25">Up to 25 people</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-soft">Expires in
+              <select name="days" defaultValue="7" className="min-h-11 rounded-md border border-[#333] bg-[#111] px-2 text-cream">
+                <option value="1">1 day</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option>
+              </select>
+            </label>
+          </div>
           <button className="min-h-12 rounded-md bg-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">Create invite link</button>
-          <p className="text-xs text-muted">Works for 7 days. They tap it, sign in with any email, and they&apos;re on your staff.</p>
+          <p className="text-xs text-muted">Anyone with the link joins your staff, so share it only with people you trust. You can turn a link off any time.</p>
         </form>
 
         {d.links.length ? (
