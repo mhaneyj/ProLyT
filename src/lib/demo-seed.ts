@@ -38,6 +38,9 @@ insert into orgs (id, name, slug, brand_color) values
   ('00000000-0000-0000-0000-0000000000a2', 'Sample Speed Academy', 'sample-speed', '#3EC1F3');
 insert into plans (org_id, name, price_cents, sessions_per_week) values
   ('00000000-0000-0000-0000-0000000000a2', 'Speed Club', 18000, 2);
+update plans set description = 'Build the fundamentals.', includes = array['Fundamental skill development','Speed, agility and movement training','Athletic mechanics and confidence','Individual skill progression'] where org_id = '${ORG_ID}' and name = 'Starter';
+update plans set description = 'Two practices a week, built around your position.', includes = array['Position-specific skill development','Football IQ and technique','Speed, agility and performance training','Consistent development'] where org_id = '${ORG_ID}' and name = 'Development';
+update plans set description = 'Two practices a week plus camps.', includes = array['1-2 camps per month included','Advanced position-specific development','Speed, agility and competitive preparation','Football IQ and leadership'] where org_id = '${ORG_ID}' and name = 'Elite';
 
 insert into auth.users (id, email) values
   ('${ADMIN}', 'admin@demo.prolyt'),
