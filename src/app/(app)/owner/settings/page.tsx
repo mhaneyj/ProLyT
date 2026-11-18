@@ -10,7 +10,7 @@ import { BrandingForm, CoachPayForm, InviteForm, SponsorForm } from "./forms";
 import { isProgramAdmin } from "@/lib/perms";
 import { feePercent } from "@/lib/fees";
 import { money } from "@/lib/domain/format";
-import { setFeePaidBy, setSports } from "./actions";
+import { setFeePaidBy, setRecruiting, setSports } from "./actions";
 
 export const metadata = { title: "Program settings" };
 
@@ -22,8 +22,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const me = await requireRole("owner");
   const staffOk = can(me, "staff.manage");
   const d = await asUser(me.id, async (q) => {
-    const [org] = await q<{ name: string; slug: string; brand_color: string; has_logo: boolean; share: number; grp: number; sports: string[]; sponsor: string | null }>(
-      "select name, slug, brand_color, logo_url is not null has_logo, one_on_one_coach_share_bps share, group_session_rate_cents grp, sports, card_sponsor sponsor from orgs where id = $1", [me.orgId]);
+    const [org] = await q<{ name: string; slug: string; brand_color: string; has_logo: boolean; share: number; grp: number; sports: string[]; sponsor: string | null; recruiting: boolean }>(
+      "select name, slug, brand_color, logo_url is not null has_logo, one_on_one_coach_share_bps share, group_session_rate_cents grp, sports, card_sponsor sponsor, recruiting_enabled recruiting from orgs where id = $1", [me.orgId]);
     const staff = await q<{ name: string; email: string | null; pay_type: string | null; payouts_enabled: boolean; coach_verified: boolean }>(`
       select p.full_name name, p.email, m.pay_type, m.payouts_enabled, m.coach_verified
       from org_members m join profiles p on p.id = m.user_id where m.org_id = $1 and m.role = 'coach' order by p.full_name`, [me.orgId]);
@@ -132,6 +132,15 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <SponsorForm sponsor={d.org.sponsor ?? ""} />
         <Link href="/owner/sponsor" className="mt-3 flex min-h-12 items-center justify-center rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] hover:border-gold">Sponsor one-pager</Link>
       </Card> : null}
+
+      <Card id="recruiting">
+        <SectionLabel>College Coach Pass</SectionLabel>
+        <p className="mb-3 mt-1 text-xs text-muted">Lets families choose whether verified college coaches can see their athlete&apos;s profile and reach them. Off by default. Even when it&apos;s on, nothing is shown unless a parent turns it on for their athlete, and only athletes 13 and older in the next four graduating classes are eligible.</p>
+        <form action={setRecruiting}>
+          <input type="hidden" name="on" value={d.org.recruiting ? "0" : "1"} />
+          <button className="min-h-12 w-full rounded-md border-2 border-[#3a3a3a] font-cond text-[17px] font-extrabold uppercase tracking-[2px] hover:border-gold">{d.org.recruiting ? "On · turn off" : "Off · turn on"}</button>
+        </form>
+      </Card>
 
       {can(me, "brand.manage") ? <Card id="sports">
         <SectionLabel>Sports</SectionLabel>

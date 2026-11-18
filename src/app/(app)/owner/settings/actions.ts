@@ -2,7 +2,7 @@
 import { refCode } from "@/lib/track";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { requirePerm } from "@/lib/auth";
+import { requirePerm, requireRole } from "@/lib/auth";
 import { readPerms } from "@/lib/perms";
 import { inviteHash, newInviteToken, programOrigin } from "@/lib/invite";
 import { revalidatePath } from "next/cache";
@@ -222,4 +222,16 @@ export async function saveSponsor(_: FormState, form: FormData): Promise<FormSta
   }
   revalidatePath("/", "layout");
   return { ok: name ? "Sponsor saved. It shows on your athletes' cards." : "Sponsor removed." };
+}
+
+export async function setRecruiting(form: FormData) {
+  const me = await requireRole("owner");
+  const on = form.get("on") === "1";
+  try {
+    await asUser(me.id, (q) => q("select set_recruiting_enabled($1, $2)", [me.orgId, on]));
+  } catch (e) {
+    back({ error: dbMessage(e) });
+  }
+  revalidatePath("/owner/settings");
+  back({ ok: on ? "College Coach Pass is on. Families choose for each athlete; nothing is shown unless they do." : "College Coach Pass is off. No athlete from your program is visible to colleges." });
 }
