@@ -103,6 +103,20 @@ check("hidden athlete photo route is 404", (await cp.goto(url("gamefit-loomis", 
 await cp.goto(url("gamefit-loomis", "/college/watchlist"));
 check("watchlist shows the note", await seen(cp.getByText(/Call in spring/)));
 
+// 4b. Express interest; the family accepts
+await cp.goto(url("gamefit-loomis", "/college/athlete/" + open));
+await cp.getByRole("button", { name: "Express interest" }).click();
+check("interest sent", await seen(cp.getByText(/The family decides/)));
+check("coach sees waiting state", await seen(cp.getByText(/Waiting on the family/)));
+check("parent got a push notice", readFileSync(LOG, "utf8").includes("A college coach is interested"));
+await parent.page.goto(url("gamefit-loomis", `/athlete/${open}/recruiting`));
+check("family sees the request with school and title", await seen(parent.page.getByText(/Safeties coach, a verified college coach/)));
+await parent.page.screenshot({ path: `${OUT}/college-family-request.png`, fullPage: true });
+await parent.page.getByRole("button", { name: "Accept", exact: true }).click();
+await parent.page.waitForLoadState("networkidle");
+await cp.goto(url("gamefit-loomis", "/college/athlete/" + open));
+check("coach sees accepted", await seen(cp.getByText(/The family accepted/)));
+
 // 5. Family sees the view; flipping to hidden hides the athlete from the college at once
 await parent.page.goto(url("gamefit-loomis", `/athlete/${open}/recruiting`));
 check("family log shows who viewed", await seen(parent.page.getByText(/Safeties coach, at Sacramento State viewed/)));
@@ -122,7 +136,7 @@ check("second applicant waits for the school admin", await seen(c2.page.getByTex
 await cp.goto(url("gamefit-loomis", "/college/team"));
 await cp.screenshot({ path: `${OUT}/college-team.png`, fullPage: true });
 check("school admin sees the request", await seen(cp.getByText(/asst@mail\.csus\.edu/)));
-await cp.getByRole("button", { name: "Approve as coach" }).click();
+await cp.getByRole("button", { name: /Approve as coach/ }).click();
 check("school admin approves staff", await seen(cp.getByText("Saved.")));
 await c2.page.goto(url("gamefit-loomis", "/college"));
 check("second coach now searches", await seen(c2.page.getByRole("button", { name: "Search" })));

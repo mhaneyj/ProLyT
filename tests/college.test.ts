@@ -152,6 +152,71 @@ describe("notes and watchlist", () => {
   });
 });
 
+describe("express interest", () => {
+  it("only a coach with contact access, and only for Open athletes", async () => {
+    await expect(call(COACH2, "select express_interest($1)", [open])).rejects.toThrow(/contact access/);
+    await expect(call(ADMIN, "select express_interest($1)", [vis])).rejects.toThrow(/isn't open to outreach/);
+    await expect(call(ADMIN, "select express_interest($1)", [hidden])).rejects.toThrow(/isn't open to outreach/);
+    expect(await call(ADMIN, "select my_interest($1) s", [open])).toEqual([{ s: "none" }]);
+  });
+  it("sends a notice the family can see, once per coach", async () => {
+    expect(await call(ADMIN, "select express_interest($1) s", [open])).toEqual([{ s: "sent" }]);
+    await expect(call(ADMIN, "select express_interest($1)", [open])).rejects.toThrow(/already sent/);
+    expect(await call(ADMIN, "select my_interest($1) s", [open])).toEqual([{ s: "pending" }]);
+    const f = await call<{ school: string; status: string; title: string }>(PARENT, "select * from family_interests($1)", [open]);
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ school: "Sac State", status: "pending", title: "Safeties coach" });
+    expect(await call(OWNER, "select * from family_interests($1)", [open])).toHaveLength(0);
+    expect(await call(ADMIN, "select * from family_interests($1)", [open])).toHaveLength(0);
+    const log = await call<{ kind: string }>(PARENT, "select kind from recruiting_events where athlete_id = $1 and kind = 'interest'", [open]);
+    expect(log).toHaveLength(1);
+  });
+  it("only a guardian can answer; accepting needs the athlete to still be Open", async () => {
+    const id = (await call<{ id: string }>(PARENT, "select id from family_interests($1)", [open]))[0].id;
+    await expect(call(OWNER, "select decide_interest($1,true,false)", [id])).rejects.toThrow(/parent or guardian/);
+    await expect(call(ADMIN, "select decide_interest($1,true,false)", [id])).rejects.toThrow(/parent or guardian/);
+    await call(PARENT, "select decide_interest($1,true,false)", [id]);
+    expect(await call(ADMIN, "select my_interest($1) s", [open])).toEqual([{ s: "accepted" }]);
+    await expect(call(PARENT, "select decide_interest($1,false,false)", [id])).rejects.toThrow(/already answered/);
+  });
+  it("going Hidden closes an accepted interest", async () => {
+    await call(PARENT, "select set_recruiting($1,'hidden','{}')", [open]);
+    expect(await call(ADMIN, "select my_interest($1) s", [open])).toEqual([{ s: "closed" }]);
+    await call(PARENT, "select set_recruiting($1,'open',$2)", [open, ["results", "film", "hometown", "academics"]]);
+    expect(await call(ADMIN, "select my_interest($1) s", [open])).toEqual([{ s: "accepted" }]);
+  });
+  it("decline and block read the same to the coach, and a block hides the athlete from that school", async () => {
+    const o2 = await athlete("Second", yr + 1, ["results"], "open");
+    await call(ADMIN, "select express_interest($1)", [o2]);
+    const id = (await call<{ id: string }>(PARENT, "select id from family_interests($1)", [o2]))[0].id;
+    await call(PARENT, "select decide_interest($1,false,true)", [id]);
+    expect(await call(ADMIN, "select my_interest($1) s", [o2])).toEqual([{ s: "not_accepted" }]);
+    expect(await call(ADMIN, "select college_profile($1) p", [o2])).toEqual([{ p: null }]);
+    expect(await call(ADMIN, "select athlete_id from college_search(null,null,null,null,null,null) where athlete_id = $1", [o2])).toHaveLength(0);
+    expect(await call(ADMIN, "select college_can_see($1) s", [o2])).toEqual([{ s: false }]);
+    await expect(call(ADMIN, "select express_interest($1)", [o2])).rejects.toThrow();
+    const ev = await call<{ detail: { blocked: boolean } }>(PARENT, "select detail from recruiting_events where athlete_id = $1 and kind = 'interest_decided'", [o2]);
+    expect(ev[0].detail.blocked).toBe(true);
+  });
+  it("a coach can withdraw; expired requests can't be answered", async () => {
+    const o3 = await athlete("Third", yr + 1, [], "open");
+    await call(ADMIN, "select express_interest($1)", [o3]);
+    await call(ADMIN, "select withdraw_interest($1)", [o3]);
+    expect(await call(ADMIN, "select my_interest($1) s", [o3])).toEqual([{ s: "withdrawn" }]);
+    const o4 = await athlete("Fourth", yr + 1, [], "open");
+    await call(ADMIN, "select express_interest($1)", [o4]);
+    await db.query("update college_interest set created_at = now() - interval '31 days' where athlete_id = $1", [o4]);
+    expect(await call(ADMIN, "select my_interest($1) s", [o4])).toEqual([{ s: "expired" }]);
+    const id = (await call<{ id: string }>(PARENT, "select id from family_interests($1)", [o4]))[0].id;
+    await expect(call(PARENT, "select decide_interest($1,true,false)", [id])).rejects.toThrow(/expired/);
+  });
+  it("is limited to 25 a day", async () => {
+    for (let i = 0; i < 22; i++) { const a = await athlete("Cap" + i, yr + 1, [], "open"); await call(ADMIN, "select express_interest($1)", [a]); }
+    const last = await athlete("CapLast", yr + 1, [], "open");
+    await expect(call(ADMIN, "select express_interest($1)", [last])).rejects.toThrow(/today's limit/);
+  });
+});
+
 describe("limits and freezing", () => {
   it("stops a coach after 200 different athletes in a day; a second capped day in a week freezes the account", async () => {
     for (let i = 0; i < 200; i++) {

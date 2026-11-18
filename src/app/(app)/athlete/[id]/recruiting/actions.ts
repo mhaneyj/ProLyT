@@ -22,3 +22,19 @@ export async function saveRecruiting(form: FormData) {
   revalidatePath(`/athlete/${id}/recruiting`);
   redirect(`/athlete/${id}/recruiting?${err ? `error=${encodeURIComponent(err)}` : "ok=saved"}`);
 }
+
+export async function answerInterest(form: FormData) {
+  const me = await requireMe();
+  const id = String(form.get("id") ?? "");
+  const req = String(form.get("req") ?? "");
+  if (!isId(id) || !isId(req)) redirect("/family");
+  const choice = String(form.get("choice") ?? "");
+  let err: string | null = null;
+  try {
+    await asUser(me.id, (q) => q("select decide_interest($1, $2, $3)", [req, choice === "accept", choice === "block"]));
+  } catch (e) {
+    err = dbMessage(e);
+  }
+  revalidatePath(`/athlete/${id}/recruiting`);
+  redirect(`/athlete/${id}/recruiting?${err ? `error=${encodeURIComponent(err)}` : "ok=saved"}`);
+}

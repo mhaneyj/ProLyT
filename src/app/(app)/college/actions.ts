@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireCollege, requireMe } from "@/lib/auth";
-import { asUser, dbMessage } from "@/lib/db";
+import { asService, asUser, dbMessage } from "@/lib/db";
+import { pushTo } from "@/lib/push";
 
 const isId = (s: string) => /^[0-9a-f-]{36}$/.test(s);
 const LEVELS = ["NCAA D1", "NCAA D2", "NCAA D3", "NAIA", "JUCO", "Prep", "Other"];
@@ -56,4 +57,31 @@ export async function decideMember(form: FormData) {
   }
   revalidatePath("/college/team");
   redirect("/college/team?ok=saved");
+}
+
+export async function sendInterest(form: FormData) {
+  const me = await requireCollege();
+  const id = String(form.get("id") ?? "");
+  if (!isId(id)) redirect("/college");
+  try {
+    await asUser(me.id, (q) => q("select express_interest($1)", [id]));
+  } catch (e) {
+    redirect(`/college/athlete/${id}?error=${encodeURIComponent(dbMessage(e))}`);
+  }
+  // Tell the parents. Best-effort; the request is also waiting on the athlete's College Coach Pass page.
+  try {
+    const g = await asService((q) => q<{ user_id: string; first_name: string }>("select g.user_id, a.first_name from guardians g join athletes a on a.id = g.athlete_id where g.athlete_id = $1", [id]));
+    await pushTo(g.map((x) => x.user_id), { title: "A college coach is interested", body: `${me.college?.school} would like to message you about ${g[0]?.first_name ?? "your athlete"}. You decide.`, url: `/athlete/${id}/recruiting`, tag: `interest-${id}` });
+  } catch { /* best-effort */ }
+  revalidatePath(`/college/athlete/${id}`);
+  redirect(`/college/athlete/${id}?ok=interest`);
+}
+
+export async function withdrawInterest(form: FormData) {
+  const me = await requireCollege();
+  const id = String(form.get("id") ?? "");
+  if (!isId(id)) redirect("/college");
+  await asUser(me.id, (q) => q("select withdraw_interest($1)", [id]));
+  revalidatePath(`/college/athlete/${id}`);
+  redirect(`/college/athlete/${id}?ok=withdrawn`);
 }

@@ -5,7 +5,7 @@ import { asUser } from "@/lib/db";
 import { computeRating } from "@/lib/domain/rating";
 import { METRICS } from "@/lib/domain/metrics";
 import { Card, Notice, Pill } from "@/components/ui";
-import { removeWatch, saveNote } from "../../actions";
+import { removeWatch, saveNote, sendInterest, withdrawInterest } from "../../actions";
 
 export const metadata = { title: "Athlete · College Coach Pass" };
 
@@ -25,6 +25,8 @@ export default async function CollegeAthlete({ params, searchParams }: { params:
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const [row] = await asUser(me.id, (q) => q<{ p: P | null }>("select college_profile($1) p", [id]));
   const p = row?.p;
+  const [ir] = p && !p.limited ? await asUser(me.id, (q) => q<{ s: string }>("select my_interest($1) s", [id])) : [];
+  const interest = ir?.s ?? "none";
   if (!p) notFound();
   if (p.limited) return <Notice>You&apos;ve reached today&apos;s viewing limit. It resets tomorrow.</Notice>;
 
@@ -37,7 +39,7 @@ export default async function CollegeAthlete({ params, searchParams }: { params:
   return (
     <>
       <Link href="/college" className="min-h-11 py-3 text-sm text-soft">← Search</Link>
-      {sp.error ? <Notice tone="bad">{sp.error}</Notice> : sp.ok ? <Notice tone="good">{sp.ok === "removed" ? "Removed." : "Saved."}</Notice> : null}
+      {sp.error ? <Notice tone="bad">{sp.error}</Notice> : sp.ok ? <Notice tone="good">{sp.ok === "removed" ? "Removed." : sp.ok === "interest" ? "Sent. The family decides whether to accept." : sp.ok === "withdrawn" ? "Withdrawn." : "Saved."}</Notice> : null}
       <div className="flex gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {p.has_photo ? <img src={`/api/college/photo/${p.athlete_id}`} alt="" className="size-24 flex-none rounded-[14px] object-cover" /> : null}
@@ -75,6 +77,25 @@ export default async function CollegeAthlete({ params, searchParams }: { params:
         </form>
         {p.watched ? <form action={removeWatch} className="mt-1"><input type="hidden" name="id" value={p.athlete_id} /><input type="hidden" name="back" value="profile" /><button className="min-h-11 text-sm text-soft underline">Remove from watchlist</button></form> : null}
       </Card>
+      {p.state === "open" ? (
+        <Card>
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-gold">Contact</h2>
+          {interest === "none" || interest === "expired" || interest === "closed" ? (
+            me.college?.canContact ? (
+              <form action={sendInterest} className="mt-2 flex flex-col gap-2">
+                <input type="hidden" name="id" value={p.athlete_id} />
+                <p className="text-sm text-soft">Tell the family you&apos;re interested. They get a notice with your name, title and school. They choose whether you can message them.</p>
+                <button className="min-h-12 rounded-md bg-gold font-bold text-on-gold">{interest === "expired" ? "Send interest again" : "Express interest"}</button>
+              </form>
+            ) : <p className="mt-1 text-sm text-muted">Your school admin hasn&apos;t given you contact access.</p>
+          ) : (
+            <div className="mt-2 flex flex-col gap-2">
+              <p className="text-sm text-soft">{interest === "pending" ? "Interest sent. Waiting on the family. Requests expire after 30 days." : interest === "accepted" ? "The family accepted. Messaging opens in the next update." : interest === "withdrawn" ? "You withdrew your interest." : "Not accepted. You can't contact this family."}</p>
+              {interest === "pending" || interest === "accepted" ? <form action={withdrawInterest}><input type="hidden" name="id" value={p.athlete_id} /><button className="min-h-11 text-sm text-soft underline">Withdraw interest</button></form> : null}
+            </div>
+          )}
+        </Card>
+      ) : null}
       <Notice>Messaging opens once families can accept contact. Please don&apos;t reach out outside ProLyt. Your view of this profile is shown to the family.</Notice>
     </>
   );

@@ -4,7 +4,7 @@ import { asUser } from "@/lib/db";
 import { loadPlayerCard } from "@/lib/cards";
 import { Card, Notice, Pill, Title } from "@/components/ui";
 import { loadAthlete } from "../header";
-import { saveRecruiting } from "./actions";
+import { answerInterest, saveRecruiting } from "./actions";
 
 export const metadata = { title: "College Coach Pass" };
 
@@ -20,6 +20,9 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   state_changed: (d) => `Setting changed from ${d.from} to ${d.to}`,
   fields_changed: (d) => `Shared details changed: ${(d.fields as string[]).length ? (d.fields as string[]).join(", ") : "none"}`,
   viewed: (d) => `${d.name ?? "A coach"}${d.title ? `, ${d.title}` : ""}, at ${d.school} viewed this profile`,
+  interest: (d) => `${d.name ?? "A coach"}${d.title ? `, ${d.title}` : ""}, at ${d.school} said they're interested`,
+  interest_decided: (d) => d.accepted ? `You accepted ${d.school}` : d.blocked ? `You declined ${d.school} and blocked the school` : `You declined ${d.school}`,
+  interest_withdrawn: (d) => `${d.school} withdrew their interest`,
   program_toggled: (d) => `The program turned College Coach Pass ${d.on ? "on" : "off"}`,
 };
 
@@ -37,7 +40,9 @@ export default async function Recruiting({ params, searchParams }: { params: Pro
       from athletes a where a.id = $1`, [id]);
     const log = await q<{ kind: string; detail: Record<string, unknown>; created_at: string }>(
       "select kind, detail, created_at::text from recruiting_events where athlete_id = $1 order by created_at desc, id limit 20", [id]);
-    return { r, log };
+    const asks = await q<{ id: string; school: string; level: string; name: string | null; title: string | null; role: string; status: string; created_at: string }>(
+      "select id, school, level, name, title, role, status, created_at::text from family_interests($1)", [id]);
+    return { r, log, asks };
   });
   const r = d.r;
   const v = await loadPlayerCard(me.id, id);
@@ -55,6 +60,27 @@ export default async function Recruiting({ params, searchParams }: { params: Pro
       <Notice>College coach accounts aren&apos;t open yet. Your choice is saved now, and nothing is shown to anyone until they open. You&apos;ll be told before that happens.</Notice>
       {!r.enabled ? <Notice>None of {a.first_name}&apos;s programs has turned College Coach Pass on yet, so nothing can be shown. Ask the program owner.</Notice> : null}
       {cannot ? <Notice tone="bad">{cannot}{r.age >= 13 ? <> <Link href={`/athlete/${a.id}/card-info`} className="underline">Edit card info</Link></> : null}</Notice> : null}
+
+      {r.guardian && d.asks.some((x) => x.status === "pending") ? (
+        <section className="flex flex-col gap-2" aria-label="Requests">
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-gold">Coaches who are interested</h2>
+          {d.asks.filter((x) => x.status === "pending").map((x) => (
+            <Card key={x.id} accent className="flex flex-col gap-2">
+              <div><span className="font-semibold">{x.school}</span> <span className="text-sm text-muted">· {x.level}</span></div>
+              <p className="text-sm text-soft">{x.name ?? "A coach"}{x.title ? `, ${x.title}` : ""}, a verified {x.role === "delegate" ? "staff member" : "college coach"}, would like to be able to message you. If you accept, they can message the parent account here. If you decline, they can&apos;t message you.</p>
+              <div className="flex flex-wrap gap-2">
+                {([["accept", "Accept", "bg-gold text-on-gold"], ["decline", "Decline", "border border-line"], ["block", "Decline and block school", "border border-line"]] as const).map(([choice, label, cls]) => (
+                  <form key={choice} action={answerInterest}>
+                    <input type="hidden" name="id" value={a.id} /><input type="hidden" name="req" value={x.id} /><input type="hidden" name="choice" value={choice} />
+                    <button disabled={choice === "accept" && r.state !== "open"} className={`min-h-11 rounded-md px-4 text-sm font-bold disabled:opacity-40 ${cls}`}>{label}</button>
+                  </form>
+                ))}
+              </div>
+              {r.state !== "open" ? <p className="text-xs text-muted">Set {a.first_name} to Open to outreach below to accept.</p> : <p className="text-xs text-muted">Blocking hides {a.first_name} from this school completely. They aren&apos;t told why.</p>}
+            </Card>
+          ))}
+        </section>
+      ) : null}
 
       {r.guardian ? (
         <form action={saveRecruiting} className="flex flex-col gap-3">
