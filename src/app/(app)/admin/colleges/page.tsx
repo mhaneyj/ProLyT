@@ -18,7 +18,7 @@ export default async function AdminColleges({ searchParams }: { searchParams: Pr
   const { schools, members, reports } = await asUser(me.id, async (q) => ({
     reports: await q<Report>("select * from college_reports_queue()"),
     schools: await q<School>("select id, name, domain, level, staff_url, status, created_at::text from schools order by (status = 'pending') desc, created_at desc limit 200"),
-    members: await q<Member>("select m.school_id, m.user_id, m.role, m.status, m.title, p.email, p.full_name from college_members m left join profiles p on p.id = m.user_id order by m.created_at"),
+    members: await q<Member>("select * from college_people()"),
   }));
   const by = (id: string) => members.filter((m) => m.school_id === id);
   const btn = "min-h-11 rounded-md px-3 text-sm font-bold";
@@ -49,7 +49,7 @@ export default async function AdminColleges({ searchParams }: { searchParams: Pr
             <Pill tone={s.status === "verified" ? "good" : s.status === "pending" ? "gold" : "bad"}>{s.status}</Pill>
           </div>
           <div className="text-sm text-soft">{s.level}{s.domain ? ` · ${s.domain}` : " · no .edu match"}</div>
-          {s.staff_url ? <a href={s.staff_url} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-gold underline">{s.staff_url}</a> : <div className="text-sm text-muted">No staff page given.</div>}
+          {s.staff_url ? <a href={s.staff_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center break-all text-sm text-gold underline">{s.staff_url}</a> : <div className="text-sm text-muted">No staff page given.</div>}
           <ul className="flex flex-col gap-1 text-sm">
             {by(s.id).map((m) => (
               <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-1.5">

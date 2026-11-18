@@ -310,3 +310,11 @@ describe("limits and freezing", () => {
     await expect(call(ADMIN, "select freeze_college(null, $1, true)", [COACH2])).rejects.toThrow(/ProLyt admins only/);
   });
 });
+
+describe("admin people list", () => {
+  it("only ProLyt sees applicant emails", async () => {
+    expect((await call(PROLYT, "select * from college_people()")).length).toBeGreaterThan(2);
+    expect(await call(PARENT, "select * from college_people()")).toHaveLength(0);
+    expect(await call(ADMIN, "select * from college_people()")).toHaveLength(0);
+  });
+});

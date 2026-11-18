@@ -181,6 +181,24 @@ await seen(ap.getByText("Saved."));
 await cp.goto(url("gamefit-loomis", "/college"));
 check("dismissed report restores the coach", await seen(cp.getByRole("button", { name: "Search" })));
 
+// 8. Phone checks on the college screens: tap size, sideways scroll, one h1
+const fresh = await signIn("new.coach@lsu.edu", "/college");
+await fresh.page.screenshot({ path: `${OUT}/college-apply.png`, fullPage: true });
+const audit = async (pg, path, who) => {
+  await pg.goto(url("gamefit-loomis", path)); await pg.waitForLoadState("networkidle");
+  const r = await pg.evaluate(() => ({
+    ovf: document.documentElement.scrollWidth > 392, h1: document.querySelectorAll("h1").length,
+    small: [...document.querySelectorAll("main a, main button, main input, main select, main textarea")].filter((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && b.height < 40 && !["hidden", "checkbox", "radio"].includes(e.type); }).map((e) => (e.innerText || e.name || e.tagName).trim().slice(0, 24)),
+  }));
+  check(`${who} ${path.slice(0, 28)}: no sideways scroll, one heading, 40px+ targets`, !r.ovf && r.h1 === 1 && r.small.length === 0, `${r.ovf ? "overflow " : ""}h1=${r.h1} ${r.small.join("|")}`);
+};
+await audit(fresh.page, "/college", "apply");
+await audit(cp, "/college", "search");
+await audit(cp, "/college/watchlist", "watchlist");
+await audit(cp, "/college/team", "team");
+await audit(ap, "/admin/colleges", "admin");
+await audit(parent.page, `/athlete/${open}/recruiting`, "family");
+
 const errs = [parent, coach, adm, c2].flatMap((x) => x.errors);
 check("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 await db.end(); await browser.close();
