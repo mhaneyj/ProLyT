@@ -90,7 +90,7 @@ export function Marketing() {
               <p className="max-w-md text-lg text-soft">Verified 40s. Real film. Coach ratings. One card that levels up every time you get tested, and a record nobody can fake. Free for families.</p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link href="/login" className={`${btn} bg-gold text-on-gold`}>Build my card</Link>
-                <a href={cta} className={`${btn} border border-line hover:border-gold`}>Run a program</a>
+                <Link href="/start/program" className={`${btn} border border-line hover:border-gold`}>Run a program</Link>
               </div>
               <p className="text-sm text-muted">Parents: open your program&apos;s ProLyt link to register your athlete.</p>
             </div>
@@ -192,7 +192,7 @@ export function Marketing() {
           <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {WINS.map(([h, t]) => <div key={h} className="rounded-[16px] border border-line bg-panel p-5"><h3 className="font-semibold">{h}</h3><p className="mt-1 text-sm text-soft">{t}</p></div>)}
           </div>
-          <a href={cta} className={`${btn} mt-8 w-full bg-gold text-on-gold sm:w-auto`}>Start a program</a>
+          <Link href="/start/program" className={`${btn} mt-8 w-full bg-gold text-on-gold sm:w-auto`}>Start a program</Link>
         </section>
 
         {/* TRUST */}
@@ -248,7 +248,7 @@ export function Marketing() {
             <h2 className="font-display text-[48px] uppercase leading-[0.95] sm:text-7xl">Your first card is <span className="text-gold">free.</span></h2>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link href="/login" className={`${btn} bg-gold text-on-gold`}>Build my card</Link>
-              <a href={cta} className={`${btn} border border-line hover:border-gold`}>Run a program</a>
+              <Link href="/start/program" className={`${btn} border border-line hover:border-gold`}>Run a program</Link>
             </div>
           </div>
         </section>
