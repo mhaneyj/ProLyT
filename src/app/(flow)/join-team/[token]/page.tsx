@@ -28,7 +28,7 @@ export default async function JoinTeam({ params, searchParams }: { params: Promi
       from athletes a
       join divisions d on d.id = (select division_id from event_teams where id = $1)
       cross join lateral eligibility(d.id, a.id) el
-      where is_guardian(a.id) or (is_self(a.id) and age_on(a.birth_date) >= 18)
+      where a.id in (select my_athlete_ids()) and (is_guardian(a.id) or (is_self(a.id) and age_on(a.birth_date) >= 18))
       order by a.first_name`, [t.team_id, t.event_id]);
     const [p] = await q<{ full_name: string }>("select full_name from profiles where id = auth.uid()");
     const [ev] = await q<{ required: boolean; basis: string }>(`select e.require_age_check required, d.basis from events e

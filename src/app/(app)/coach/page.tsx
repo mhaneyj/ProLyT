@@ -54,7 +54,8 @@ export default async function CoachToday({ searchParams }: { searchParams: Promi
         (select count(*)::int from attendance at where at.session_id = s.id) marked
       from sessions s
       where s.starts_at > now() - interval '6 hours' and s.starts_at < now() + interval '3 days'
-      order by s.starts_at`, [me.id]),
+        and ($2::uuid is null or s.org_id = $2)
+      order by s.starts_at`, [me.id, me.orgId ?? null]),
   );
   const mine = me.roles.includes("owner") ? sessions : sessions.filter((s) => s.mine);
   const due = me.orgId && me.perms.includes("results.log")
