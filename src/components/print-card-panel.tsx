@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
+import { requestCards } from "@/app/(app)/athlete/[id]/cards/order-actions";
 
-// Preview of the printed card, with front and back, a tier picker when the athlete has earned more than one, and the download.
-// The image is the exact file that gets downloaded.
+// Preview of the printed card (small, watermarked), with front and back and a tier picker, and the order request.
+// The print-ready file is ProLyt's product, so families order printed cards instead of downloading it.
 export type PrintTier = { key: "player" | "champion" | "mvp" | "attendee" | "signed"; label: string };
 
 export function PrintCardPanel({ athleteId, first, tiers }: { athleteId: string; first: string; tiers: PrintTier[] }) {
@@ -14,8 +15,8 @@ export function PrintCardPanel({ athleteId, first, tiers }: { athleteId: string;
   return (
     <div className="flex flex-col gap-3 rounded-[14px] border border-line bg-panel p-3.5">
       <div>
-        <div className="font-semibold">Print {first}&apos;s card</div>
-        <p className="text-[13px] text-muted">Print-ready, 2.5 × 3.5 in. Shows only name, position, verified tests and rating.</p>
+        <div className="font-semibold">Order {first}&apos;s printed card</div>
+        <p className="text-[13px] text-muted">Real 2.5 × 3.5 in cards, printed and shipped by ProLyt. Shows only name, position, verified tests and rating.</p>
       </div>
       {tiers.length > 1 ? (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Card edition">
@@ -35,10 +36,17 @@ export function PrintCardPanel({ athleteId, first, tiers }: { athleteId: string;
         <img key={src} src={src} alt={`${first}'s printed card, ${side}, ${tiers.find((t) => t.key === tier)?.label ?? ""}`} onLoad={() => setLoaded(src)}
           className={`h-full w-full rounded-[14px] ${loaded === src ? "opacity-100" : "opacity-0"}`} />
       </div>
-      <a href={src} download className="flex min-h-12 items-center justify-center rounded-md bg-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">
-        Download {side}
-      </a>
-      <p className="text-center text-[12px] text-muted">Download both sides, then print or send to a print shop.</p>
+      <form action={requestCards} className="flex flex-col gap-3">
+        <input type="hidden" name="athlete" value={athleteId} /><input type="hidden" name="tier" value={tier} />
+        <div className="flex items-center gap-3">
+          <label htmlFor="qty" className="text-sm text-soft">How many</label>
+          <select id="qty" name="qty" defaultValue="10" className="min-h-12 flex-1 rounded-md border border-[#333] bg-[#111] px-3 text-cream">
+            {[1, 5, 10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <button className="flex min-h-12 items-center justify-center rounded-md bg-gold font-cond text-[16px] font-extrabold uppercase tracking-[1.5px] text-on-gold">Request printed cards</button>
+        <p className="text-center text-[12px] text-muted">No payment now. We&apos;ll email you the price and shipping before anything is printed.</p>
+      </form>
     </div>
   );
 }

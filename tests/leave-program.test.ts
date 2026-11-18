@@ -53,3 +53,14 @@ describe("start_my_program", () => {
     await expect(as(db, NEWBIE, () => db.query("select start_my_program('Four','four-prog','football')"))).rejects.toThrow(/three programs/);
   });
 });
+
+describe("request_card_order", () => {
+  it("family only, validated, rate-limited", async () => {
+    await expect(as(db, OTHER, () => db.query("select request_card_order($1,'player',10)", [kid]))).rejects.toThrow(/family/);
+    await as(db, PARENT, () => db.query("select request_card_order($1,'player',10,'for the team')", [kid]));
+    await expect(as(db, PARENT, () => db.query("select request_card_order($1,'bogus',10)", [kid]))).rejects.toThrow();
+    await expect(as(db, PARENT, () => db.query("select request_card_order($1,'player',0)", [kid]))).rejects.toThrow();
+    expect((await as(db, PARENT, () => db.query("select 1 from card_orders"))).rows.length).toBe(1);
+    expect((await as(db, OTHER, () => db.query("select 1 from card_orders"))).rows.length).toBe(0);
+  });
+});

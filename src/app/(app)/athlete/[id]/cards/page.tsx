@@ -20,7 +20,7 @@ export const metadata = { title: "Player Card" };
 
 const TIER_ORDER = { mvp: 0, champion: 1, attendee: 2 } as const;
 
-export default async function Cards({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
+export default async function Cards({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string; ordered?: string; order_error?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const me = await requireMe();
@@ -51,6 +51,8 @@ export default async function Cards({ params, searchParams }: { params: Promise<
       {a.family ? <Link href={`/athlete/${a.id}/card-info`} className="-mt-1 inline-flex min-h-11 items-center self-start text-sm font-semibold text-gold">Edit card info: number, team, position →</Link> : null}
       {sp.ok === "rated" ? <Notice tone="good">Ratings saved. {a.first_name}&apos;s card is updated.</Notice> : null}
       {sp.ok === "asked" ? <Notice tone="good">Sent. Your parent got a notification to unlock your full card.</Notice> : null}
+      {sp.ordered ? <Notice tone="good">Got it. We&apos;ll email you the price and shipping before anything is printed.</Notice> : null}
+      {sp.order_error ? <Notice tone="bad">{sp.order_error}</Notice> : null}
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : null}
 
       {v.upgrade ? <UpgradeReveal up={v.upgrade} card={<TiltCard finish="gold">{front}</TiltCard>} first={a.first_name} athleteId={a.id} ovr={rating.ovr} marks={v.marks} /> : null}
