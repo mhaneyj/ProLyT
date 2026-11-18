@@ -237,7 +237,6 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
         <span aria-hidden="true" className="text-gold">→</span>
       </Link>
       <Link href="/register" className="mt-1 flex min-h-12 items-center justify-center text-sm font-semibold text-muted hover:text-cream">+ Add another athlete</Link>
-      <Link href={`/family/programs?athlete=${a.id}`} className="flex min-h-12 items-center justify-center text-sm font-semibold text-muted hover:text-cream">Programs and switching</Link>
     </>
   );
 }

@@ -1218,7 +1218,7 @@ describe("program plans", () => {
     expect((await feat()).p).toBe("club");
     await expect(as(db, OWNER, () => db.query("select admin_comp_club($1, null)", [ORG]))).rejects.toThrow(/admins only/);
     await as(db, PADMIN, () => db.query("select admin_comp_club($1, null)", [ORG]));
-    const f = await feat();
+    let f = await feat();
     expect(f.p).toBe("starter");
     expect(f.f).toMatchObject({ booking: true, payments: true, film_uploads: false, age_checks: false, coach_pages: false });
     // Starter can't switch on age checks.
