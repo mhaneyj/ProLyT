@@ -117,6 +117,26 @@ await parent.page.waitForLoadState("networkidle");
 await cp.goto(url("gamefit-loomis", "/college/athlete/" + open));
 check("coach sees accepted", await seen(cp.getByText(/The family accepted/)));
 
+// 4c. Messaging: coach writes, a link is refused, family replies, a report freezes the coach
+await cp.goto(url("gamefit-loomis", "/college/athlete/" + open));
+await cp.getByLabel("Message").fill("Check hudl.com/me for our camp");
+await cp.getByRole("button", { name: "Send", exact: true }).click();
+check("links are refused", await seen(cp.getByText(/Links aren't allowed/)));
+await cp.getByLabel("Message").fill("Great speed on tape. Are you visiting campus this spring?");
+await cp.getByRole("button", { name: "Send", exact: true }).click();
+check("message sent", await seen(cp.getByText("Message sent.")));
+check("parent got a message push", readFileSync(LOG, "utf8").includes("Message from Sacramento State"));
+await parent.page.goto(url("gamefit-loomis", `/athlete/${open}/recruiting`));
+await parent.page.getByRole("link", { name: /Open conversation/ }).click();
+check("family reads the message", await seen(parent.page.getByText(/Are you visiting campus/)));
+await parent.page.getByLabel("Your reply").fill("Yes, we plan to visit in April.");
+await parent.page.getByRole("button", { name: "Send", exact: true }).click();
+await parent.page.waitForLoadState("networkidle");
+await parent.page.screenshot({ path: `${OUT}/college-family-thread.png`, fullPage: true });
+await cp.goto(url("gamefit-loomis", "/college/athlete/" + open));
+check("coach sees the reply", await seen(cp.getByText(/visit in April/)));
+await cp.screenshot({ path: `${OUT}/college-coach-thread.png`, fullPage: true });
+
 // 5. Family sees the view; flipping to hidden hides the athlete from the college at once
 await parent.page.goto(url("gamefit-loomis", `/athlete/${open}/recruiting`));
 check("family log shows who viewed", await seen(parent.page.getByText(/Safeties coach, at Sacramento State viewed/)));
@@ -140,6 +160,26 @@ await cp.getByRole("button", { name: /Approve as coach/ }).click();
 check("school admin approves staff", await seen(cp.getByText("Saved.")));
 await c2.page.goto(url("gamefit-loomis", "/college"));
 check("second coach now searches", await seen(c2.page.getByRole("button", { name: "Search" })));
+
+// 7. Report freezes the coach; ProLyt dismisses
+await parent.page.goto(url("gamefit-loomis", `/athlete/${open}/recruiting`));
+await db.query("update athletes set recruiting_state = 'open' where id = $1", [open]);
+await parent.page.reload();
+await parent.page.getByRole("link", { name: /Open conversation/ }).click();
+await parent.page.getByText("Report this coach").click();
+await parent.page.getByLabel("What happened").fill("Asked for my number");
+await parent.page.getByRole("button", { name: /Report and freeze/ }).click();
+await parent.page.waitForLoadState("networkidle");
+await cp.goto(url("gamefit-loomis", "/college"));
+check("reported coach is frozen", await seen(cp.getByText(/access is paused/)));
+await ap.goto(url("gamefit-loomis", "/admin/colleges"));
+check("admin sees the report with the thread", await seen(ap.getByText(/Asked for my number/)) && await seen(ap.getByText(/Are you visiting campus/)));
+await ap.screenshot({ path: `${OUT}/college-admin-report.png`, fullPage: true });
+await ap.getByRole("button", { name: /Dismiss and restore/ }).click();
+await ap.waitForLoadState("networkidle");
+await seen(ap.getByText("Saved."));
+await cp.goto(url("gamefit-loomis", "/college"));
+check("dismissed report restores the coach", await seen(cp.getByRole("button", { name: "Search" })));
 
 const errs = [parent, coach, adm, c2].flatMap((x) => x.errors);
 check("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));

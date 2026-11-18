@@ -32,3 +32,16 @@ export async function freezeCollege(form: FormData) {
   revalidatePath("/admin/colleges");
   redirect("/admin/colleges?ok=saved");
 }
+
+export async function resolveReport(form: FormData) {
+  const me = await requirePlatformAdmin();
+  const id = String(form.get("id") ?? "");
+  if (!isId(id)) redirect("/admin/colleges");
+  try {
+    await asUser(me.id, (q) => q("select resolve_college_report($1, $2)", [id, String(form.get("action")) === "remove" ? "remove" : "dismiss"]));
+  } catch (e) {
+    redirect(`/admin/colleges?error=${encodeURIComponent(dbMessage(e))}`);
+  }
+  revalidatePath("/admin/colleges");
+  redirect("/admin/colleges?ok=saved");
+}

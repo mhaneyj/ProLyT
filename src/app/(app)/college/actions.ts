@@ -85,3 +85,20 @@ export async function withdrawInterest(form: FormData) {
   revalidatePath(`/college/athlete/${id}`);
   redirect(`/college/athlete/${id}?ok=withdrawn`);
 }
+
+export async function sendMessage(form: FormData) {
+  const me = await requireCollege();
+  const id = String(form.get("id") ?? "");
+  if (!isId(id)) redirect("/college");
+  try {
+    await asUser(me.id, (q) => q("select send_college_message($1, $2)", [id, String(form.get("body") ?? "").slice(0, 1100)]));
+  } catch (e) {
+    redirect(`/college/athlete/${id}?error=${encodeURIComponent(dbMessage(e))}`);
+  }
+  try {
+    const g = await asService((q) => q<{ user_id: string; first_name: string }>("select g.user_id, a.first_name from guardians g join athletes a on a.id = g.athlete_id where g.athlete_id = $1", [id]));
+    await pushTo(g.map((x) => x.user_id), { title: `Message from ${me.college?.school}`, body: `A college coach wrote about ${g[0]?.first_name ?? "your athlete"}.`, url: `/athlete/${id}/recruiting`, tag: `msg-${id}` });
+  } catch { /* best-effort */ }
+  revalidatePath(`/college/athlete/${id}`);
+  redirect(`/college/athlete/${id}?ok=sent#thread`);
+}

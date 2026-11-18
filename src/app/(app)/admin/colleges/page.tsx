@@ -2,17 +2,21 @@ import { requirePlatformAdmin } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { Card, Notice, Pill } from "@/components/ui";
 import { AdminTabs } from "../tabs";
-import { decideSchool, freezeCollege } from "./actions";
+import { decideSchool, freezeCollege, resolveReport } from "./actions";
 
 export const metadata = { title: "Colleges · ProLyt admin" };
 
 type School = { id: string; name: string; domain: string | null; level: string; staff_url: string | null; status: string; created_at: string };
 type Member = { school_id: string; user_id: string; role: string; status: string; title: string | null; email: string | null; full_name: string | null };
 
+type Report = { id: string; status: string; reason: string; detail: string | null; created_at: string; school: string; coach: string | null; coach_status: string | null; athlete: string; thread: { from_family: boolean; body: string; at: string }[] };
+const REASONS: Record<string, string> = { contact_details: "Asked to talk outside ProLyt", commercial: "Money, NIL, agent or sales pitch", pressure: "Pressure or promises", inappropriate: "Inappropriate", other: "Something else" };
+
 export default async function AdminColleges({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
   const sp = await searchParams;
   const me = await requirePlatformAdmin();
-  const { schools, members } = await asUser(me.id, async (q) => ({
+  const { schools, members, reports } = await asUser(me.id, async (q) => ({
+    reports: await q<Report>("select * from college_reports_queue()"),
     schools: await q<School>("select id, name, domain, level, staff_url, status, created_at::text from schools order by (status = 'pending') desc, created_at desc limit 200"),
     members: await q<Member>("select m.school_id, m.user_id, m.role, m.status, m.title, p.email, p.full_name from college_members m left join profiles p on p.id = m.user_id order by m.created_at"),
   }));
@@ -23,6 +27,20 @@ export default async function AdminColleges({ searchParams }: { searchParams: Pr
       <h1 className="font-display text-[34px] uppercase leading-none">Colleges</h1>
       <AdminTabs on="colleges" />
       {sp.error ? <Notice tone="bad">{sp.error}</Notice> : sp.ok ? <Notice tone="good">Saved.</Notice> : null}
+      {reports.some((r) => r.status === "open") ? <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-gold">Reports</h2> : null}
+      {reports.filter((r) => r.status === "open").map((r) => (
+        <Card key={r.id} accent className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-2"><span className="font-semibold">{r.coach} · {r.school}</span><Pill tone="warn">{r.coach_status}</Pill></div>
+          <div className="text-sm text-soft">{REASONS[r.reason]} · about {r.athlete}{r.detail ? ` · "${r.detail}"` : ""}</div>
+          <ul className="flex flex-col gap-1 rounded-md border border-line p-2 text-xs">
+            {r.thread.length === 0 ? <li className="text-muted">No messages.</li> : r.thread.map((t, k) => <li key={k}><span className="text-muted">{t.from_family ? "Family" : "Coach"}:</span> {t.body}</li>)}
+          </ul>
+          <div className="flex gap-2">
+            <form action={resolveReport}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="action" value="dismiss" /><button className={`${btn} border border-line`}>Dismiss and restore coach</button></form>
+            <form action={resolveReport}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="action" value="remove" /><button className={`${btn} bg-gold text-on-gold`}>Remove coach</button></form>
+          </div>
+        </Card>
+      ))}
       <p className="text-sm text-soft">One check per school. Confirm the applicant is on the school&apos;s athletics staff page, then approve. After that the school admin approves their own staff.</p>
       {schools.length === 0 ? <Notice>No schools yet.</Notice> : schools.map((s) => (
         <Card key={s.id} className="flex flex-col gap-2">

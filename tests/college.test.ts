@@ -217,6 +217,74 @@ describe("express interest", () => {
   });
 });
 
+describe("messaging", () => {
+  const msg = (who: string, a: string, b: string) => call(who, "select send_college_message($1,$2)", [a, b]);
+  it("only after the family accepts, and only for a coach with contact access", async () => {
+    const fresh = await athlete("Msgless", yr + 1, [], "open");
+    await expect(msg(ADMIN, fresh, "Hello")).rejects.toThrow(/once they accept/);
+    await expect(msg(COACH2, open, "Hello")).rejects.toThrow(/contact access/);
+    await msg(ADMIN, open, "Hi, we like your film. Are you visiting campus this spring?");
+    expect((await call(ADMIN, "select * from college_thread($1)", [open])).length).toBe(1);
+  });
+  it("blocks links, contact details and business offers", async () => {
+    for (const bad of ["see hudl.com/me", "go to https://x.y", "email me at a@b.co", "my number is 916 555 1234", "add me on snapchat", "text me", "follow @coachjoe", "we can set up an NIL deal", "I'm an agent"]) {
+      await expect(msg(ADMIN, open, bad), bad).rejects.toThrow();
+    }
+    expect((await call(ADMIN, "select * from college_thread($1)", [open])).length).toBe(1);
+    const ok = await msg(ADMIN, open, "Great speed. We run a 4-2-5 and love long DBs.");
+    expect(ok).toHaveLength(1);
+  });
+  it("a coach can't send more than three in a row without a reply", async () => {
+    await msg(ADMIN, open, "One more thing about academics.");
+    await expect(msg(ADMIN, open, "Another")).rejects.toThrow(/Wait for the family/);
+    const iid = (await call<{ id: string }>(PARENT, "select id from family_interests($1) where status = 'accepted'", [open]))[0].id;
+    await call(PARENT, "select family_reply($1,'Thanks coach, we will visit in April. Call me at 916 555 0000')", [iid]);
+    await msg(ADMIN, open, "Sounds great.");
+    const fam = await call<{ body: string }>(PARENT, "select * from family_thread($1)", [iid]);
+    expect(fam.length).toBe(5);
+    await expect(call(OWNER, "select * from family_thread($1)", [iid])).resolves.toHaveLength(0);
+    await expect(call(ADMIN, "select * from family_thread($1)", [iid])).resolves.toHaveLength(0);
+    await expect(call(OWNER, "select family_reply($1,'x')", [iid])).rejects.toThrow(/parent or guardian/);
+  });
+  it("is limited to 30 a day", async () => {
+    const a2 = await athlete("Many", yr + 1, [], "open");
+    await call(ADMIN, "select express_interest($1)", [a2]).catch(() => undefined); // may hit the interest cap in this suite
+    const iid = (await db.query<{ id: string }>("select id from college_interest where user_id = $1 and athlete_id = $2", [ADMIN, open])).rows[0].id;
+    await db.query("insert into college_messages (interest_id, from_family, sender, body) select $1, false, $2, 'x' from generate_series(1, 30)", [iid, ADMIN]);
+    await db.query("insert into college_messages (interest_id, from_family, sender, body) values ($1, true, $2, 'reply')", [iid, PARENT]);
+    await expect(msg(ADMIN, open, "One too many")).rejects.toThrow(/today's message limit/);
+  });
+  it("ending a conversation shuts the coach out; the log stays with the family", async () => {
+    const iid = (await call<{ id: string }>(PARENT, "select id from family_interests($1) where status = 'accepted'", [open]))[0].id;
+    await call(PARENT, "select close_interest($1,false)", [iid]);
+    await expect(msg(ADMIN, open, "Hello?")).rejects.toThrow(/once they accept/);
+    expect(await call(ADMIN, "select * from college_thread($1)", [open])).toHaveLength(0);
+    expect((await call(PARENT, "select * from family_thread($1)", [iid])).length).toBeGreaterThan(5);
+    await expect(call(PARENT, "select family_reply($1,'x')", [iid])).rejects.toThrow(/closed/);
+  });
+  it("a report freezes the coach, blocks the school, and ProLyt can dismiss or remove", async () => {
+    const o5 = await athlete("Reportee", yr + 1, [], "open");
+    await db.query("delete from college_interest where user_id = $1 and created_at >= date_trunc('day', now()) and athlete_id <> $2", [ADMIN, open]); // reset daily interest count
+    await call(ADMIN, "select express_interest($1)", [o5]);
+    const iid = (await call<{ id: string }>(PARENT, "select id from family_interests($1)", [o5]))[0].id;
+    await call(PARENT, "select decide_interest($1,true,false)", [iid]);
+    await db.query("delete from college_messages where sender = $1", [ADMIN]); // reset the daily count
+    await msg(ADMIN, o5, "Hi there");
+    await expect(call(OWNER, "select report_college_coach($1,'other',null)", [iid])).rejects.toThrow(/parent or guardian/);
+    await call(PARENT, "select report_college_coach($1,'pressure','Kept asking for a commitment')", [iid]);
+    expect((await db.query<{ status: string }>("select status from college_members where user_id = $1", [ADMIN])).rows[0].status).toBe("frozen");
+    expect(await call(ADMIN, "select college_can_see($1) s", [o5])).toEqual([{ s: false }]); // frozen and blocked
+    await expect(call(ADMIN, "select * from college_reports_queue()")).resolves.toHaveLength(0);
+    const q = await call<{ id: string; thread: unknown[]; coach_status: string }>(PROLYT, "select * from college_reports_queue()");
+    expect(q).toHaveLength(1);
+    expect(q[0].thread).toHaveLength(1);
+    await call(PROLYT, "select resolve_college_report($1,'dismiss')", [q[0].id]);
+    expect((await db.query<{ status: string }>("select status from college_members where user_id = $1", [ADMIN])).rows[0].status).toBe("active");
+    await expect(call(PROLYT, "select resolve_college_report($1,'dismiss')", [q[0].id])).rejects.toThrow(/already handled/);
+    await expect(call(PARENT, "select * from college_reports_queue()")).resolves.toHaveLength(0);
+  });
+});
+
 describe("limits and freezing", () => {
   it("stops a coach after 200 different athletes in a day; a second capped day in a week freezes the account", async () => {
     for (let i = 0; i < 200; i++) {

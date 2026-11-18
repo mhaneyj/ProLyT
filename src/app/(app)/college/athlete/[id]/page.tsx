@@ -5,7 +5,7 @@ import { asUser } from "@/lib/db";
 import { computeRating } from "@/lib/domain/rating";
 import { METRICS } from "@/lib/domain/metrics";
 import { Card, Notice, Pill } from "@/components/ui";
-import { removeWatch, saveNote, sendInterest, withdrawInterest } from "../../actions";
+import { removeWatch, saveNote, sendInterest, sendMessage, withdrawInterest } from "../../actions";
 
 export const metadata = { title: "Athlete · College Coach Pass" };
 
@@ -27,6 +27,7 @@ export default async function CollegeAthlete({ params, searchParams }: { params:
   const p = row?.p;
   const [ir] = p && !p.limited ? await asUser(me.id, (q) => q<{ s: string }>("select my_interest($1) s", [id])) : [];
   const interest = ir?.s ?? "none";
+  const thread = interest === "accepted" ? await asUser(me.id, (q) => q<{ id: string; from_family: boolean; body: string; created_at: string }>("select id, from_family, body, created_at::text from college_thread($1)", [id])) : [];
   if (!p) notFound();
   if (p.limited) return <Notice>You&apos;ve reached today&apos;s viewing limit. It resets tomorrow.</Notice>;
 
@@ -39,7 +40,7 @@ export default async function CollegeAthlete({ params, searchParams }: { params:
   return (
     <>
       <Link href="/college" className="min-h-11 py-3 text-sm text-soft">← Search</Link>
-      {sp.error ? <Notice tone="bad">{sp.error}</Notice> : sp.ok ? <Notice tone="good">{sp.ok === "removed" ? "Removed." : sp.ok === "interest" ? "Sent. The family decides whether to accept." : sp.ok === "withdrawn" ? "Withdrawn." : "Saved."}</Notice> : null}
+      {sp.error ? <Notice tone="bad">{sp.error}</Notice> : sp.ok ? <Notice tone="good">{sp.ok === "removed" ? "Removed." : sp.ok === "interest" ? "Sent. The family decides whether to accept." : sp.ok === "sent" ? "Message sent." : sp.ok === "withdrawn" ? "Withdrawn." : "Saved."}</Notice> : null}
       <div className="flex gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {p.has_photo ? <img src={`/api/college/photo/${p.athlete_id}`} alt="" className="size-24 flex-none rounded-[14px] object-cover" /> : null}
@@ -90,13 +91,31 @@ export default async function CollegeAthlete({ params, searchParams }: { params:
             ) : <p className="mt-1 text-sm text-muted">Your school admin hasn&apos;t given you contact access.</p>
           ) : (
             <div className="mt-2 flex flex-col gap-2">
-              <p className="text-sm text-soft">{interest === "pending" ? "Interest sent. Waiting on the family. Requests expire after 30 days." : interest === "accepted" ? "The family accepted. Messaging opens in the next update." : interest === "withdrawn" ? "You withdrew your interest." : "Not accepted. You can't contact this family."}</p>
+              <p className="text-sm text-soft">{interest === "pending" ? "Interest sent. Waiting on the family. Requests expire after 30 days." : interest === "accepted" ? "The family accepted. You can message the parent account below." : interest === "withdrawn" ? "You withdrew your interest." : "Not accepted. You can't contact this family."}</p>
               {interest === "pending" || interest === "accepted" ? <form action={withdrawInterest}><input type="hidden" name="id" value={p.athlete_id} /><button className="min-h-11 text-sm text-soft underline">Withdraw interest</button></form> : null}
             </div>
           )}
         </Card>
       ) : null}
-      <Notice>Messaging opens once families can accept contact. Please don&apos;t reach out outside ProLyt. Your view of this profile is shown to the family.</Notice>
+      {interest === "accepted" ? (
+        <Card id="thread">
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-gold">Messages</h2>
+          <ul className="mt-2 flex flex-col gap-2">
+            {thread.length === 0 ? <li className="text-sm text-muted">No messages yet. Introduce yourself and say what you saw.</li> : thread.map((m) => (
+              <li key={m.id} className={`max-w-[88%] whitespace-pre-wrap break-words rounded-[14px] p-3 text-sm ${m.from_family ? "self-start border border-line bg-panel" : "self-end bg-gold text-on-gold"}`}>
+                {m.body}<div className={`mt-1 text-xs ${m.from_family ? "text-muted" : "opacity-70"}`}>{m.from_family ? "Family" : "You"} · {m.created_at.slice(0, 16).replace("T", " ")}</div>
+              </li>
+            ))}
+          </ul>
+          <form action={sendMessage} className="mt-3 flex flex-col gap-2">
+            <input type="hidden" name="id" value={p.athlete_id} />
+            <textarea name="body" required maxLength={1000} rows={3} aria-label="Message" placeholder="Write to the parent" className="w-full rounded-md border border-line bg-panel p-3 text-[16px]" />
+            <button className="min-h-12 rounded-md bg-gold font-bold text-on-gold">Send</button>
+            <p className="text-xs text-muted">No links, phone numbers, emails, social handles, NIL or agent talk. Messages are kept and the family can report you. Up to three in a row until they reply.</p>
+          </form>
+        </Card>
+      ) : null}
+      <Notice>Contact goes to the parent account, and only after the family accepts. Please don&apos;t reach out outside ProLyt. Your view of this profile is shown to the family.</Notice>
     </>
   );
 }

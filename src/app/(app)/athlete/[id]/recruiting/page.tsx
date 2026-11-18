@@ -22,6 +22,9 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   viewed: (d) => `${d.name ?? "A coach"}${d.title ? `, ${d.title}` : ""}, at ${d.school} viewed this profile`,
   interest: (d) => `${d.name ?? "A coach"}${d.title ? `, ${d.title}` : ""}, at ${d.school} said they're interested`,
   interest_decided: (d) => d.accepted ? `You accepted ${d.school}` : d.blocked ? `You declined ${d.school} and blocked the school` : `You declined ${d.school}`,
+  message: (d) => `${d.name ?? "A coach"}${d.title ? `, ${d.title}` : ""}, at ${d.school} sent a message`,
+  interest_closed: (d) => d.blocked ? `You ended the conversation with ${d.school} and blocked the school` : `You ended the conversation with ${d.school}`,
+  reported: (d) => `You reported a coach at ${d.school}. Their account was frozen and ProLyt will review it`,
   interest_withdrawn: (d) => `${d.school} withdrew their interest`,
   program_toggled: (d) => `The program turned College Coach Pass ${d.on ? "on" : "off"}`,
 };
@@ -78,6 +81,18 @@ export default async function Recruiting({ params, searchParams }: { params: Pro
               </div>
               {r.state !== "open" ? <p className="text-xs text-muted">Set {a.first_name} to Open to outreach below to accept.</p> : <p className="text-xs text-muted">Blocking hides {a.first_name} from this school completely. They aren&apos;t told why.</p>}
             </Card>
+          ))}
+        </section>
+      ) : null}
+
+      {r.guardian && d.asks.some((x) => x.status === "accepted") ? (
+        <section className="flex flex-col gap-2" aria-label="Conversations">
+          <h2 className="font-cond text-[15px] font-extrabold uppercase tracking-[2px] text-gold">Conversations</h2>
+          {d.asks.filter((x) => x.status === "accepted").map((x) => (
+            <Link key={x.id} href={`/athlete/${a.id}/recruiting/${x.id}`} className="block rounded-[14px] border border-line bg-panel p-3 hover:border-gold">
+              <span className="font-semibold">{x.school}</span> <span className="text-sm text-muted">· {x.name ?? "Coach"}{x.title ? `, ${x.title}` : ""}</span>
+              <span className="block text-sm text-gold">Open conversation →</span>
+            </Link>
           ))}
         </section>
       ) : null}
