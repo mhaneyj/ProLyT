@@ -19,6 +19,7 @@ const FIELD_LABELS: [string, string][] = [
 const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   state_changed: (d) => `Setting changed from ${d.from} to ${d.to}`,
   fields_changed: (d) => `Shared details changed: ${(d.fields as string[]).length ? (d.fields as string[]).join(", ") : "none"}`,
+  viewed: (d) => `${d.name ?? "A coach"}${d.title ? `, ${d.title}` : ""}, at ${d.school} viewed this profile`,
   program_toggled: (d) => `The program turned College Coach Pass ${d.on ? "on" : "off"}`,
 };
 

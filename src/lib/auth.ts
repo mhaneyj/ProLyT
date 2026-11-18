@@ -29,6 +29,7 @@ export type Me = {
   perms: Perm[];                 // what this person may do in that program
   orgPaused: boolean;
   features: Features;
+  college: { schoolId: string; school: string; schoolStatus: string; role: "admin" | "coach" | "delegate"; status: string; title: string; canContact: boolean } | null;
 };
 
 const ALL_ON: Features = { booking: true, film_uploads: true, voice: true, recruiting: true, payments: true, messaging: true, age_checks: true, coach_pages: true };
@@ -72,6 +73,7 @@ export const getMe = cache(async (): Promise<Me | null> => {
     const programs = [...new Map(rows.map((r) => [r.org_id, { id: r.org_id, name: r.name, slug: r.slug }])).values()];
     // On a program's own web address, that program is the context, even before joining it
     // (no roles yet → sent to its registration page). On the bare ProLyt domain, use their first program.
+    const [col] = await q<{ school_id: string; school: string; school_status: string; role: "admin" | "coach" | "delegate"; status: string; title: string; can_contact: boolean }>("select * from college_me()");
     const org = hostBrand
       ? { id: hostBrand.id, name: hostBrand.name, slug: hostBrand.slug }
       : programs[0] ?? null;
@@ -90,6 +92,7 @@ export const getMe = cache(async (): Promise<Me | null> => {
       roles: info.paused ? [] : [...new Set(rows.filter((r) => r.org_id === org?.id).map((r) => r.role))],
       isPlatformAdmin: Boolean(adm?.ok),
       programs,
+      college: col ? { schoolId: col.school_id, school: col.school, schoolStatus: col.school_status, role: col.role, status: col.status, title: col.title, canContact: col.can_contact } : null,
     };
   });
 });
@@ -133,6 +136,14 @@ export function homeFor(me: Me) {
   if (me.roles.includes("coach")) return "/coach";
   if (me.roles.includes("guardian") || me.isParent) return "/family";
   if (me.athleteId) return `/athlete/${me.athleteId}`;
+  if (me.college) return "/college";
   if (me.isPlatformAdmin) return "/admin";
   return "/start";
+}
+
+/** An approved college coach or staff member (the school is verified and they are active). */
+export async function requireCollege(): Promise<Me & { college: NonNullable<Me["college"]> }> {
+  const me = await requireMe();
+  if (!me.college || me.college.status !== "active" || me.college.schoolStatus !== "verified") redirect("/college");
+  return me as Me & { college: NonNullable<Me["college"]> };
 }

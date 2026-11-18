@@ -47,6 +47,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     items.push(feed);
     if (msgs) items.push(msgs);
   }
+  if (!items.length && me.college) {
+    items.push({ href: "/college", label: "Search", icon: "profile", match: "/college" });
+    if (me.college.status === "active") {
+      items.push({ href: "/college/watchlist", label: "Watchlist", icon: "feed" });
+      if (me.college.role === "admin") items.push({ href: "/college/team", label: "Team", icon: "dashboard" });
+    }
+  }
   if (!items.length) {
     // Members without a program role yet (a scout, a new adult athlete): the network.
     items.push(feed, { href: "/discover", label: "Find", icon: "profile" });
