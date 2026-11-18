@@ -154,24 +154,6 @@ begin
   insert into audit_log (actor, action, target, detail) values (auth.uid(), 'decide_college_member', p_user::text, jsonb_build_object('action', p_action, 'can_contact', p_can_contact));
 end $$;
 
--- A family can block a school: that school can no longer find or see the athlete, and isn't told why.
-create table if not exists recruiting_blocks (
-  athlete_id uuid not null references athletes (id) on delete cascade,
-  school_id uuid not null references schools (id) on delete cascade,
-  by_user uuid references auth.users (id),
-  created_at timestamptz not null default now(),
-  primary key (athlete_id, school_id)
-);
-alter table recruiting_blocks enable row level security;
-
--- What the signed-in college account may see of an athlete: the family's setting, or hidden if the family blocked that school.
-create or replace function college_vis(p_athlete uuid) returns text language sql stable security definer set search_path = public as $$
-  select case when exists (select 1 from recruiting_blocks b join college_members m on m.school_id = b.school_id where b.athlete_id = p_athlete and m.user_id = auth.uid())
-              then 'hidden' else recruiting_effective(p_athlete) end
-$$;
-revoke all on function college_vis(uuid) from public, anon;
-grant execute on function college_vis(uuid) to authenticated;
-
 -- ───────────── What a college may see ─────────────
 -- Best verified results (not self-reported), for the metrics a coach cares about.
 create or replace function college_best(p_athlete uuid) returns jsonb language sql stable security definer set search_path = public as $$
@@ -193,7 +175,7 @@ language sql stable security definer set search_path = public as $$
          case when 'results' = any (a.recruiting_fields) then college_best(a.id) end
     from athletes a
    where is_college_active()
-     and college_vis(a.id) in ('visible', 'open')
+     and recruiting_effective(a.id) in ('visible', 'open')
      and (p_pos is null or a.position ilike p_pos)
      and (p_grad is null or a.grad_year = p_grad)
      and (p_place is null or ('hometown' = any (a.recruiting_fields) and a.hometown ilike '%' || p_place || '%')
@@ -213,7 +195,7 @@ begin
   if not is_college_active() then return null; end if;
   select * into m from college_members where user_id = uid;
   select * into s from schools where id = m.school_id;
-  v_state := college_vis(p_athlete);
+  v_state := recruiting_effective(p_athlete);
   if v_state not in ('visible', 'open') then return null; end if;
   select * into a from athletes where id = p_athlete;
 
@@ -252,18 +234,18 @@ end $$;
 create or replace function set_watch(p_athlete uuid, p_note text) returns void language plpgsql security definer set search_path = public as $$
 begin
   if not is_college_active() then raise exception 'College accounts only'; end if;
-  if college_vis(p_athlete) not in ('visible', 'open') then raise exception 'This athlete isn''t available'; end if;
+  if recruiting_effective(p_athlete) not in ('visible', 'open') then raise exception 'This athlete isn''t available'; end if;
   insert into college_watch (user_id, athlete_id, note) values (auth.uid(), p_athlete, coalesce(left(p_note, 2000), ''))
   on conflict (user_id, athlete_id) do update set note = excluded.note, updated_at = now();
 end $$;
 
 create or replace function college_watchlist() returns table (athlete_id uuid, available boolean, first_name text, last_name text, pos text, grad_year int, note text, updated_at timestamptz)
 language sql stable security definer set search_path = public as $$
-  select w.athlete_id, college_vis(w.athlete_id) in ('visible', 'open'),
-         case when college_vis(w.athlete_id) in ('visible', 'open') then a.first_name end,
-         case when college_vis(w.athlete_id) in ('visible', 'open') then a.last_name end,
-         case when college_vis(w.athlete_id) in ('visible', 'open') then a.position end,
-         case when college_vis(w.athlete_id) in ('visible', 'open') then a.grad_year end,
+  select w.athlete_id, recruiting_effective(w.athlete_id) in ('visible', 'open'),
+         case when recruiting_effective(w.athlete_id) in ('visible', 'open') then a.first_name end,
+         case when recruiting_effective(w.athlete_id) in ('visible', 'open') then a.last_name end,
+         case when recruiting_effective(w.athlete_id) in ('visible', 'open') then a.position end,
+         case when recruiting_effective(w.athlete_id) in ('visible', 'open') then a.grad_year end,
          w.note, w.updated_at
     from college_watch w join athletes a on a.id = w.athlete_id
    where w.user_id = auth.uid() and is_college_active()
@@ -295,7 +277,7 @@ grant execute on function apply_college(text, text, text, text, text, boolean, b
 
 -- For the photo route: may this college account see this athlete right now? (No view is logged here.)
 create or replace function college_can_see(p_athlete uuid) returns boolean language sql stable security definer set search_path = public as $$
-  select is_college_active() and college_vis(p_athlete) in ('visible', 'open')
+  select is_college_active() and recruiting_effective(p_athlete) in ('visible', 'open')
 $$;
 grant execute on function college_can_see(uuid) to authenticated;
 

@@ -44,9 +44,14 @@ async function pool(): Promise<Pool> {
     const url = (process.env.DATABASE_URL ?? "").replace(/sslmode=(require|prefer|verify-ca)\b/, "sslmode=verify-full");
     g.__gfPool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 5 * 60_000 }) // keep connections warm between page views;
   }
-  gs.__gfSchema ??= ensureSchema(g.__gfPool).catch((e) => {
-    gs.__gfSchema = undefined; // try again on the next request
-    throw e;
+  const p = g.__gfPool;
+  gs.__gfSchema ??= ensureSchema(p).catch(async (e) => {
+    // A brand-new database with no schema can't serve anything: fail and retry on the next request.
+    const ready = await p.query("select to_regclass('public.orgs') is not null as ready").then((r) => Boolean(r.rows[0]?.ready)).catch(() => false);
+    if (!ready) { gs.__gfSchema = undefined; throw e; }
+    // An existing database stays up on its current schema (the failed update rolled back); pages that need the update will error alone.
+    console.error("[db] MIGRATION FAILED, serving on the current schema. Fix and redeploy:", e instanceof Error ? e.message : e);
+    setTimeout(() => { gs.__gfSchema = undefined; }, 5 * 60_000).unref?.();
   });
   await gs.__gfSchema;
   return g.__gfPool;
