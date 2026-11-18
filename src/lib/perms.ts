@@ -9,6 +9,7 @@ export const PERMS = [
   ["staff.manage", "Invite and manage coaches"],
   ["billing.manage", "Packages and payments"],
   ["brand.manage", "Program name, logo and colors"],
+  ["pay.manage", "Paymaster: set how coaches are paid"],
 ] as const;
 export type Perm = (typeof PERMS)[number][0];
 export const FEATURES = [

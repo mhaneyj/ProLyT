@@ -294,6 +294,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       {can(me, "billing.manage") ? <Card id="coach-pay">
         <SectionLabel>Coach pay</SectionLabel>
+        {can(me, "pay.manage") ? <Link href="/owner/pay" className="flex min-h-11 items-center font-semibold text-gold">Paymaster: set how each coach is paid →</Link> : null}
         <p className="mb-3 mt-1 text-xs text-muted">Credited automatically when a coach checks a session in.</p>
         <CoachPayForm shareBps={d.org.share} groupCents={d.org.grp} />
       </Card> : null}

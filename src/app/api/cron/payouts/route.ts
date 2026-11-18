@@ -20,6 +20,9 @@ export async function GET(request: NextRequest) {
     const out = [];
     const now = new Date().toISOString();
     for (const o of orgs) {
+      // Close last month's coach pool once (a no-op if it was already closed or the pool is off).
+      const prev = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+      await q("select run_coach_pool($1, $2)", [o.id, prev]);
       const [{ collected, fee }] = await q<{ collected: number; fee: number }>(
         "select coalesce(sum(amount_cents), 0)::int collected, coalesce(sum(platform_fee_cents), 0)::int fee from payments where org_id = $1 and status = 'paid' and created_at > $2 and created_at <= $3",
         [o.id, o.since, now]);
