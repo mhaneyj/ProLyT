@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireParent } from "@/lib/auth";
 import { asUser } from "@/lib/db";
+import { stripeConfigured } from "@/lib/stripe";
 import { familyKids } from "@/lib/kid";
 import { money, dayTime, ageOn } from "@/lib/domain/format";
 import { METRICS, PERFORMANCE, bestOfficial, formatValue, improvement, metricLabel, metricShort, type Source } from "@/lib/domain/metrics";
@@ -104,10 +105,12 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
     <UpNext kicker="Payment" tone="bad" title="Your last payment didn't go through" sub={`Update your card to keep ${a.first_name} training.`}>
       <form action="/api/stripe/checkout" method="post"><input type="hidden" name="athlete_id" value={a.id} /><button className={`${btn} w-full`}>Fix payment</button></form>
     </UpNext>
-  ) : a.status === "pending" && me.features.payments ? (
+  ) : a.status === "pending" && me.features.payments && stripeConfigured ? (
     <UpNext kicker="Training plan" title={`Finish signing up for ${a.plan ?? "training"}`} sub={a.price_cents ? `${money(a.price_cents)} a month.` : undefined}>
       <form action="/api/stripe/checkout" method="post"><input type="hidden" name="athlete_id" value={a.id} /><button className={`${btn} w-full`}>Finish payment</button></form>
     </UpNext>
+  ) : a.status === "pending" && a.plan ? (
+    <UpNext kicker="Training plan" title={`You picked ${a.plan}`} sub={`${a.price_cents ? `${money(a.price_cents)} a month. ` : ""}Your program will tell you how to pay. You can still book sessions.`} />
   ) : a.next_at ? (
     <UpNext kicker="Next session" title={a.next_title ?? "Training"} sub={[dayTime(a.next_at), a.next_where].filter(Boolean).join(" · ")}>
       <Link href="/schedule" className="mt-2 text-sm font-semibold text-gold">See the schedule →</Link>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { asUser } from "@/lib/db";
-import { ageOn, dayTime, time } from "@/lib/domain/format";
+import { ageOn, dayTime, money, time } from "@/lib/domain/format";
 import { METRICS, performanceFor, bestOfficial, formatValue, metricLabel, metricShort, type Source } from "@/lib/domain/metrics";
 import { Icon } from "@/components/icons";
 import { Card, SectionLabel } from "@/components/ui";
@@ -43,6 +43,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const here = roster.filter((r) => r.status === "present").length;
   const unmarked = roster.filter((r) => !r.status).length;
   const [o] = await asUser(me.id, (q) => q<{ sports: string[] }>("select sports from orgs where id = $1", [me.orgId]));
+  const [pay] = me.roles.includes("coach") ? await asUser(me.id, (q) => q<{ cents: number | null; mode: string; employee: boolean }>(
+    "select coalesce(m.session_rate_cents, o.group_session_rate_cents) cents, m.pay_mode mode, m.pay_type = 'employee' employee from org_members m join orgs o on o.id = m.org_id where m.org_id = $1 and m.user_id = $2 and m.role = 'coach'", [me.orgId, me.id])) : [];
+  const earnLine = !pay || pay.employee ? null : pay.mode === "pool" ? "Checking athletes in counts toward your share of the monthly pool." : pay.cents ? `Check in at least one athlete and ${money(pay.cents)} is credited to you for this session.` : null;
   const tests = [...new Set((o?.sports ?? ["football"]).flatMap((x) => performanceFor(x)))];
   const canRoster = me.perms.includes("roster.manage");
   const canLog = me.perms.includes("results.log");
@@ -61,6 +64,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <div className="mt-1 text-sm text-soft">{time(s.starts_at)}–{time(s.ends_at)}{s.location ? ` · ${s.location}` : ""}</div>
       </div>
 
+      {earnLine ? <p className="-mt-2 text-[13px] text-soft">{earnLine}</p> : null}
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-[10px] border border-line bg-panel p-3">
           <div className="text-[11px] uppercase tracking-[1px] text-muted">Here</div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PayoutGuide } from "@/components/payout-guide";
 import { requireRole } from "@/lib/auth";
-import { asUser } from "@/lib/db";
+import { asUser, isDemo } from "@/lib/db";
 import { stripeConfigured } from "@/lib/stripe";
 import { Card, Notice, Title } from "@/components/ui";
 
@@ -39,7 +39,7 @@ export default async function CoachStart({ searchParams }: { searchParams: Promi
               <button className="min-h-12 w-full rounded-md bg-gold font-cond text-[17px] font-extrabold uppercase tracking-[2px] text-on-gold">{m?.stripe_account_id ? "Finish payout setup" : "Set up payouts"}</button>
             </form>
             <PayoutGuide />
-            {!stripeConfigured ? <p className="mt-2 text-xs text-muted">Demo mode: Stripe isn&apos;t connected, so this button explains instead of opening Stripe.</p> : null}
+            {!stripeConfigured ? <p className="mt-2 text-xs text-muted">{isDemo ? "Demo mode: Stripe isn't connected, so this button explains instead of opening Stripe." : "Payouts aren't switched on for this program yet. Your program owner is finishing setup, and you'll be able to continue here."}</p> : null}
           </>
         ))}
       {step(3, false, "Start coaching", "Post a session, check kids in, and log results from the Today screen.")}
