@@ -9,7 +9,8 @@ export type Settlement = {
   coachTransfers: { coachId: string; destination: string; amountCents: number; earningIds: string[] }[];
   held: { coachId: string; amountCents: number; reason: string }[];
   platformFeeCents: number;
-  programCents: number;
+  programCents: number;      // this period's change to the program's balance; negative when coaches are paid from earlier weeks' money
+  programPayoutCents: number; // what to send the program now: the whole balance, never below zero
 };
 
 export function settleWeek(input: {
@@ -18,12 +19,20 @@ export function settleWeek(input: {
   feeCents?: number;         // ProLyt's fee as recorded on each payment this period
   earnings: Earning[];
   coaches: Coach[];
+  carryCents?: number;       // the program's unsent balance from earlier weeks
 }): Settlement {
   const byCoach = new Map<string, Earning[]>();
   for (const e of input.earnings) {
     if (e.status !== "pending") continue; // paid, payroll (employees) and void never move through Stripe
     byCoach.set(e.coachId, [...(byCoach.get(e.coachId) ?? []), e]);
   }
+
+  // Coaches are paid first, but only from money actually collected (this period plus what is carried over).
+  // Memberships are billed monthly while sessions run weekly, so a week can owe more than it collected;
+  // a coach whose pay doesn't fit yet waits as pending and is paid when the next payments arrive.
+  const platformFeeCents = input.feeCents ?? Math.round((input.collectedCents * input.feeBps) / 10000);
+  const carry = input.carryCents ?? 0;
+  let available = input.collectedCents - platformFeeCents + carry;
 
   const coachTransfers: Settlement["coachTransfers"] = [];
   const held: Settlement["held"] = [];
@@ -34,14 +43,16 @@ export function settleWeek(input: {
       held.push({ coachId, amountCents, reason: "Coach hasn't finished payout setup" });
       continue;
     }
-    if (amountCents > 0) coachTransfers.push({ coachId, destination: coach.stripeAccountId, amountCents, earningIds: list.map((e) => e.id) });
+    if (amountCents <= 0) continue;
+    if (amountCents > available) {
+      held.push({ coachId, amountCents, reason: "Waiting for more membership payments to come in" });
+      continue;
+    }
+    available -= amountCents;
+    coachTransfers.push({ coachId, destination: coach.stripeAccountId, amountCents, earningIds: list.map((e) => e.id) });
   }
 
-  const platformFeeCents = input.feeCents ?? Math.round((input.collectedCents * input.feeBps) / 10000);
   const coachTotal = coachTransfers.reduce((s, t) => s + t.amountCents, 0);
   const programCents = input.collectedCents - platformFeeCents - coachTotal;
-  if (programCents < 0) {
-    throw new Error("Coach pay exceeds money collected this period. Review before paying out.");
-  }
-  return { coachTransfers, held, platformFeeCents, programCents };
+  return { coachTransfers, held, platformFeeCents, programCents, programPayoutCents: Math.max(0, programCents + carry) };
 }

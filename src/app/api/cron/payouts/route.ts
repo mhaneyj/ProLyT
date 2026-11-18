@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
         "select user_id, stripe_account_id, payouts_enabled from org_members where org_id = $1 and role = 'coach'", [o.id]))
         .map((c) => ({ id: c.user_id, stripeAccountId: c.stripe_account_id, payoutsEnabled: c.payouts_enabled }));
 
-      const plan = settleWeek({ collectedCents: collected, feeBps: o.platform_fee_bps, feeCents: fee, earnings, coaches });
+      // The program's unsent balance from earlier weeks (can be negative only in old rows; never after this change).
+      const [{ owed }] = await q<{ owed: number }>(
+        "select coalesce(sum(program_cents), 0)::int owed from settlements where org_id = $1 and program_transfer_id is null", [o.id]);
+      const plan = settleWeek({ collectedCents: collected, feeBps: o.platform_fee_bps, feeCents: fee, earnings, coaches, carryCents: owed });
 
       for (const t of plan.coachTransfers) {
         const tr = await stripe().transfers.create(
@@ -39,16 +42,14 @@ export async function GET(request: NextRequest) {
         await q("update coach_earnings set status = 'paid', stripe_transfer_id = $2 where id = any($1::uuid[])", [t.earningIds, tr.id]);
       }
 
-      // The program's share, plus anything owed from weeks before payouts were set up.
+      // The program's share: its whole unsent balance, once its own payout account is ready.
       let programTransfer: string | null = null;
-      const [{ owed }] = await q<{ owed: number }>(
-        "select coalesce(sum(program_cents), 0)::int owed from settlements where org_id = $1 and program_transfer_id is null and program_cents > 0", [o.id]);
-      if (plan.programCents + owed > 0 && o.stripe_account_id && o.payouts_enabled) {
+      if (plan.programPayoutCents > 0 && o.stripe_account_id && o.payouts_enabled) {
         const tr = await stripe().transfers.create(
-          { amount: plan.programCents + owed, currency: "usd", destination: o.stripe_account_id, transfer_group: `org_${o.id}`, metadata: { org_id: o.id } },
+          { amount: plan.programPayoutCents, currency: "usd", destination: o.stripe_account_id, transfer_group: `org_${o.id}`, metadata: { org_id: o.id } },
           { idempotencyKey: `program_${o.id}_${o.since}` });
         programTransfer = tr.id;
-        if (owed) await q("update settlements set program_transfer_id = $2 where org_id = $1 and program_transfer_id is null and program_cents > 0", [o.id, tr.id]);
+        await q("update settlements set program_transfer_id = $2 where org_id = $1 and program_transfer_id is null", [o.id, tr.id]);
       }
       await q(`insert into settlements (org_id, period_start, period_end, collected_cents, platform_fee_cents, coach_cents, program_cents, program_transfer_id)
                values ($1,$2,$3,$4,$5,$6,$7,$8)`,

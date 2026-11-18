@@ -28,9 +28,24 @@ describe("weekly settlement", () => {
     expect(s.platformFeeCents).toBe(5000);
     expect(s.programCents).toBe(100000 - 5000 - 21000);
   });
-  it("refuses to pay out more than was collected", () => {
-    expect(() => settleWeek({ collectedCents: 1000, feeBps: 0, coaches,
-      earnings: [{ id: "1", coachId: "lem", amountCents: 7000, status: "pending" }] })).toThrow(/exceeds/);
+  it("holds a coach whose pay is more than has come in, instead of failing the run", () => {
+    const s = settleWeek({ collectedCents: 1000, feeBps: 0, coaches,
+      earnings: [{ id: "1", coachId: "lem", amountCents: 7000, status: "pending" }] });
+    expect(s.coachTransfers).toEqual([]);
+    expect(s.held).toEqual([{ coachId: "lem", amountCents: 7000, reason: "Waiting for more membership payments to come in" }]);
+    expect(s.programCents).toBe(1000);
+  });
+  it("pays a coach from money carried over from earlier weeks", () => {
+    const s = settleWeek({ collectedCents: 0, feeBps: 0, carryCents: 30000, coaches,
+      earnings: [{ id: "1", coachId: "lem", amountCents: 14000, status: "pending" }] });
+    expect(s.coachTransfers).toHaveLength(1);
+    expect(s.programCents).toBe(-14000);
+    expect(s.programPayoutCents).toBe(16000);
+  });
+  it("never sends the program a negative amount", () => {
+    const s = settleWeek({ collectedCents: 0, feeBps: 0, carryCents: 14000, coaches,
+      earnings: [{ id: "1", coachId: "lem", amountCents: 14000, status: "pending" }] });
+    expect(s.programPayoutCents).toBe(0);
   });
 });
 
