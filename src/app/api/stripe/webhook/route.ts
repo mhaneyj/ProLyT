@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
           await q("select complete_session_payment($1, $2)", [s.metadata.session_payment_id, s.id]);
           break;
         }
+        if (s.metadata?.event_card_order_id && s.payment_status === "paid") {
+          await q("select complete_event_card_order($1, $2, $3)", [s.metadata.event_card_order_id, s.id, s.metadata.organizer_transfer === "yes"]);
+          break;
+        }
         if (s.metadata?.pack_purchase_id && s.payment_status === "paid") {
           await q("select complete_pack_purchase($1, $2)", [s.metadata.pack_purchase_id, s.id]);
           break;

@@ -13,6 +13,7 @@ import { Bracket, Chips, StandingsTable, type Standing } from "@/components/even
 import { GameLine } from "@/components/game-line";
 import { CopyLink } from "@/components/copy-link";
 import { EnablePush } from "@/components/enable-push";
+import { EventCardOffer, type CardKid } from "@/components/event-card-offer";
 
 type Ev = { id: string; name: string; kind: string; starts_on: string; ends_on: string | null; location: string | null; details: string | null; status: string; closes: string | null; host: string; open: boolean; age_check: boolean };
 
@@ -46,15 +47,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 // The event's public page: what coaches and families see from the link the host shares.
-export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ r?: string; d?: string; team?: string }> }) {
-  const [{ id }, { r, d: divPick, team: teamPick }] = await Promise.all([params, searchParams]);
+export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ r?: string; d?: string; team?: string; card?: string; card_error?: string }> }) {
+  const [{ id }, { r, d: divPick, team: teamPick, card, card_error }] = await Promise.all([params, searchParams]);
   const d = await load(id);
   if (!d) notFound();
   const { e, divisions, games, standings, champs, teams } = d;
   // Signed in: the teams you follow and your athletes' teams are "yours" (highlighted, one tap to filter).
   const me = await getMe();
   const mine = new Set<string>(), following = new Set<string>();
+  let cardKids: CardKid[] = [];
   if (me) await asUser(me.id, async (q) => {
+    cardKids = await q<CardKid>(`select a.id, a.first_name, a.position, exists (select 1 from athlete_ai_photos p where p.athlete_id = a.id and p.status = 'approved') has_ai,
+        (select c.status from my_event_cards($1) c where c.athlete_id = a.id) status
+      from event_roster r join athletes a on a.id = r.athlete_id where r.event_id = $1 and is_guardian(a.id) order by a.first_name`, [id]);
     for (const t of await q<{ team_id: string }>("select team_id from team_follows where user_id = $1", [me.id])) { mine.add(t.team_id); following.add(t.team_id); }
     for (const t of await q<{ team_id: string }>("select r.team_id from event_roster r where r.event_id = $1 and (is_guardian(r.athlete_id) or is_self(r.athlete_id))", [id])) mine.add(t.team_id);
   });
@@ -77,6 +82,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {e.location ? <div className="text-sm text-soft">{e.location}</div> : null}
       </div>
       {e.status === "live" ? <AutoRefresh seconds={20} /> : null}
+      <EventCardOffer eventId={e.id} kids={cardKids} open={["open", "closed", "live"].includes(e.status) && (e.ends_on ?? e.starts_on) >= new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} notice={{ good: card ? "You're set. Your card prints at the event." : undefined, bad: card_error }} />
       {d.series && e.status !== "done" ? (
         <div className="flex items-center gap-4 rounded-[14px] border border-line bg-panel p-3.5">
           <div className="w-[84px] flex-none">

@@ -19,7 +19,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const tier = TIERS.find((t) => t === url.searchParams.get("tier")) ?? "player";
   const me = await getMe();
   if (!me || !isId(id)) return new Response("Not found", { status: 404 });
-  const adminFull = me.isPlatformAdmin && url.searchParams.get("full") === "1";
+  const eventId = isId(url.searchParams.get("event") ?? "") ? url.searchParams.get("event")! : null;
+  const wantsFull = url.searchParams.get("full") === "1";
+  // Full print file: ProLyt staff, or the event's staff for an athlete with a paid card order at that event.
+  const adminFull = wantsFull && (me.isPlatformAdmin || Boolean(eventId && (await asUser(me.id, (q) => q<{ ok: boolean }>("select can_print_event_card($1, $2) ok", [eventId, id])))[0]?.ok));
   // Staff fulfilling an order render the card as the athlete's own family would see it.
   const viewer = adminFull ? ((await asService((q) => q<{ user_id: string }>("select user_id from guardians where athlete_id = $1 order by is_primary desc limit 1", [id])))[0]?.user_id ?? null) : me.id;
   if (!viewer) return new Response("Not found", { status: 404 });
@@ -29,11 +32,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!a || !v) return new Response("Not found", { status: 404 });
 
   const earned = v.cards.find((c) => c.tier === tier) ?? null;
+  // An event card: the "attendee" edition for that event, available as soon as the athlete is on its roster.
+  const ev = eventId ? (await asService((q) => q<{ name: string; starts_on: string }>(
+    "select e.name, e.starts_on::text from events e join event_roster r on r.event_id = e.id where e.id = $1 and r.athlete_id = $2", [eventId, id])))[0] : null;
   const attrs = cardAttrs(v);
   const input: PrintInput = {
     tier, first: a.first_name, last: a.last_name, position: a.position, sport: a.sport ?? "football", ovr: v.rating.ovr,
     marks: v.marks, band: v.band, cardNo: v.cardNo, org: v.ranks[0]?.org_name ?? null, highlight: v.highlight,
-    event: earned ? { name: earned.event_name, date: cardDate(earned.starts_on) } : null,
+    event: ev ? { name: ev.name, date: cardDate(ev.starts_on) } : earned ? { name: earned.event_name, date: cardDate(earned.starts_on) } : null,
     attrs, career: v.career,
   };
   const pic = side === "front" ? ((await approvedAiPhoto(id)) ?? (await readAthletePhoto(id))) : null;

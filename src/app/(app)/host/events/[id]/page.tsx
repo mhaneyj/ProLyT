@@ -124,6 +124,10 @@ export default async function HostEvent({ params, searchParams }: { params: Prom
         ))}
       </section>
 
+      <Link href={`/host/events/${e.id}/print`} className="flex min-h-14 items-center justify-between rounded-xl border border-gold/60 bg-gold/5 px-3">
+        <span><span className="block font-semibold">Card station</span><span className="block text-[12px] text-muted">Print the collector cards families added, hand them over at check-in. The event earns $5 a card.</span></span>
+        <span aria-hidden className="text-gold">›</span>
+      </Link>
       <Link href={`/host/events/${e.id}/cards`} className="flex min-h-14 items-center justify-between rounded-xl border border-gold/60 bg-gold/5 px-3">
         <span><span className="block font-semibold">Event cards</span><span className="block text-[12px] text-muted">A collectible card for every player who checks in. Gold for champions, holo for your MVP.</span></span>
         <span aria-hidden="true" className="text-gold">→</span>
