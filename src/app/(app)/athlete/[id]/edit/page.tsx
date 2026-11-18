@@ -19,7 +19,7 @@ export default async function EditProfile({ params }: { params: Promise<{ id: st
   return (
     <>
       {switcher}
-      <Link href={`/athlete/${id}`} className="text-sm font-semibold">← Profile</Link>
+      <Link href={`/athlete/${id}`} className="inline-flex min-h-11 items-center text-sm font-semibold">← Profile</Link>
       <h1 className="font-display text-[34px] uppercase leading-none">Edit {a.self ? "your" : `${a.first_name}'s`} profile</h1>
       <ProfileForm v={{
         athlete: id, position: a.position ?? "", grad_year: a.grad_year ? String(a.grad_year) : "", sport: a.sport, hometown: a.hometown ?? "",

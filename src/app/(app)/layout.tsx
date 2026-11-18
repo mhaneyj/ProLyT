@@ -66,7 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={brand ? (themeVars(brand.brand_color) as React.CSSProperties) : undefined} className="min-h-dvh">
       <div className="mx-auto flex min-h-dvh max-w-md flex-col">
         <header className="flex items-center justify-between gap-3 px-5 pt-4">
-          <Link href="/home" className="flex min-w-0 items-center gap-2.5">
+          <Link href="/home" className="flex min-h-11 min-w-0 items-center gap-2.5">
             {brand ? (
               <>
                 <ProgramLogo brand={brand} size={36} />

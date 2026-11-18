@@ -82,7 +82,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
 
   return (
     <div style={accent} className="flex flex-col gap-4">
-      {switcher ?? (isStaff && !a.family ? <Link href="/coach" className="text-sm font-semibold">← Today</Link> : null)}
+      {switcher ?? (isStaff && !a.family ? <Link href="/coach" className="inline-flex min-h-11 items-center text-sm font-semibold">← Today</Link> : null)}
 
       {sp.saved ? <Notice tone="good">Profile saved.</Notice> : null}
       {sp.linked ? <Notice tone="good">{a.self ? "Your login is connected. This profile is yours." : `You're now ${a.first_name}'s parent on ProLyt.`}</Notice> : null}
@@ -116,7 +116,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
         </div>
       </div>
 
-      {a.bio ? <p className="text-[15px] leading-relaxed text-soft">{a.bio}</p> : a.family ? <Link href={`/athlete/${a.id}/edit`} className="text-sm font-semibold text-gold">+ Add a bio, height, weight and a highlight link</Link> : null}
+      {a.bio ? <p className="text-[15px] leading-relaxed text-soft">{a.bio}</p> : a.family ? <Link href={`/athlete/${a.id}/edit`} className="inline-flex min-h-11 items-center text-sm font-semibold text-gold">+ Add a bio, height, weight and a highlight link</Link> : null}
 
       {a.highlight_url ? <Player id="" storagePath={a.highlight_url} title={`${a.first_name}'s highlight reel`} /> : null}
 
@@ -156,7 +156,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <SectionLabel right={a.family ? <Link href={`/athlete/${a.id}/edit#featured`} className="text-sm font-semibold">Pick featured</Link> : null}>Stats</SectionLabel>
+        <SectionLabel right={a.family ? <Link href={`/athlete/${a.id}/edit#featured`} className="inline-flex min-h-11 items-center text-sm font-semibold">Pick featured</Link> : null}>Stats</SectionLabel>
         {sp.stat === "added" ? <Notice tone="good">Stat added. It shows as self-reported until a coach records it.</Notice> : null}
         {sp.stat_error ? <Notice tone="bad">{sp.stat_error}</Notice> : null}
         <StatShowcase rows={d.results} picks={a.featured_metrics} ranks={d.ranks}
@@ -188,7 +188,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
 
       {d.highlights.length ? (
         <section className="flex flex-col gap-2">
-          <SectionLabel right={<Link href={`/athlete/${a.id}/film`} className="text-sm font-semibold">All film</Link>}>Highlights</SectionLabel>
+          <SectionLabel right={<Link href={`/athlete/${a.id}/film`} className="inline-flex min-h-11 items-center text-sm font-semibold">All film</Link>}>Highlights</SectionLabel>
           {d.highlights.map((f) => (
             <div key={f.id} className="flex flex-col gap-1.5">
               <Player id={f.id} storagePath={f.storage_path} title={f.title} />
@@ -273,7 +273,7 @@ export default async function AthleteProfile({ params, searchParams }: { params:
 
       {d.note ? (
         <section className="flex flex-col gap-2">
-          <SectionLabel right={<Link href={`/athlete/${a.id}/progress`} className="text-sm font-semibold">All notes</Link>}>From the coach</SectionLabel>
+          <SectionLabel right={<Link href={`/athlete/${a.id}/progress`} className="inline-flex min-h-11 items-center text-sm font-semibold">All notes</Link>}>From the coach</SectionLabel>
           <NoteCard coach={d.note.coach} date={d.note.created_at} body={d.note.body} focus={d.note.focus} />
         </section>
       ) : null}

@@ -22,7 +22,7 @@ export default async function NewSession() {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: TZ });
   return (
     <>
-      <Link href="/coach" className="text-sm font-semibold">← Today</Link>
+      <Link href="/coach" className="inline-flex min-h-11 items-center text-sm font-semibold">← Today</Link>
       <Title sub="Families in your program see it on their schedule right away.">New session</Title>
       <NewSessionForm programs={programOptions} coaches={coaches.sort((a, b) => a.name.localeCompare(b.name))} me={me.id} isOwner={isOwner} today={today} />
     </>

@@ -29,7 +29,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
   return (
     <>
       <AdminTabs on="people" />
-      <Link href="/admin/people" className="text-sm font-semibold">← People</Link>
+      <Link href="/admin/people" className="inline-flex min-h-11 items-center text-sm font-semibold">← People</Link>
       <div>
         <h1 className="font-display text-[30px] uppercase leading-none">{person.full_name || person.email}</h1>
         <div className="mt-1 text-sm text-muted">{person.email} · joined {shortDate(person.created_at)}</div>

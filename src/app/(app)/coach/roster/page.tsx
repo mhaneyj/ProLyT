@@ -31,7 +31,7 @@ export default async function RosterBoard({ searchParams }: { searchParams: Prom
   const tabs: [string, string][] = [["due", "Needs test"], ["ovr", "Top OVR"], ["name", "A–Z"]];
   return (
     <>
-      <Link href="/coach" className="text-sm text-soft">← Today</Link>
+      <Link href="/coach" className="inline-flex min-h-11 items-center text-sm text-soft">← Today</Link>
       <Title sub={`${rows.length} athletes · ${dueN} due for a retest`}>Roster board</Title>
       <div role="tablist" aria-label="Sort" className="flex gap-2">
         {tabs.map(([k, label]) => (
@@ -47,7 +47,7 @@ export default async function RosterBoard({ searchParams }: { searchParams: Prom
             <span className="text-[10px] uppercase tracking-wider text-muted">OVR</span>
           </div>
           <div className="min-w-0 flex-1">
-            <Link href={`/athlete/${r.athlete_id}`} className="block truncate font-semibold">{r.name}</Link>
+            <Link href={`/athlete/${r.athlete_id}`} className="flex min-h-11 items-center truncate font-semibold">{r.name}</Link>
             <div className="text-[12px] text-muted">
               {[r.pos, r.band, r.rank ? `#${r.rank} of ${r.of_n}` : null].filter(Boolean).join(" · ")}
             </div>
@@ -55,7 +55,7 @@ export default async function RosterBoard({ searchParams }: { searchParams: Prom
               <Pill tone={r.due ? "warn" : "good"}>{ago(r.last_tested)}</Pill>
               <Pill tone="gold">{r.here_30} sessions / 30d</Pill>
               {r.packs ? <Pill tone="gold">{r.packs} pack{r.packs > 1 ? "s" : ""} unopened</Pill> : null}
-              <Link href={`/athlete/${r.athlete_id}/goals`} className="inline-flex min-h-8 items-center rounded-full border border-line px-2.5 text-[12px] font-semibold text-gold">Goals</Link>
+              <Link href={`/athlete/${r.athlete_id}/goals`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[12px] font-semibold text-gold">Goals</Link>
             </div>
           </div>
         </Card>

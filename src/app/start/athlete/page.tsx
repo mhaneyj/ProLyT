@@ -12,7 +12,7 @@ export default async function StartAthlete() {
   if (me.athleteId) redirect(`/athlete/${me.athleteId}`);
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-5 py-8">
-      <Link href="/start" className="text-sm font-semibold">← Back</Link>
+      <Link href="/start" className="inline-flex min-h-11 items-center text-sm font-semibold">← Back</Link>
       <ProLytMark className="text-3xl" />
       <div>
         <Kicker>Free, forever</Kicker>

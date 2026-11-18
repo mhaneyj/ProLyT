@@ -131,6 +131,7 @@ export default async function FamilyHome({ searchParams }: { searchParams: Promi
 
   return (
     <>
+      <h1 className="sr-only">Home</h1>
       <KidSwitcher kids={kids} current={a.id} to="/family" />
       <PassCards passes={passes} />
       {welcome ? <Notice tone="good">{a.first_name}&apos;s Player Card is ready. Start by signing it.</Notice> : null}

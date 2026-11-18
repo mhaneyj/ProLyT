@@ -54,7 +54,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 
   return (
     <>
-      <Link href="/coach" className="text-sm font-semibold">← Today</Link>
+      <Link href="/coach" className="inline-flex min-h-11 items-center text-sm font-semibold">← Today</Link>
       <div>
         <div className="font-cond text-[13px] font-extrabold uppercase tracking-[3px] text-gold">{[s.coach, dayTime(s.starts_at).split(" ")[0]].filter(Boolean).join(" · ")}</div>
         <h1 className="font-display text-[34px] uppercase leading-none">{s.title}</h1>

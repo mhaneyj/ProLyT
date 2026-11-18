@@ -40,7 +40,7 @@ export default async function Register() {
 
   return (
     <main style={themeVars(brand.brand_color) as React.CSSProperties} className="mx-auto flex max-w-md flex-col gap-5 px-5 py-6 pb-16">
-      <Link href="/home" className="text-sm font-semibold">← Back</Link>
+      <Link href="/home" className="inline-flex min-h-11 items-center text-sm font-semibold">← Back</Link>
       <div className="flex items-center gap-3">
         <ProgramLogo brand={brand} size={48} />
         <div>

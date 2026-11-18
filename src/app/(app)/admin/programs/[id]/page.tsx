@@ -44,7 +44,7 @@ export default async function AdminProgram({ params, searchParams }: { params: P
   return (
     <>
       <AdminTabs on="programs" />
-      <Link href="/admin" className="text-sm font-semibold">← Programs</Link>
+      <Link href="/admin" className="inline-flex min-h-11 items-center text-sm font-semibold">← Programs</Link>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display text-[34px] uppercase leading-none">{o.name}</h1>

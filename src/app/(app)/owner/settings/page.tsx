@@ -45,7 +45,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <Link href="/owner" className="text-sm font-semibold">← Dashboard</Link>
+      <Link href="/owner" className="inline-flex min-h-11 items-center text-sm font-semibold">← Dashboard</Link>
       <Title sub="Your program's look, coaches and coach pay.">Settings</Title>
       {root ? <Notice>Your families sign in at <span className="font-semibold text-cream">{d.org.slug}.{root}</span></Notice> : null}
 

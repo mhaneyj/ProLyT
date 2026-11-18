@@ -39,7 +39,7 @@ export function Ranks({ ranks, plus, athleteId, first }: { ranks: Rank[]; plus: 
                 {r.rank === 1 ? "Top of the board. Hold it." : (
                   <>Top {formatValue(r.metric, r.top_value)} · {plus
                     ? <span className="text-cream">{g} to pass #{r.rank - 1}</span>
-                    : <Link href={`/plus?for=${athleteId}`} className="font-semibold text-gold">What it takes to pass #{r.rank - 1} →</Link>}</>
+                    : <Link href={`/plus?for=${athleteId}`} className="inline-flex min-h-11 items-center font-semibold text-gold">What it takes to pass #{r.rank - 1} →</Link>}</>
                 )}
               </span>
             </span>

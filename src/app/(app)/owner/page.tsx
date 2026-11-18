@@ -77,20 +77,28 @@ function Launch({ s, pay }: { s: Setup; pay: boolean }) {
 
 export const metadata = { title: "Dashboard" };
 
+/** Payouts run on Fridays. */
+function nextFriday() {
+  const d = new Date();
+  d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7 || 7));
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
 export default async function Owner() {
   const me = await requireRole("owner");
   const d = await asUser(me.id, async (q) => {
-    const [k] = await q<{ revenue: number; last: number; athletes: number; active: number; past_due: number; logged: number; held: number }>(`
+    const [k] = await q<{ revenue: number; last: number; athletes: number; active: number; past_due: number; logged: number | null; held: number; due: number }>(`
       select
         (select coalesce(sum(amount_cents),0)::int from payments where org_id = $1 and created_at > now() - interval '30 days') revenue,
         (select coalesce(sum(amount_cents),0)::int from payments where org_id = $1 and created_at between now() - interval '60 days' and now() - interval '30 days') last,
         (select count(*)::int from program_athletes where org_id = $1 and status = 'active') athletes,
         (select count(*)::int from memberships m join plans p on p.id = m.plan_id where p.org_id = $1 and m.status = 'active') active,
         (select count(*)::int from memberships m join plans p on p.id = m.plan_id where p.org_id = $1 and m.status = 'past_due') past_due,
-        (select coalesce(round(100.0 * count(*) filter (where exists (select 1 from attendance at where at.session_id = s.id)) / nullif(count(*),0)),0)::int
+        (select round(100.0 * count(*) filter (where exists (select 1 from attendance at where at.session_id = s.id)) / nullif(count(*),0))::int
            from sessions s where s.org_id = $1 and s.starts_at between now() - interval '30 days' and now()) logged,
         (select coalesce(sum(e.amount_cents),0)::int from coach_earnings e join org_members om on om.user_id = e.coach_id and om.org_id = e.org_id and om.role = 'coach'
-           where e.org_id = $1 and e.status = 'pending' and not om.payouts_enabled) held`, [me.orgId]);
+           where e.org_id = $1 and e.status = 'pending' and not om.payouts_enabled) held,
+        (select coalesce(sum(e.amount_cents),0)::int from coach_earnings e where e.org_id = $1 and e.status = 'pending') due`, [me.orgId]);
     const alerts = await q<{ title: string; sub: string }>(`
       select a.first_name || ' ' || a.last_name || ' · payment failed' title, p.name || ' · ' || to_char(p.price_cents/100.0, 'FM$999') sub
       from memberships m join athletes a on a.id = m.athlete_id join plans p on p.id = m.plan_id
@@ -128,7 +136,7 @@ export default async function Owner() {
   const live = d.k.revenue > 0 || d.k.active > 0;
   // The launch list covers payouts.
   const alerts = d.alerts.filter((a) => !a.title.startsWith("Set up payouts"));
-  const change = d.k.last ? Math.round(((d.k.revenue - d.k.last) / d.k.last) * 100) : null;
+  const change = d.k.last >= 100 ? Math.round(((d.k.revenue - d.k.last) / d.k.last) * 100) : null;
 
   return (
     <>
@@ -145,7 +153,7 @@ export default async function Owner() {
       {live ? (<>
       <Card>
         <div className="flex items-baseline justify-between text-sm"><span className="text-muted">Revenue</span>
-          {change !== null ? <span className={change >= 0 ? "font-bold text-good" : "font-bold text-warn"}>{change >= 0 ? "+" : ""}{change}% vs prior 30 days</span> : null}
+          {change !== null && change !== 0 ? <span className={change >= 0 ? "font-bold text-good" : "font-bold text-warn"}>{change >= 0 ? "+" : ""}{change}% vs prior 30 days</span> : null}
         </div>
         <div className="tabular font-display text-[44px] leading-none">{money(d.k.revenue)}</div>
         <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-soft">
@@ -155,8 +163,13 @@ export default async function Owner() {
       <div className="grid grid-cols-3 gap-2">
         <Stat label="Athletes" value={d.k.athletes} />
         <Stat label="Active" value={d.k.active} tone="good" />
-        <Stat label="Attendance taken" value={`${d.k.logged}%`} />
+        <Stat label="Attendance taken" value={d.k.logged === null ? "—" : `${d.k.logged}%`} />
       </div>
+      <Link href="/owner/pay" className="flex items-center justify-between gap-3 rounded-[14px] border border-line bg-panel p-4 hover:border-gold">
+        <span className="min-w-0"><span className="block text-sm text-muted">Coach pay · next payout {nextFriday()}</span>
+          <span className="tabular block font-display text-[28px] leading-none">{money(d.k.due)}</span>
+          <span className="mt-1 block text-xs text-soft">{d.k.held ? `${money(d.k.held)} of it is waiting on a coach's payout setup. ` : "Paid automatically. "}Set how each coach is paid →</span></span>
+      </Link>
       </>) : null}
       {live || alerts.length ? <SectionLabel>Needs attention</SectionLabel> : null}
       {alerts.length === 0 ? (live ? <Empty title="All clear" /> : null) : alerts.map((a, i) => (
