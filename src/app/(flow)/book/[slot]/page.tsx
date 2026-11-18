@@ -21,7 +21,7 @@ export default async function Book({ params, searchParams }: { params: Promise<{
     where ts.id = $1 and t.listed and ts.cancelled_at is null`, [slot]));
   if (!s) notFound();
   const kids = await asUser(me.id, (q) => q<{ id: string; name: string }>(`select a.id, a.first_name || ' ' || a.last_name name from athletes a
-    where is_guardian(a.id) or (is_self(a.id) and age_on(a.birth_date) >= 18) order by a.first_name`));
+    where a.id in (select my_athlete_ids()) and (is_guardian(a.id) or (is_self(a.id) and age_on(a.birth_date) >= 18)) order by a.first_name`));
   const when = new Date(s.starts_at).toLocaleString("en-US", { timeZone: TZ, weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const online = s.payouts && stripeConfigured && s.price_cents > 0;
   return (
