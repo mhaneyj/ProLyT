@@ -27,6 +27,6 @@ export async function startProgram(_: StartState, form: FormData): Promise<Start
   }
   // Sessions are locked to one address, so the owner signs in once more on their program's own address.
   const h = await headers();
-  const origin = programOrigin({ slug: p.data.slug, custom_domain: null }, { proto: h.get("x-forwarded-proto") ?? "https", host: h.get("host") ?? "" });
+  const origin = programOrigin({ slug: p.data.slug, custom_domain: null }, { proto: h.get("x-forwarded-proto") ?? (/^localhost(:|$)/.test(h.get("host") ?? "") ? "http" : "https"), host: h.get("host") ?? "" });
   redirect(`${origin}/login?next=/owner`);
 }

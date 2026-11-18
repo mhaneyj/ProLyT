@@ -33,7 +33,7 @@ export function StartProgramForm() {
         </select>
       </div>
       <label className="flex min-h-11 items-start gap-2 text-sm text-soft">
-        <input type="checkbox" name="adult" className="mt-0.5 size-5 flex-none" />
+        <input type="checkbox" name="adult" defaultChecked={state.values?.adult === "on"} className="mt-0.5 size-5 flex-none" />
         <span>I&apos;m 18 or older and I&apos;m allowed to run this program.</span>
       </label>
       <div aria-live="polite" className="text-sm">{state.error ? <span role="alert" className="text-bad">{state.error}</span> : null}</div>

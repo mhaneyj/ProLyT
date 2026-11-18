@@ -47,8 +47,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 // The event's public page: what coaches and families see from the link the host shares.
-export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ r?: string; d?: string; team?: string; card?: string; card_error?: string }> }) {
-  const [{ id }, { r, d: divPick, team: teamPick, card, card_error }] = await Promise.all([params, searchParams]);
+export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ r?: string; d?: string; team?: string; card?: string; card_error?: string; error?: string }> }) {
+  const [{ id }, { r, d: divPick, team: teamPick, card, card_error, error }] = await Promise.all([params, searchParams]);
   const d = await load(id);
   if (!d) notFound();
   const { e, divisions, games, standings, champs, teams } = d;
@@ -82,7 +82,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {e.location ? <div className="text-sm text-soft">{e.location}</div> : null}
       </div>
       {e.status === "live" ? <AutoRefresh seconds={20} /> : null}
-      <EventCardOffer eventId={e.id} kids={cardKids} open={["open", "closed", "live"].includes(e.status) && (e.ends_on ?? e.starts_on) >= new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} notice={{ good: card ? "You're set. Your card prints at the event." : undefined, bad: card_error }} />
+      <EventCardOffer eventId={e.id} kids={cardKids} open={["open", "closed", "live"].includes(e.status) && (e.ends_on ?? e.starts_on) >= new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} notice={{ good: card ? "You're set. Your card prints at the event." : undefined, bad: card_error ?? error }} />
       {d.series && e.status !== "done" ? (
         <div className="flex items-center gap-4 rounded-[14px] border border-line bg-panel p-3.5">
           <div className="w-[84px] flex-none">

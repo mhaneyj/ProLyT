@@ -404,9 +404,9 @@ let coachLink = "";
   await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true } });
   await page.reload();
   // First run asks for a name, then offers Face ID
-  check("new account is asked for a name once", await seen(page.getByLabel("What's your name?")));
-  await page.getByLabel("What's your name?").fill("Pat Morgan");
-  await page.getByRole("button", { name: "Save name" }).click();
+  check("new account is asked for a name once", await seen(page.getByLabel(/Add your name/)));
+  await page.getByLabel(/Add your name/).fill("Pat Morgan");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByRole("button", { name: "Turn on" }).click();
   check("parent turns on Face ID in one tap", await seen(page.getByText(/Next time, tap/)));
   await page.reload();
@@ -730,6 +730,66 @@ let coachLink = "";
   check("team page is titled with the team name", await seen(h.page.getByRole("heading", { name: /Rocklin Raptors 15U/ })));
   await h.ctx.close();
 
+  // ── 17b. Event collector card: family adds it, pays (real webhook, signed locally), staff print and hand it over, host earns $5
+  {
+    const { default: pgmod } = await import(createRequire(import.meta.url).resolve("pg", { paths: [process.cwd()] }));
+    const Stripe = createRequire(import.meta.url)(createRequire(import.meta.url).resolve("stripe", { paths: [process.cwd()] }));
+    const dbq = async (sql, args = []) => { const c = new pgmod.Client({ connectionString: process.env.DATABASE_URL }); await c.connect(); try { return (await c.query(sql, args)).rows; } finally { await c.end(); } };
+    // Avery's parent signs in with her password (the one-time-code limit for her email is used up by earlier steps)
+    const fam = await (async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+      await page.goto(url("gamefit-loomis", `/login?next=/e/${eventId}`));
+      await page.getByLabel("Email").fill("parent@family.test");
+      await page.getByText("Use a password instead").click();
+      await page.getByLabel("Password").fill("Loomis-Mom-77");
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      return { ctx, page, errors };
+    })();
+    await fam.page.waitForURL(/\/e\//, { timeout: 15000 });
+    check("family sees the printed card offer for Avery", await seen(fam.page.getByText("Take the game home")) && await seen(fam.page.getByText("Avery", { exact: false }).first()));
+    const preview = await fam.page.locator("img[alt$='card preview']").first().evaluate((i) => new Promise((r) => (i.complete ? r(i.naturalWidth) : i.addEventListener("load", () => r(i.naturalWidth)))));
+    check("the card preview renders small (watermarked), not the print file", preview > 0 && preview <= 420, String(preview));
+    await fam.page.getByRole("button", { name: /Add · \$25/ }).first().click();
+    await fam.page.waitForLoadState("domcontentloaded");
+    const orders = await dbq("select id, status, price_cents, organizer_cents from event_card_orders where event_id = $1", [eventId]);
+    check("tapping Add starts a $25 order with $5 for the host", orders.length === 1 && orders[0].status === "pending" && orders[0].price_cents === 2500 && orders[0].organizer_cents === 500, JSON.stringify(orders));
+    check("if Stripe can't be reached the family sees a plain message on the event page", await seen(fam.page.getByText(/Payment didn't start/)) && fam.page.url().includes(`/e/${eventId}`), fam.page.url());
+
+    // Stripe confirms the payment: a real, signed webhook delivery
+    const payload = JSON.stringify({ id: "evt_e2e_1", object: "event", api_version: "2024-06-20", type: "checkout.session.completed", data: { object: { id: "cs_test_e2e_1", object: "checkout.session", payment_status: "paid", mode: "payment",
+      metadata: { event_card_order_id: orders[0].id, event_id: eventId, organizer_transfer: "no" } } } });
+    const header = new Stripe("sk_test_dummy").webhooks.generateTestHeaderString({ payload, secret: process.env.STRIPE_WEBHOOK_SECRET });
+    const hook = await fetch(`http://localhost:${PORT}/api/stripe/webhook`, { method: "POST", headers: { "stripe-signature": header, "content-type": "application/json" }, body: payload });
+    check("the Stripe webhook is accepted", hook.status === 200, String(hook.status));
+    const paid = await dbq("select status, stripe_checkout_id from event_card_orders where id = $1", [orders[0].id]);
+    check("the order is marked paid", paid[0].status === "paid" && paid[0].stripe_checkout_id === "cs_test_e2e_1");
+    const replay = await fetch(`http://localhost:${PORT}/api/stripe/webhook`, { method: "POST", headers: { "stripe-signature": header, "content-type": "application/json" }, body: payload });
+    check("a repeated webhook changes nothing", replay.status === 200 && (await dbq("select count(*)::int n from event_card_orders where event_id = $1 and status = 'paid'", [eventId]))[0].n === 1);
+    await fam.page.goto(url("gamefit-loomis", `/e/${eventId}`));
+    check("family sees it's ordered, with no second Add button", await seen(fam.page.getByText("Ordered. We print it at the event.")) && (await fam.page.getByRole("button", { name: /Add ·/ }).count()) === 0);
+    check("a family can't open the staff card station", (await fam.page.goto(url("gamefit-loomis", `/host/events/${eventId}/print`))).status() === 404);
+
+    // Event day: staff print and hand it over
+    const st = await signIn("gamefit-loomis", "josh.personal@gmail.test", `/login?next=/host/events/${eventId}/print`);
+    await st.page.waitForURL(/\/print/);
+    check("card station shows Avery's card to print", await seen(st.page.getByText("Avery Real")) && await seen(st.page.getByRole("link", { name: "Front file" })));
+    await st.page.goto(url("gamefit-loomis", `/host/events/${eventId}/print/sheet?side=front`));
+    const sheetImg = await st.page.locator("img").first().evaluate((i) => new Promise((r) => (i.complete ? r(i.naturalWidth) : i.addEventListener("load", () => r(i.naturalWidth)))));
+    check("print sheet loads the full-resolution card", sheetImg === 1060, String(sheetImg));
+    await st.page.goto(url("gamefit-loomis", `/host/events/${eventId}/print`));
+    await st.page.getByRole("button", { name: "Mark printed" }).click();
+    check("staff mark it printed and it moves to ready for pickup", await seen(st.page.getByText("Ready for pickup (1)")));
+    await st.page.getByRole("button", { name: "Handed over" }).click();
+    check("staff hand it over at check-in", await seen(st.page.getByText("Picked up (1)")));
+    check("the event is shown earning $5.00", await seen(st.page.getByText("$5.00", { exact: true })));
+    check("the event's share is flagged as owed until Stripe is connected", await seen(st.page.getByText(/of the event's share is owed by ProLyt/)));
+    check("no client errors (card station)", st.errors.length === 0 && fam.errors.length === 0, [...st.errors, ...fam.errors].join("; "));
+    await fam.page.goto(url("gamefit-loomis", `/e/${eventId}`));
+    check("family sees the card as picked up", await seen(fam.page.getByText("Picked up", { exact: true })));
+    await st.ctx.close(); await fam.ctx.close();
+  }
+
   // ProLyt staff see where the new family came from
   const a = await signIn("", "marcus@prolyt.test", "/login?next=/admin/growth");
   await a.page.goto(url("", "/admin/growth"));
@@ -745,7 +805,7 @@ let coachLink = "";
   const h2 = await signIn("gamefit-loomis", "josh.personal@gmail.test", `/login?next=/host/events/${eventId}`);
   await h2.page.getByText("Event details and waiver").click();
   await h2.page.getByRole("checkbox", { name: /Require an age check/ }).check();
-  await h2.page.getByRole("button", { name: "Save", exact: true }).click();
+  await h2.page.getByRole("button", { name: "Save", exact: true }).last().click();
   check("host requires an age check", await seen(h2.page.getByText("Required for this event")));
 
   const f = await signIn("gamefit-loomis", "new.family@example.test", `/login?next=${encodeURIComponent(path15)}`);
@@ -823,7 +883,7 @@ let coachLink = "";
   const staffUrl = await j.page.getByLabel("Staff link for volunteers").inputValue();
   check("host gets a staff link for volunteers", /\/staff\/[\w-]{32,}$/.test(staffUrl), staffUrl);
   await j.page.goto(url("gamefit-loomis", `/host/events/${eventId}/schedule`));
-  await j.page.getByRole("button", { name: "Save", exact: true }).click();
+  await j.page.getByRole("button", { name: "Save", exact: true }).last().click();
   await j.page.waitForURL(/saved=1/);
   await j.page.getByLabel("Field names").fill("Field 1, Field 2");
   await j.page.getByRole("button", { name: "Add field" }).click();
@@ -876,11 +936,11 @@ let coachLink = "";
   check("booth lists the checked-in athlete", await seen(vol.page.getByText("Drew Newcomer")) && await seen(vol.page.getByText("0/1 tested")));
   const drewBox = vol.page.getByLabel("Drew Newcomer result");
   await drewBox.fill("51");
-  await vol.page.getByRole("button", { name: "Save", exact: true }).click();
+  await vol.page.getByRole("button", { name: "Save", exact: true }).last().click();
   check("booth refuses an unbelievable time", await seen(vol.page.getByText(/40-yard dash should be/)));
   const beforeBooth = logLines();
   await drewBox.fill("512");
-  await vol.page.getByRole("button", { name: "Save", exact: true }).click();
+  await vol.page.getByRole("button", { name: "Save", exact: true }).last().click();
   check("booth saves 512 as 5.12 seconds", await seen(vol.page.getByText("5.12 s").or(vol.page.getByText("5.12s")).or(vol.page.getByText(/^5\.12/))));
   check("Drew's family hears about the result", await pushed("Drew: 40-yard dash", beforeBooth - 1));
   await vol.page.goto(url("gamefit-loomis", `/day/${eventId}/booth?station=40yd`));
@@ -1027,6 +1087,61 @@ let coachLink = "";
   await pg.waitForURL(/\/plus/);
   check("ProLyt+ page shows plans and what's free", await seen(pg.getByRole("heading", { name: "ProLyt+" })) && await seen(pg.getByText("Alerts when a coach opens the profile")) && await seen(pg.getByText("$5.99")));
   await pctx.close();
+}
+
+// ── 23. Self-serve program signup: a new organizer starts a program, signs in on its address, lands as owner
+{
+  const o = await signIn("", "organizer@foothills.test", "/login?next=/start/program");
+  await o.page.waitForURL(/start\/program/);
+  check("new organizer sees the program setup page", await seen(o.page.getByRole("heading", { name: "Set up your program" })));
+  await o.page.getByLabel("Program name").fill("Foothills 7v7");
+  check("the web address fills in from the name", (await o.page.getByLabel("Your web address").inputValue()) === "foothills-7v7");
+  await o.page.getByRole("button", { name: "Create my program" }).click();
+  check("must confirm they're 18+ and allowed to run it", await seen(o.page.getByText(/Confirm you are 18 or older/)));
+  await o.page.getByRole("checkbox").check();
+  await o.page.getByLabel("Your web address").fill("admin");
+  await o.page.getByRole("button", { name: "Create my program" }).click();
+  check("reserved web addresses are refused", await seen(o.page.getByText(/reserved/)));
+  await o.page.getByLabel("Your web address").fill("gamefit-loomis");
+  await o.page.getByRole("button", { name: "Create my program" }).click();
+  check("a taken web address is refused", await seen(o.page.getByText(/taken/)));
+  await o.page.getByLabel("Your web address").fill("foothills-7v7");
+  await o.page.getByRole("button", { name: "Create my program" }).click();
+  await o.page.waitForURL(/foothills-7v7\.localhost/, { timeout: 15000 });
+  check("creating it sends them to their own program address to sign in", /\/login/.test(o.page.url()), o.page.url());
+  const before = logLines();
+  await o.page.getByLabel("Email").fill("organizer@foothills.test");
+  await o.page.getByRole("button", { name: /Email me a code/ }).click();
+  await seen(o.page.getByText("Enter your code"));
+  await o.page.getByLabel("Code").fill(await logged("code", "organizer@foothills.test", before - 1));
+  await o.page.waitForURL(/\/owner/, { timeout: 15000 });
+  check("they land on their program's owner page", await seen(o.page.getByText("Foothills 7v7").first()));
+  check("no client errors (self-serve signup)", o.errors.length === 0, o.errors.join("; "));
+  await o.ctx.close();
+}
+
+// ── 24. A family leaves a program: spots freed, history kept
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(url("gamefit-loomis", "/login?next=/family/programs"));
+  await page.getByLabel("Email").fill("parent@family.test");
+  await page.getByText("Use a password instead").click();
+  await page.getByLabel("Password").fill("Loomis-Mom-77");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(/family\/programs/, { timeout: 15000 });
+  check("family sees Avery's programs", await seen(page.getByText("Gamefit Loomis").first()) || await seen(page.getByText(/Game-?Fit/i).first()));
+  await page.getByText("Leave this program").first().click();
+  await page.getByRole("button", { name: /^Leave / }).click();
+  check("leaving needs the confirm box ticked", await seen(page.getByText("Tick the box to confirm.")));
+  await page.getByText("Leave this program").first().click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: /^Leave / }).click();
+  check("family leaves the program", await seen(page.getByText(/You left the program/)));
+  check("the athlete is no longer in any program", await seen(page.getByText(/isn't in a program right now/)));
+  await page.goto(url("gamefit-loomis", "/athlete"));
+  check("no client errors (leave)", errors.length === 0, errors.join("; "));
+  await ctx.close();
 }
 
 await browser.close();
