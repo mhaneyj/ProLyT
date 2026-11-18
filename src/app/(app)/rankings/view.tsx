@@ -16,7 +16,7 @@ export async function RankingsView({ me, sp }: { me: Me; sp: RankingsParams }) {
   const mine = await asUser(me.id, (q) => q<{ id: string; first_name: string; age: number; opt_in: boolean; power: { sport: string; band: string; grp: string; rank: number; of_n: number } | null }>(
     `select a.id, a.first_name, date_part('year', age(current_date, a.birth_date))::int age, a.leaderboard_opt_in opt_in,
       (select to_jsonb(p) from (select sport, band, grp, rank, of_n from my_power(a.id)) p) power
-     from athletes a where a.id in (select my_athlete_ids()) order by a.first_name`));
+     from athletes a where is_family(a.id) order by a.first_name`));
   const first = mine.find((m) => m.power)?.power;
   const sport = sp.sport === "hockey" ? "hockey" : sp.sport === "football" ? "football" : first?.sport ?? "football";
   const band = (BANDS as readonly string[]).includes(sp.band ?? "") ? sp.band! : first?.band ?? "HS";

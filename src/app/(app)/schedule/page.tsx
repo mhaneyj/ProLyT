@@ -27,7 +27,6 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                   join guardians g on g.athlete_id = sa.athlete_id and g.user_id = $1 where sa.session_id = s.id), '{}') booked
       from sessions s left join profiles p on p.id = s.coach_id
       where s.starts_at > now() - interval '2 hours' and s.starts_at < now() + interval '21 days'
-        and (s.org_id in (select my_org_ids()) or exists (select 1 from session_athletes x where x.session_id = s.id and x.athlete_id in (select my_athlete_ids())))
       order by s.starts_at`, [me.id]);
     const kids = await q<Kid>(`
       select a.id, a.first_name, pa.org_id from guardians g join athletes a on a.id = g.athlete_id

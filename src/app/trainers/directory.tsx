@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
 import { asService } from "@/lib/db";
 import { getMe } from "@/lib/auth";
 import { SPECIALTIES } from "@/lib/domain/trainers";
@@ -7,8 +6,12 @@ import { TrainerCard, type TrainerCardRow } from "@/components/trainer-card";
 import { ProLytMark } from "@/components/brand";
 import { currentOrgSlug } from "@/lib/org";
 
-async function loadRows(spec: string | null, text: string, coaches: boolean, programSlug: string | null) {
-  return asService((db) => db<TrainerCardRow>(`
+// Shared by /trainers (independent marketplace) and /coaches (program coaches' pages).
+export async function Directory({ s, q, coaches }: { s?: string; q?: string; coaches: boolean }) {
+  const programSlug = coaches ? await currentOrgSlug() : null;
+  const spec = (SPECIALTIES as readonly string[]).includes(s ?? "") ? s! : null;
+  const text = (q ?? "").trim().slice(0, 60);
+  const rows = await asService((db) => db<TrainerCardRow>(`
     select t.user_id, t.slug, t.display_name, t.headline, t.city, t.specialties, t.verified_at is not null verified, t.photo_data is not null has_photo, o.name program,
       case when $3 then (select min(se.price_cents) from sessions se where se.coach_id = t.user_id and se.org_id = t.org_id and se.kind = 'one_on_one' and se.starts_at > now())
            else (select min(sv.price_cents) from trainer_services sv where sv.trainer_id = t.user_id and sv.active) end from_cents,
@@ -21,16 +24,6 @@ async function loadRows(spec: string | null, text: string, coaches: boolean, pro
       and (t.org_id is null or has_feature(t.org_id, 'coach_pages'))
       and ($2 = '' or t.display_name ilike '%' || $2 || '%' or t.city ilike '%' || $2 || '%' or t.headline ilike '%' || $2 || '%')
     order by t.verified_at is not null desc, next_at nulls last, t.created_at limit 60`, [spec, text, coaches, programSlug]));
-}
-// Public and hit by search/ads traffic: one shared 60-second cache per filter, not one query per visitor.
-const cachedRows = unstable_cache(loadRows, ["directory-rows"], { revalidate: 60 });
-
-// Shared by /trainers (independent marketplace) and /coaches (program coaches' pages).
-export async function Directory({ s, q, coaches }: { s?: string; q?: string; coaches: boolean }) {
-  const programSlug = coaches ? await currentOrgSlug() : null;
-  const spec = (SPECIALTIES as readonly string[]).includes(s ?? "") ? s! : null;
-  const text = (q ?? "").trim().slice(0, 60);
-  const rows = await cachedRows(spec, text, coaches, programSlug);
   const me = await getMe();
   const chip = (label: string, val: string | null) => {
     const on = spec === val;

@@ -33,7 +33,7 @@ export async function postingAs(me: Me): Promise<PostAs[]> {
   return asUser(me.id, async (q) => {
     const kids = await q<{ id: string; label: string }>(`
       select a.id, a.first_name || ' ' || a.last_name label from athletes a
-      where a.id in (select my_athlete_ids()) and age_on(a.birth_date) >= 13 and (is_guardian(a.id) or (is_self(a.id) and athlete_can_message(a.id)))
+      where age_on(a.birth_date) >= 13 and (is_guardian(a.id) or (is_self(a.id) and athlete_can_message(a.id)))
       order by is_self(a.id) desc, a.first_name`);
     const out: PostAs[] = [];
     for (const k of kids) {
